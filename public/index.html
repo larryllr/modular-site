@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>模块化 Cloudflare 网站</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="模块导航">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">CF</span>
+          <div>
+            <strong>Modular Site</strong>
+            <span>Cloudflare Workers</span>
+          </div>
+        </div>
+
+        <div class="toolbar" role="tablist" aria-label="模块筛选">
+          <button class="toolbar-button is-active" type="button" data-filter="all">全部</button>
+          <button class="toolbar-button" type="button" data-filter="enabled">启用</button>
+          <button class="toolbar-button" type="button" data-filter="tools">工具</button>
+        </div>
+
+        <nav class="module-nav" id="moduleNav" aria-label="功能模块"></nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="workspace-header">
+          <div>
+            <p class="eyebrow">Module Runtime</p>
+            <h1>功能模块中心</h1>
+          </div>
+          <canvas id="featureMap" width="520" height="160" aria-label="模块状态图"></canvas>
+        </header>
+
+        <section class="status-strip" aria-label="项目状态">
+          <div>
+            <span class="metric-label">前端模块</span>
+            <strong id="clientModuleCount">0</strong>
+          </div>
+          <div>
+            <span class="metric-label">已启用</span>
+            <strong id="enabledModuleCount">0</strong>
+          </div>
+          <div>
+            <span class="metric-label">API 状态</span>
+            <strong id="apiState">检查中</strong>
+          </div>
+        </section>
+
+        <section class="module-grid" id="moduleGrid" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <template id="moduleToggleTemplate">
+      <label class="switch">
+        <input type="checkbox" />
+        <span></span>
+      </label>
+    </template>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

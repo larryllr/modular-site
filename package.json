@@ -1,0 +1,17 @@
+{
+  "name": "cloudflare-modular-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ./node_modules/wrangler/bin/wrangler.js dev",
+    "deploy": "node ./node_modules/wrangler/bin/wrangler.js deploy",
+    "check": "node ./node_modules/typescript/bin/tsc --noEmit",
+    "types": "node ./node_modules/wrangler/bin/wrangler.js types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260507.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.15.2"
+  }
+}
