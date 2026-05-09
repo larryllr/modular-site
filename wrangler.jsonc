@@ -12,7 +12,8 @@
   },
   "kv_namespaces": [
     {
-      "binding": "SITE_CONFIG"
+      "binding": "SITE_CONFIG",
+      "id": "df768570169c407b8e8f03e8decb1176"
       // Deploy to Cloudflare requires a KV namespace id.
       // Create one with `wrangler kv namespace create SITE_CONFIG`,
       // then add: "id": "<KV_NAMESPACE_ID>"
