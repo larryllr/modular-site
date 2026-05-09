@@ -110,6 +110,60 @@ textarea {
   gap: 8px;
 }
 
+.admin-page-nav-item {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-page-settings {
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.sidebar-field {
+  display: grid;
+  gap: 5px;
+}
+
+.sidebar-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sidebar-field input,
+.sidebar-field textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 9px;
+}
+
+.sidebar-field textarea {
+  min-height: 74px;
+  resize: vertical;
+}
+
+.sidebar-mini-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sidebar-mini-actions .button {
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
 .sidebar-actions {
   display: grid;
   gap: 8px;
@@ -208,18 +262,29 @@ h1 {
   grid-template-columns: 1fr;
 }
 
+.workspace-header.no-visual {
+  grid-template-columns: 1fr;
+}
+
 .workspace-header.compact h1 {
   font-size: clamp(32px, 7vw, 52px);
 }
 
-#featureMap {
+.home-visual {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  min-width: 0;
+}
+
+.home-visual img {
+  display: block;
   width: 100%;
+  max-height: 260px;
   height: auto;
-  aspect-ratio: 13 / 4;
-  border: 1px solid var(--line);
+  object-fit: contain;
+  object-position: center;
   border-radius: 8px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
 }
 
 .status-strip {
@@ -705,6 +770,10 @@ h1 {
   padding: 10px;
 }
 
+.editable-section.is-collapsed {
+  background: var(--panel);
+}
+
 .section-controls {
   display: flex;
   align-items: center;
@@ -716,6 +785,21 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.section-toggle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--teal-dark);
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
 }
 
 .section-tools {

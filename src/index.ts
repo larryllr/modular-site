@@ -83,6 +83,7 @@ type SiteConfig = {
   updatedAt: string;
   homeTitle: string;
   homeDescription: string;
+  homeImage: string;
   pages: SitePage[];
 };
 
@@ -112,6 +113,7 @@ const defaultSiteConfig: SiteConfig = {
   updatedAt: "2026-05-09T00:00:00.000Z",
   homeTitle: "功能入口",
   homeDescription: "这里是所有分页面的入口。管理员可以在 /admin 添加页面、分配模块和修改标题。",
+  homeImage: "",
   pages: [
     {
       id: "workspace",
@@ -426,6 +428,7 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
     updatedAt: new Date().toISOString(),
     homeTitle: limitText(asString(source.homeTitle) || defaultSiteConfig.homeTitle, 80),
     homeDescription: limitText(asString(source.homeDescription) || defaultSiteConfig.homeDescription, 220),
+    homeImage: normalizeImageSrc(asString(source.homeImage)),
     pages
   };
 }

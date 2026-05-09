@@ -8,6 +8,7 @@ const fallbackConfig = {
   updatedAt: new Date().toISOString(),
   homeTitle: "功能入口",
   homeDescription: "这里是所有分页面的入口。管理员可以在 /admin 添加页面、分配模块和修改标题。",
+  homeImage: "",
   pages: [
     {
       id: "workspace",
@@ -61,6 +62,8 @@ const state = {
   config: fallbackConfig,
   token: localStorage.getItem(adminTokenKey) || "",
   selectedPageId: "",
+  expandedSettings: "",
+  expandedSections: new Set(),
   saveStatus: ""
 };
 
@@ -198,9 +201,11 @@ function renderAdminEditor() {
   const sidebar = element("aside", "sidebar admin-sidebar");
   const brand = element("div", "brand");
   brand.append(mark("AD"), textBlock("站点后台", "预览式页面编辑"));
+  const selectedPage = getSelectedPage();
 
   const pageNav = element("nav", "module-nav");
   for (const page of state.config.pages) {
+    const group = element("section", "admin-page-nav-item");
     const item = document.createElement("button");
     item.type = "button";
     item.classList.toggle("is-active", page.id === state.selectedPageId);
@@ -209,7 +214,50 @@ function renderAdminEditor() {
       state.selectedPageId = page.id;
       renderAdminEditor();
     });
-    pageNav.append(item);
+
+    const settings = element("div", "admin-page-settings");
+    settings.append(
+      sidebarField("标题", page.title, (value) => {
+        page.title = value;
+      })
+    );
+    settings.append(
+      sidebarField("后缀", page.slug, (value) => {
+        page.slug = normalizeSlug(value);
+      })
+    );
+    settings.append(
+      sidebarAreaField("说明", page.description, (value) => {
+        page.description = value;
+      })
+    );
+    settings.append(
+      checkbox("主页显示", page.visible, (checked) => {
+        page.visible = checked;
+        renderAdminEditor();
+      })
+    );
+    const settingActions = element("div", "sidebar-mini-actions");
+    const entryButton = button("入口卡片", state.expandedSettings === "entry" ? "button primary" : "button", "button");
+    entryButton.addEventListener("click", () => {
+      state.expandedSettings = state.expandedSettings === "entry" ? "" : "entry";
+      renderAdminEditor();
+    });
+    const commentsButton = button("评论区域", state.expandedSettings === "comments" ? "button primary" : "button", "button");
+    commentsButton.addEventListener("click", () => {
+      state.expandedSettings = state.expandedSettings === "comments" ? "" : "comments";
+      renderAdminEditor();
+    });
+    settingActions.append(entryButton, commentsButton);
+    settings.append(settingActions);
+
+    group.append(item);
+
+    if (page.id === state.selectedPageId) {
+      group.append(settings);
+    }
+
+    pageNav.append(group);
   }
 
   const addPageButton = button("新增分页面", "button primary", "button");
@@ -237,7 +285,6 @@ function renderAdminEditor() {
   sidebar.append(brand, pageNav, sidebarActions);
 
   const main = element("main", "admin-workspace");
-  const selectedPage = getSelectedPage();
   const title = element("header", "workspace-header compact");
   const titleText = element("div");
   titleText.append(element("p", "eyebrow", "Preview Admin"), element("h1", "", "预览模式编辑"));
@@ -264,6 +311,11 @@ function renderHomeSettings() {
   panel.append(
     areaField("主页说明", state.config.homeDescription, (value) => {
       state.config.homeDescription = value;
+    })
+  );
+  panel.append(
+    imageValueField("主页展示图片", state.config.homeImage, (value) => {
+      state.config.homeImage = value;
     })
   );
   return panel;
@@ -305,32 +357,20 @@ function renderPreviewEditor(page) {
 
 function renderEditablePageHeader(page) {
   const header = element("section", "preview-page-header");
-  const meta = element("div", "preview-meta");
-  const slugField = field("网址后缀", page.slug, (value) => {
-    page.slug = normalizeSlug(value);
-  });
-  const visible = checkbox("在主页显示入口", page.visible, (checked) => {
-    page.visible = checked;
-  });
-  meta.append(slugField, visible);
+  header.append(
+    element("p", "eyebrow", `/${page.slug}`),
+    element("h1", "", page.title),
+    element("p", "lead", page.description || "这个分页面还没有说明。")
+  );
 
-  const title = document.createElement("input");
-  title.className = "preview-title-input";
-  title.value = page.title;
-  title.setAttribute("aria-label", "页面标题");
-  title.addEventListener("input", () => {
-    page.title = title.value;
-  });
+  if (state.expandedSettings === "entry") {
+    header.append(renderEntrySettings(page));
+  }
 
-  const desc = document.createElement("textarea");
-  desc.className = "preview-description-input";
-  desc.value = page.description;
-  desc.setAttribute("aria-label", "页面说明");
-  desc.addEventListener("input", () => {
-    page.description = desc.value;
-  });
+  if (state.expandedSettings === "comments") {
+    header.append(renderBottomCommentsSettings(page));
+  }
 
-  header.append(meta, title, desc, renderEntrySettings(page), renderBottomCommentsSettings(page));
   return header;
 }
 
@@ -425,25 +465,38 @@ function renderInsertBar(page, index) {
 
 function renderEditableSection(page, section, index) {
   const shell = element("section", `editable-section editable-${section.type}`);
-  shell.append(renderSectionControls(page, section, index));
+  const expanded = state.expandedSections.has(section.id);
+  shell.classList.toggle("is-collapsed", !expanded);
+  shell.append(renderSectionControls(page, section, index, expanded));
 
-  if (section.type === "system") {
-    shell.append(renderEditableSystemSection(page, section));
-  } else if (section.type === "image") {
-    shell.append(renderEditableImageSection(section));
-  } else if (section.type === "comments") {
-    shell.append(renderEditableCommentsSection(page, section));
-  } else {
-    shell.append(renderEditableTextSection(section));
+  if (expanded) {
+    if (section.type === "system") {
+      shell.append(renderEditableSystemSection(page, section));
+    } else if (section.type === "image") {
+      shell.append(renderEditableImageSection(section));
+    } else if (section.type === "comments") {
+      shell.append(renderEditableCommentsSection(page, section));
+    } else {
+      shell.append(renderEditableTextSection(section));
+    }
   }
 
   return shell;
 }
 
-function renderSectionControls(page, section, index) {
+function renderSectionControls(page, section, index, expanded) {
   const controls = element("div", "section-controls");
-  const label = sectionLabel(section);
-  controls.append(element("strong", "", label));
+  const toggle = button(expanded ? "▾" : "▸", "section-toggle", "button");
+  toggle.setAttribute("aria-label", expanded ? "折叠模块" : "展开模块");
+  toggle.addEventListener("click", () => {
+    if (expanded) {
+      state.expandedSections.delete(section.id);
+    } else {
+      state.expandedSections.add(section.id);
+    }
+    renderAdminEditor();
+  });
+  controls.append(toggle, element("strong", "", sectionLabel(section)));
 
   const tools = element("div", "section-tools");
   const up = button("上移", "button", "button");
@@ -700,11 +753,19 @@ function renderHome(pages) {
   const copy = element("div");
   copy.append(element("p", "eyebrow", "Home"), element("h1", "", state.config.homeTitle));
   copy.append(element("p", "lead", state.config.homeDescription));
-  const canvas = document.createElement("canvas");
-  canvas.id = "featureMap";
-  canvas.width = 520;
-  canvas.height = 160;
-  header.append(copy, canvas);
+  const homeImage = state.config.homeImage?.trim();
+  header.classList.toggle("no-visual", !homeImage);
+  header.append(copy);
+
+  if (homeImage) {
+    const visual = element("figure", "home-visual");
+    const image = document.createElement("img");
+    image.src = homeImage;
+    image.alt = state.config.homeTitle;
+    visual.append(image);
+    header.append(visual);
+  }
+
   main.append(header);
   main.append(
     renderStatusStrip([
@@ -720,7 +781,6 @@ function renderHome(pages) {
   }
   main.append(grid);
   app.append(main);
-  drawFeatureMap(canvas, pages);
 }
 
 function renderPage(page) {
@@ -822,12 +882,7 @@ function renderPageEntry(page) {
   link.href = `/${page.slug}`;
   link.textContent = "进入";
 
-  const pills = element("div", "pill-row");
-  for (const section of page.sections.slice(0, 10)) {
-    pills.append(element("span", "pill", sectionLabel(section)));
-  }
-
-  card.append(header, pills, link);
+  card.append(header, link);
   return card;
 }
 
@@ -1213,6 +1268,7 @@ function createCommentsSection() {
 
 function insertSection(page, index, section) {
   page.sections.splice(index, 0, section);
+  state.expandedSections.add(section.id);
   renderAdminEditor();
 }
 
@@ -1238,6 +1294,7 @@ function deletePage(page) {
   if (confirm(`确定删除“${page.title}”？`)) {
     state.config.pages = state.config.pages.filter((item) => item.id !== page.id);
     state.selectedPageId = state.config.pages[0]?.id || "";
+    state.expandedSettings = "";
     renderAdminEditor();
   }
 }
@@ -1267,6 +1324,26 @@ function field(label, value, onInput, hint = "") {
     wrapper.append(element("small", "", hint));
   }
 
+  return wrapper;
+}
+
+function sidebarField(label, value, onInput) {
+  const wrapper = element("label", "sidebar-field");
+  wrapper.append(element("span", "", label));
+  const input = document.createElement("input");
+  input.value = value || "";
+  input.addEventListener("input", () => onInput(input.value));
+  wrapper.append(input);
+  return wrapper;
+}
+
+function sidebarAreaField(label, value, onInput) {
+  const wrapper = element("label", "sidebar-field");
+  wrapper.append(element("span", "", label));
+  const textarea = document.createElement("textarea");
+  textarea.value = value || "";
+  textarea.addEventListener("input", () => onInput(textarea.value));
+  wrapper.append(textarea);
   return wrapper;
 }
 
@@ -1343,7 +1420,7 @@ function imageValueField(label, value, onChange) {
     renderAdminEditor();
   });
 
-  wrapper.append(input, upload, element("small", "", "留空则不使用自定义背景。"));
+  wrapper.append(input, upload, element("small", "", "留空则不使用这张图片。"));
   return wrapper;
 }
 
