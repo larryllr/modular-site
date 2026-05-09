@@ -25,6 +25,39 @@ npm run deploy
 
 第一次部署会打开 Cloudflare 登录授权。按浏览器提示登录后，Wrangler 会把 Worker 和静态文件发布到 Cloudflare。
 
+后台配置保存在 Cloudflare Workers KV。正式部署前需要创建 KV 命名空间，并把返回的 `id` 填到 `wrangler.jsonc` 的 `kv_namespaces`：
+
+```bash
+npm run types
+npm run wrangler -- kv namespace create SITE_CONFIG
+```
+
+本地开发会使用 Wrangler 的本地 KV 模拟，所以不填 `id` 也可以先预览。
+
+## 管理员后台
+
+- 访问 `/admin` 进入管理员界面。
+- 默认管理员密码：`llr20081209`。
+- 管理员界面可以新增分页面、修改页面标题和说明、设置网址后缀、控制是否在主页显示入口、为页面勾选系统模块、添加自定义文本模块。
+- 管理员界面现在是预览式编辑：在页面预览中插入系统模块、文本模块和图片模块，并用上移/下移控制它们在分页面里的位置。
+- 图片模块支持粘贴图片地址或上传本地图片；可以选择正常图片显示，也可以作为背景图片显示。
+- `/` 是默认主页，会自动显示所有启用分页面的入口。
+- 每个分页面通过自己的后缀进入，例如后缀是 `workspace`，访问路径就是 `/workspace`。
+
+修改管理员密码建议使用 Cloudflare secret。线上运行：
+
+```bash
+npm run wrangler -- secret put admin
+```
+
+本地开发可以新建 `.dev.vars`：
+
+```bash
+admin="你的新密码"
+```
+
+不要把真实密码提交到 GitHub；仓库里只保留了 `.dev.vars.example` 作为示例。
+
 ## 上传到 GitHub
 
 本机已经安装 GitHub CLI。网络可以访问 GitHub 登录接口后，在项目目录运行：
