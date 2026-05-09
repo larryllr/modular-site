@@ -90,6 +90,13 @@ type SiteLink = {
   backgroundImage: string;
 };
 
+type HomeAnnouncement = {
+  enabled: boolean;
+  title: string;
+  text: string;
+  durationSeconds: number;
+};
+
 type PageSection = SystemSection | ContentBlock | ImageSection | CommentsSection;
 
 type SitePage = {
@@ -111,6 +118,7 @@ type SiteConfig = {
   homeTitle: string;
   homeDescription: string;
   homeImage: string;
+  announcement: HomeAnnouncement;
   links: SiteLink[];
   pages: SitePage[];
 };
@@ -126,6 +134,7 @@ type CommentRecord = {
   name: string;
   body: string;
   ip: string;
+  device: string;
   createdAt: string;
 };
 
@@ -142,6 +151,12 @@ const defaultSiteConfig: SiteConfig = {
   homeTitle: "功能入口",
   homeDescription: "这里是所有分页面的入口。管理员可以在 /admin 添加页面、分配模块和修改标题。",
   homeImage: "",
+  announcement: {
+    enabled: false,
+    title: "公告",
+    text: "",
+    durationSeconds: 8
+  },
   links: [],
   pages: [
     {
@@ -300,6 +315,7 @@ const apiRoutes: Record<string, ApiRoute> = {
       name: limitText(asString(body.name), 40) || "访客",
       body: content,
       ip: getClientIp(request),
+      device: getClientDevice(request),
       createdAt: new Date().toISOString()
     };
     const nextComments = [comment, ...comments].slice(0, 300);
@@ -466,8 +482,20 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
     homeTitle: limitText(asString(source.homeTitle) || defaultSiteConfig.homeTitle, 80),
     homeDescription: limitText(asString(source.homeDescription) || defaultSiteConfig.homeDescription, 220),
     homeImage: normalizeImageSrc(asString(source.homeImage)),
+    announcement: normalizeAnnouncement(source.announcement),
     links: rawLinks.slice(0, 40).map(normalizeSiteLink),
     pages
+  };
+}
+
+function normalizeAnnouncement(value: unknown): HomeAnnouncement {
+  const record = asRecord(value);
+
+  return {
+    enabled: typeof record.enabled === "boolean" ? record.enabled : false,
+    title: limitText(asString(record.title) || "公告", 40),
+    text: limitText(asString(record.text || record.message), 400),
+    durationSeconds: clampNumber(record.durationSeconds ?? record.closeAfterSeconds, 0, 120, 8)
   };
 }
 
@@ -661,6 +689,7 @@ function normalizeComment(value: unknown): CommentRecord | null {
     name: limitText(asString(record.name), 40) || "访客",
     body,
     ip: limitText(asString(record.ip), 80) || "unknown",
+    device: limitText(asString(record.device), 120) || "未知设备",
     createdAt: limitText(asString(record.createdAt), 40) || new Date().toISOString()
   };
 }
@@ -679,6 +708,75 @@ function getClientIp(request: Request): string {
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown"
   );
+}
+
+function getClientDevice(request: Request): string {
+  const headers = request.headers;
+  const userAgent = headers.get("user-agent") || "";
+  const model = cleanClientHint(headers.get("sec-ch-ua-model"));
+  const platform = cleanClientHint(headers.get("sec-ch-ua-platform"));
+  const cfType = limitText(headers.get("cf-device-type") || "", 30);
+  const device = model || deviceFromUserAgent(userAgent) || platform || cfType || "未知设备";
+  const browser = browserFromUserAgent(userAgent);
+  const parts = [device, browser].filter(Boolean);
+
+  return limitText([...new Set(parts)].join(" / "), 120) || "未知设备";
+}
+
+function cleanClientHint(value: string | null): string {
+  return limitText((value || "").replace(/^"|"$/g, ""), 80);
+}
+
+function deviceFromUserAgent(userAgent: string): string {
+  if (/iPad/i.test(userAgent)) {
+    return "iPad";
+  }
+
+  if (/iPhone/i.test(userAgent)) {
+    return "iPhone";
+  }
+
+  if (/Android/i.test(userAgent)) {
+    return /Mobile/i.test(userAgent) ? "Android 手机" : "Android 设备";
+  }
+
+  if (/Windows/i.test(userAgent)) {
+    return "Windows 电脑";
+  }
+
+  if (/Mac OS X|Macintosh/i.test(userAgent)) {
+    return "Mac";
+  }
+
+  if (/Linux/i.test(userAgent)) {
+    return "Linux 设备";
+  }
+
+  return "";
+}
+
+function browserFromUserAgent(userAgent: string): string {
+  if (/Edg\//i.test(userAgent)) {
+    return "Edge";
+  }
+
+  if (/OPR\//i.test(userAgent)) {
+    return "Opera";
+  }
+
+  if (/Firefox\//i.test(userAgent)) {
+    return "Firefox";
+  }
+
+  if (/Chrome\//i.test(userAgent) && !/Chromium/i.test(userAgent)) {
+    return "Chrome";
+  }
+
+  if (/Safari\//i.test(userAgent)) {
+    return "Safari";
+  }
+
+  return "";
 }
 
 function normalizeStringList(value: unknown, maxItems: number, maxLength: number): string[] {

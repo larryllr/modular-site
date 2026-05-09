@@ -12,6 +12,12 @@ const fallbackConfig = {
   homeTitle: "功能入口",
   homeDescription: "这里是所有分页面的入口。管理员可以在 /admin 添加页面、分配模块和修改标题。",
   homeImage: "",
+  announcement: {
+    enabled: false,
+    title: "公告",
+    text: "",
+    durationSeconds: 8
+  },
   links: [],
   pages: [
     {
@@ -371,6 +377,7 @@ function renderExternalLinkSidebarSettings(link) {
 
 function renderHomeSettings() {
   const panel = element("section", "admin-panel");
+  const announcement = state.config.announcement;
   panel.append(element("h2", "", "主页入口设置"));
   panel.append(
     field("主页标题", state.config.homeTitle, (value) => {
@@ -387,6 +394,34 @@ function renderHomeSettings() {
       state.config.homeImage = value;
     })
   );
+  const notice = element("section", "announcement-settings");
+  notice.append(element("h3", "", "主页公告"));
+  notice.append(
+    checkbox("启用公告弹幕", announcement.enabled, (checked) => {
+      announcement.enabled = checked;
+      renderAdminEditor();
+    })
+  );
+  const noticeRow = element("div", "admin-row");
+  noticeRow.append(
+    field("公告标题", announcement.title, (value) => {
+      announcement.title = value;
+    })
+  );
+  noticeRow.append(
+    numberField("几秒后自动关闭", announcement.durationSeconds, 0, 120, 1, (value) => {
+      announcement.durationSeconds = value;
+      renderAdminEditor();
+    })
+  );
+  notice.append(noticeRow);
+  notice.append(
+    areaField("公告内容", announcement.text, (value) => {
+      announcement.text = value;
+    })
+  );
+  notice.append(element("p", "form-hint", "填 0 秒表示不自动关闭；公告只在主页显示，会以弹幕形式横向滚动。"));
+  panel.append(notice);
   return panel;
 }
 
@@ -1088,6 +1123,12 @@ function renderHome(pages, links) {
   }
 
   main.append(header);
+  const announcement = renderHomeAnnouncement();
+
+  if (announcement) {
+    main.append(announcement);
+  }
+
   main.append(
     renderStatusStrip([
       ["分页面", String(pages.length)],
@@ -1107,6 +1148,32 @@ function renderHome(pages, links) {
   main.append(grid);
   main.append(renderHomeViewControl());
   app.append(main);
+}
+
+function renderHomeAnnouncement() {
+  const announcement = state.config.announcement;
+
+  if (!announcement.enabled || !announcement.text.trim()) {
+    return null;
+  }
+
+  const banner = element("section", "home-announcement");
+  const textLength = announcement.text.trim().length;
+  banner.style.setProperty("--announcement-speed", `${Math.max(8, Math.min(24, textLength * 0.35))}s`);
+
+  const label = element("span", "announcement-label", announcement.title || "公告");
+  const track = element("div", "announcement-track");
+  track.append(element("span", "announcement-text", announcement.text));
+  const close = button("关闭", "announcement-close", "button");
+  close.addEventListener("click", () => banner.remove());
+  banner.append(label, track, close);
+
+  const seconds = Number(announcement.durationSeconds);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    window.setTimeout(() => banner.remove(), seconds * 1000);
+  }
+
+  return banner;
 }
 
 function renderPage(page) {
@@ -1518,8 +1585,9 @@ async function loadComments(pageSlug, list, adminMode) {
 function renderCommentItem(pageSlug, comment, adminMode, list) {
   const item = element("article", "comment-item");
   const head = element("div", "comment-head");
+  const meta = [comment.ip || "unknown", comment.device || "未知设备", formatDate(comment.createdAt)].join(" · ");
   head.append(element("strong", "", comment.name || "访客"));
-  head.append(element("span", "", `${comment.ip || "unknown"} · ${formatDate(comment.createdAt)}`));
+  head.append(element("span", "comment-meta", meta));
   const body = element("p", "", comment.body);
   item.append(head, body);
 
@@ -1558,8 +1626,18 @@ function hydrateConfig(config) {
   return {
     ...fallbackConfig,
     ...next,
+    announcement: hydrateAnnouncement(next.announcement),
     links: (next.links || fallbackConfig.links).map(hydrateExternalLink),
     pages: (next.pages || fallbackConfig.pages).map(hydratePage)
+  };
+}
+
+function hydrateAnnouncement(announcement) {
+  return {
+    enabled: Boolean(announcement?.enabled),
+    title: announcement?.title || "公告",
+    text: announcement?.text || announcement?.message || "",
+    durationSeconds: clampNumber(Number(announcement?.durationSeconds ?? announcement?.closeAfterSeconds ?? 8), 0, 120)
   };
 }
 
