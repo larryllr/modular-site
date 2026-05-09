@@ -4,6 +4,7 @@ const app = document.querySelector("#app");
 const adminTokenKey = "cloudflare-modular-site.admin-token";
 const homeLayoutKey = "cloudflare-modular-site.home-entry-layout";
 const pageColumnsKeyPrefix = "cloudflare-modular-site.page-columns.";
+const maxUndoSteps = 50;
 
 const fallbackConfig = {
   version: 1,
@@ -70,6 +71,7 @@ const state = {
   selectedLinkId: "",
   expandedSettings: "",
   expandedSections: new Set(),
+  undoStack: [],
   saveStatus: ""
 };
 
@@ -147,6 +149,7 @@ async function renderAdmin() {
   try {
     const payload = await api.getJson("/api/admin/config", true);
     state.config = hydrateConfig(payload.config);
+    state.undoStack = [];
     ensureAdminSelection();
     renderAdminEditor();
   } catch {
@@ -186,6 +189,7 @@ function renderLogin(message = "") {
       const payload = await api.postJson("/api/admin/login", { password: password.value });
       state.token = payload.token;
       state.config = hydrateConfig(payload.config);
+      state.undoStack = [];
       ensureAdminSelection();
       localStorage.setItem(adminTokenKey, state.token);
       renderAdminEditor();
@@ -258,6 +262,7 @@ function renderAdminEditor() {
 
   const addPageButton = button("新增分页面", "button primary", "button");
   addPageButton.addEventListener("click", () => {
+    rememberConfigChange();
     const page = createPage();
     state.config.pages.push(page);
     state.selectedItemType = "page";
@@ -268,6 +273,7 @@ function renderAdminEditor() {
 
   const addLinkButton = button("新增网站入口", "button", "button");
   addLinkButton.addEventListener("click", () => {
+    rememberConfigChange();
     const link = createExternalLink();
     state.config.links.push(link);
     state.selectedItemType = "link";
@@ -319,7 +325,7 @@ function renderPageSidebarSettings(page) {
   );
   settings.append(
     sidebarField("后缀", page.slug, (value) => {
-      page.slug = normalizeSlug(value);
+      page.slug = uniquePageSlug(page, value);
     })
   );
   settings.append(
@@ -467,12 +473,44 @@ function renderExternalLinkPreview(link) {
 }
 
 function renderEditablePageHeader(page) {
-  const header = element("section", "preview-page-header");
-  header.append(
-    element("p", "eyebrow", `/${page.slug}`),
-    element("h1", "", page.title),
-    element("p", "lead", page.description || "这个分页面还没有说明。")
-  );
+  const header = element("section", "preview-page-header editable-page-header");
+
+  const slugField = element("label", "inline-edit-field inline-slug-field");
+  slugField.append(element("span", "", "网址后缀"));
+  const slugRow = element("div", "inline-slug-row");
+  slugRow.append(element("strong", "", "/"));
+  const slugInput = document.createElement("input");
+  slugInput.className = "inline-input inline-slug-input";
+  slugInput.value = page.slug;
+  slugInput.addEventListener("change", () => {
+    rememberConfigChange();
+    page.slug = uniquePageSlug(page, slugInput.value);
+    renderAdminEditor();
+  });
+  slugRow.append(slugInput);
+  slugField.append(slugRow);
+
+  const titleInput = document.createElement("input");
+  titleInput.className = "inline-input inline-title-input";
+  titleInput.value = page.title || "";
+  titleInput.placeholder = "分页面标题";
+  titleInput.addEventListener("input", () => {
+    rememberConfigChange();
+    page.title = titleInput.value;
+  });
+  titleInput.addEventListener("change", () => renderAdminEditor());
+
+  const descriptionInput = document.createElement("textarea");
+  descriptionInput.className = "inline-input inline-description-input";
+  descriptionInput.value = page.description || "";
+  descriptionInput.placeholder = "这个分页面还没有说明。";
+  descriptionInput.rows = 2;
+  descriptionInput.addEventListener("input", () => {
+    rememberConfigChange();
+    page.description = descriptionInput.value;
+  });
+
+  header.append(slugField, titleInput, descriptionInput);
 
   return header;
 }
@@ -654,6 +692,7 @@ function renderSectionControls(page, section, index, expanded) {
   const remove = button("删除", "button danger", "button");
   remove.disabled = locked;
   remove.addEventListener("click", () => {
+    rememberConfigChange();
     page.sections.splice(index, 1);
     renderAdminEditor();
   });
@@ -863,6 +902,7 @@ function imageUploadField(section) {
     }
 
     state.saveStatus = "正在处理图片...";
+    rememberConfigChange();
     renderAdminEditor();
 
     try {
@@ -892,7 +932,10 @@ function renderSaveBar(selectedItem) {
 
   const save = button("保存配置", "button primary", "button");
   save.addEventListener("click", saveAdminConfig);
-  bar.append(element("span", "save-status", state.saveStatus), preview, save);
+  const undo = button("撤销", "button", "button");
+  undo.disabled = state.undoStack.length === 0;
+  undo.addEventListener("click", undoAdminChange);
+  bar.append(element("span", "save-status", state.saveStatus), undo, preview, save);
   return bar;
 }
 
@@ -933,6 +976,40 @@ async function saveAdminConfig() {
     state.saveStatus = error.message;
     renderAdminEditor();
   }
+}
+
+function rememberConfigChange() {
+  const snapshot = cloneConfig(state.config);
+  const previous = state.undoStack[state.undoStack.length - 1];
+
+  if (previous && JSON.stringify(previous) === JSON.stringify(snapshot)) {
+    return;
+  }
+
+  state.undoStack.push(snapshot);
+
+  if (state.undoStack.length > maxUndoSteps) {
+    state.undoStack.shift();
+  }
+
+  state.saveStatus = "有未保存修改。";
+}
+
+function undoAdminChange() {
+  const snapshot = state.undoStack.pop();
+
+  if (!snapshot) {
+    return;
+  }
+
+  state.config = hydrateConfig(snapshot);
+  ensureAdminSelection();
+  state.saveStatus = "已撤销上一步，记得保存配置。";
+  renderAdminEditor();
+}
+
+function cloneConfig(config) {
+  return JSON.parse(JSON.stringify(config));
 }
 
 function renderPublicSite() {
@@ -1034,7 +1111,7 @@ function renderHome(pages, links) {
 
 function renderPage(page) {
   document.title = page.title;
-  const columns = getPageColumnCount(page.slug);
+  const columnMode = getPageColumnMode(page.slug);
   const main = element("main", "workspace");
   const header = element("header", "workspace-header compact");
   const copy = element("div");
@@ -1042,24 +1119,26 @@ function renderPage(page) {
   copy.append(element("p", "lead", page.description));
   header.append(copy);
   main.append(header);
-  main.append(renderPageStatusStrip(page, columns));
+  main.append(renderPageStatusStrip(page, columnMode));
 
-  const grid = element("section", "module-grid page-module-grid");
-  grid.style.setProperty("--grid-columns", String(columns));
+  const grid = element("section", `module-grid page-module-grid ${columnMode === "default" ? "layout-default" : "layout-fixed"}`);
+  if (columnMode !== "default") {
+    grid.style.setProperty("--grid-columns", String(columnMode));
+  }
   const context = moduleContext(page);
 
   for (const section of page.sections) {
     const node = renderPublicSection(section, context);
 
     if (node) {
-      applySectionLayout(node, section, columns);
+      applySectionLayout(node, section, columnMode);
       grid.append(node);
     }
   }
 
   if (page.comments.enabled && page.comments.mode === "module") {
     const commentsNode = renderCommentsSection(page, page.comments, false);
-    applySectionLayout(commentsNode, page.comments, columns);
+    applySectionLayout(commentsNode, page.comments, columnMode);
     grid.append(commentsNode);
   }
 
@@ -1108,15 +1187,19 @@ function renderPageStatusStrip(page, columns) {
   viewItem.append(element("span", "metric-label", "显示几个在这行"));
   const select = document.createElement("select");
   select.className = "input";
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "default";
+  defaultOption.textContent = "默认选项";
+  select.append(defaultOption);
   for (const value of [1, 2, 3, 4, 5]) {
     const option = document.createElement("option");
     option.value = String(value);
     option.textContent = `${value} 个`;
     select.append(option);
   }
-  select.value = String(columns);
+  select.value = columns === "default" ? "default" : String(columns);
   select.addEventListener("change", () => {
-    setPageColumnCount(page.slug, Number(select.value));
+    setPageColumnMode(page.slug, select.value);
     renderPublicSite();
   });
   viewItem.append(select);
@@ -1152,8 +1235,12 @@ function renderPublicSection(section, context) {
 
 function applySectionLayout(node, section, columns) {
   const layout = hydrateLayout(section.layout, section.type);
-  const span = layout.width > 0 ? Math.max(1, Math.min(columns, Math.round((layout.width / 100) * columns))) : 1;
-  node.style.gridColumn = `span ${span}`;
+  if (columns === "default") {
+    node.style.gridColumn = layout.width >= 100 ? "1 / -1" : "";
+  } else {
+    const span = layout.width > 0 ? Math.max(1, Math.min(columns, Math.round((layout.width / 100) * columns))) : 1;
+    node.style.gridColumn = `span ${span}`;
+  }
   node.style.minHeight = `${layout.minHeight}px`;
 }
 
@@ -1161,13 +1248,29 @@ function countPageModules(page) {
   return page.sections.length + (page.comments.enabled ? 1 : 0);
 }
 
-function getPageColumnCount(slug) {
-  const value = Number(localStorage.getItem(`${pageColumnsKeyPrefix}${slug}`));
-  return Number.isFinite(value) ? Math.max(1, Math.min(5, value)) : 1;
+function getPageColumnMode(slug) {
+  const saved = localStorage.getItem(`${pageColumnsKeyPrefix}${slug}`);
+  const value = Number(saved);
+  if (!saved || saved === "default" || !Number.isFinite(value)) {
+    return "default";
+  }
+
+  return Math.max(1, Math.min(5, value));
 }
 
-function setPageColumnCount(slug, value) {
-  localStorage.setItem(`${pageColumnsKeyPrefix}${slug}`, String(Math.max(1, Math.min(5, value))));
+function setPageColumnMode(slug, value) {
+  if (value === "default") {
+    localStorage.removeItem(`${pageColumnsKeyPrefix}${slug}`);
+    return;
+  }
+
+  const count = Number(value);
+  if (!Number.isFinite(count)) {
+    localStorage.removeItem(`${pageColumnsKeyPrefix}${slug}`);
+    return;
+  }
+
+  localStorage.setItem(`${pageColumnsKeyPrefix}${slug}`, String(Math.max(1, Math.min(5, count))));
 }
 
 function renderNotFound(slug) {
@@ -1708,6 +1811,7 @@ function createCommentsSection() {
 }
 
 function insertSection(page, index, section) {
+  rememberConfigChange();
   page.sections.splice(index, 0, section);
   state.expandedSections.add(section.id);
   renderAdminEditor();
@@ -1726,6 +1830,7 @@ function moveSection(page, index, direction) {
     return;
   }
 
+  rememberConfigChange();
   const [section] = page.sections.splice(index, 1);
   page.sections.splice(nextIndex, 0, section);
   renderAdminEditor();
@@ -1757,6 +1862,7 @@ function moveSectionTo(page, index, nextIndex) {
     return;
   }
 
+  rememberConfigChange();
   const [section] = page.sections.splice(index, 1);
   page.sections.splice(targetIndex, 0, section);
   renderAdminEditor();
@@ -1770,6 +1876,7 @@ function deletePage(page) {
   }
 
   if (confirm(`确定删除“${page.title}”？`)) {
+    rememberConfigChange();
     state.config.pages = state.config.pages.filter((item) => item.id !== page.id);
     state.selectedPageId = state.config.pages[0]?.id || "";
     state.expandedSettings = "";
@@ -1779,6 +1886,7 @@ function deletePage(page) {
 
 function deleteExternalLink(link) {
   if (confirm(`确定删除“${link.title}”？`)) {
+    rememberConfigChange();
     state.config.links = state.config.links.filter((item) => item.id !== link.id);
     state.selectedItemType = "page";
     state.selectedPageId = state.config.pages[0]?.id || "";
@@ -1805,7 +1913,10 @@ function field(label, value, onInput, hint = "") {
   const input = document.createElement("input");
   input.className = "input";
   input.value = value || "";
-  input.addEventListener("input", () => onInput(input.value));
+  input.addEventListener("input", () => {
+    rememberConfigChange();
+    onInput(input.value);
+  });
   wrapper.append(input);
 
   if (hint) {
@@ -1820,7 +1931,10 @@ function sidebarField(label, value, onInput) {
   wrapper.append(element("span", "", label));
   const input = document.createElement("input");
   input.value = value || "";
-  input.addEventListener("input", () => onInput(input.value));
+  input.addEventListener("input", () => {
+    rememberConfigChange();
+    onInput(input.value);
+  });
   wrapper.append(input);
   return wrapper;
 }
@@ -1830,7 +1944,10 @@ function sidebarAreaField(label, value, onInput) {
   wrapper.append(element("span", "", label));
   const textarea = document.createElement("textarea");
   textarea.value = value || "";
-  textarea.addEventListener("input", () => onInput(textarea.value));
+  textarea.addEventListener("input", () => {
+    rememberConfigChange();
+    onInput(textarea.value);
+  });
   wrapper.append(textarea);
   return wrapper;
 }
@@ -1841,7 +1958,10 @@ function areaField(label, value, onInput) {
   const textarea = document.createElement("textarea");
   textarea.className = "textarea";
   textarea.value = value || "";
-  textarea.addEventListener("input", () => onInput(textarea.value));
+  textarea.addEventListener("input", () => {
+    rememberConfigChange();
+    onInput(textarea.value);
+  });
   wrapper.append(textarea);
   return wrapper;
 }
@@ -1860,7 +1980,10 @@ function selectField(label, value, options, onChange) {
   }
 
   select.value = value;
-  select.addEventListener("change", () => onChange(select.value));
+  select.addEventListener("change", () => {
+    rememberConfigChange();
+    onChange(select.value);
+  });
   wrapper.append(select);
   return wrapper;
 }
@@ -1878,6 +2001,7 @@ function numberField(label, value, min, max, step, onChange) {
   input.addEventListener("change", () => {
     const next = clampNumber(Number(input.value), min, max);
     input.value = String(next);
+    rememberConfigChange();
     onChange(next);
   });
   wrapper.append(input);
@@ -1889,7 +2013,10 @@ function checkbox(label, checked, onChange) {
   const input = document.createElement("input");
   input.type = "checkbox";
   input.checked = checked;
-  input.addEventListener("change", () => onChange(input.checked));
+  input.addEventListener("change", () => {
+    rememberConfigChange();
+    onChange(input.checked);
+  });
   wrapper.append(input, element("span", "", label));
   return wrapper;
 }
@@ -1901,7 +2028,10 @@ function imageValueField(label, value, onChange) {
   input.className = "input";
   input.value = value || "";
   input.placeholder = "粘贴图片地址或上传图片";
-  input.addEventListener("input", () => onChange(input.value));
+  input.addEventListener("input", () => {
+    rememberConfigChange();
+    onChange(input.value);
+  });
 
   const upload = document.createElement("input");
   upload.type = "file";
@@ -1914,6 +2044,7 @@ function imageValueField(label, value, onChange) {
     }
 
     state.saveStatus = "正在处理图片...";
+    rememberConfigChange();
     renderAdminEditor();
 
     try {
@@ -2068,6 +2199,24 @@ function normalizeSlug(value) {
   }
 
   return cleaned || "page";
+}
+
+function uniquePageSlug(currentPage, value) {
+  const base = normalizeSlug(value);
+  const used = new Set(
+    state.config.pages
+      .filter((page) => page !== currentPage)
+      .map((page) => page.slug)
+  );
+  let slug = base;
+  let suffix = 2;
+
+  while (used.has(slug)) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
 }
 
 function uniqueClientSlug(base) {
