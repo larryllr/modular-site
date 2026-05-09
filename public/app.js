@@ -151,7 +151,7 @@ function renderLogin(message = "") {
   password.required = true;
 
   const submit = button("登录", "button primary", "submit");
-  const help = element("p", "form-hint", "默认密码为 llr20081209。上线后可用 Cloudflare 变量 admin 修改。");
+  const help = element("p", "form-hint", "管理员密码请查看 README。上线后可用 Cloudflare 变量 admin 修改。");
   const feedback = element("p", "form-error", message);
 
   form.append(password, submit, help, feedback);
