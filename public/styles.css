@@ -116,6 +116,10 @@ textarea {
   margin-top: auto;
 }
 
+.public-sidebar {
+  padding-top: 28px;
+}
+
 .module-nav button,
 .module-nav a {
   display: grid;
@@ -299,6 +303,28 @@ h1 {
 
 .entry-card .button {
   width: fit-content;
+}
+
+.entry-card.has-entry-background {
+  background-position: center;
+  background-size: cover;
+  color: #ffffff;
+}
+
+.entry-card.has-entry-background p,
+.entry-card.has-entry-background small,
+.entry-card.has-entry-background .pill {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.entry-card.has-entry-background .pill,
+.entry-card.has-entry-background .button {
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+.entry-icon.has-image {
+  background-position: center;
+  background-size: cover;
 }
 
 .switch {
@@ -779,6 +805,86 @@ h1 {
 .image-background-section p,
 .image-background-section small {
   color: rgba(255, 255, 255, 0.84);
+}
+
+.entry-settings {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.entry-preview-wrap {
+  display: grid;
+  gap: 7px;
+}
+
+.entry-preview-wrap .module-card {
+  min-height: 180px;
+  box-shadow: none;
+}
+
+.field-title {
+  font-weight: 700;
+}
+
+.image-value-field input[type="file"] {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 9px;
+}
+
+.comments-section {
+  min-height: 0;
+}
+
+.comment-form {
+  display: grid;
+  gap: 10px;
+}
+
+.comments-list {
+  display: grid;
+  gap: 10px;
+}
+
+.comment-item {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comment-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.comment-item p {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.comments-manager {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
 }
 
 .save-bar {

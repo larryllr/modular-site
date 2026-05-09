@@ -15,6 +15,18 @@ const fallbackConfig = {
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
       visible: true,
+      entry: {
+        title: "",
+        description: "",
+        iconText: "PG",
+        iconImage: "",
+        backgroundImage: ""
+      },
+      comments: {
+        enabled: false,
+        title: "评论",
+        description: "留下你的想法。"
+      },
       modules: ["overview", "notes", "api-status", "checklist"],
       blocks: [
         {
@@ -318,8 +330,80 @@ function renderEditablePageHeader(page) {
     page.description = desc.value;
   });
 
-  header.append(meta, title, desc);
+  header.append(meta, title, desc, renderEntrySettings(page), renderBottomCommentsSettings(page));
   return header;
+}
+
+function renderEntrySettings(page) {
+  const panel = element("section", "entry-settings");
+  const head = element("div", "section-head");
+  head.append(element("h2", "", "主页入口卡片"));
+  head.append(element("p", "", "控制主页里这个分页面入口卡片的背景、小方块背景和显示文字。"));
+
+  const row = element("div", "admin-row");
+  row.append(
+    field("入口标题", page.entry.title, (value) => {
+      page.entry.title = value;
+    }, "留空时使用页面标题。")
+  );
+  row.append(
+    field("入口说明", page.entry.description, (value) => {
+      page.entry.description = value;
+    }, "留空时使用页面说明。")
+  );
+
+  const iconRow = element("div", "admin-row");
+  iconRow.append(
+    field("小方块文字", page.entry.iconText, (value) => {
+      page.entry.iconText = value.slice(0, 4).toUpperCase();
+    })
+  );
+  iconRow.append(imageValueField("小方块背景", page.entry.iconImage, (value) => {
+    page.entry.iconImage = value;
+  }));
+
+  const backgroundRow = element("div", "admin-row");
+  backgroundRow.append(imageValueField("入口卡片背景", page.entry.backgroundImage, (value) => {
+    page.entry.backgroundImage = value;
+  }));
+  backgroundRow.append(renderEntryPreview(page));
+
+  panel.append(head, row, iconRow, backgroundRow);
+  return panel;
+}
+
+function renderEntryPreview(page) {
+  const wrapper = element("div", "entry-preview-wrap");
+  wrapper.append(element("span", "field-title", "入口预览"));
+  wrapper.append(renderPageEntry(page));
+  return wrapper;
+}
+
+function renderBottomCommentsSettings(page) {
+  const panel = element("section", "entry-settings comments-placement-settings");
+  const head = element("div", "section-head");
+  head.append(element("h2", "", "底部评论区"));
+  head.append(element("p", "", "开启后，评论区会固定显示在分页面内容底部；也可以通过插入条添加评论模块到任意位置。"));
+  const row = element("div", "admin-row");
+  row.append(
+    checkbox("在页面底部显示评论区", page.comments.enabled, (checked) => {
+      page.comments.enabled = checked;
+      renderAdminEditor();
+    })
+  );
+  row.append(
+    field("底部评论标题", page.comments.title, (value) => {
+      page.comments.title = value;
+    })
+  );
+  panel.append(head, row);
+  panel.append(
+    field("底部评论说明", page.comments.description, (value) => {
+      page.comments.description = value;
+    })
+  );
+  panel.append(renderCommentsManager(page));
+  return panel;
 }
 
 function renderInsertBar(page, index) {
@@ -332,8 +416,10 @@ function renderInsertBar(page, index) {
   text.addEventListener("click", () => insertSection(page, index, createTextSection()));
   const image = button("图片模块", "button primary", "button");
   image.addEventListener("click", () => insertSection(page, index, createImageSection()));
+  const comments = button("评论模块", "button", "button");
+  comments.addEventListener("click", () => insertSection(page, index, createCommentsSection()));
 
-  bar.append(system, text, image);
+  bar.append(system, text, image, comments);
   return bar;
 }
 
@@ -345,6 +431,8 @@ function renderEditableSection(page, section, index) {
     shell.append(renderEditableSystemSection(page, section));
   } else if (section.type === "image") {
     shell.append(renderEditableImageSection(section));
+  } else if (section.type === "comments") {
+    shell.append(renderEditableCommentsSection(page, section));
   } else {
     shell.append(renderEditableTextSection(section));
   }
@@ -495,6 +583,23 @@ function renderEditableImageSection(section) {
   return card;
 }
 
+function renderEditableCommentsSection(page, section) {
+  const card = element("article", "module-card inline-editor-card comments-editor-card");
+  const row = element("div", "admin-row");
+  row.append(
+    field("评论模块标题", section.title, (value) => {
+      section.title = value;
+    })
+  );
+  row.append(
+    field("评论模块说明", section.description, (value) => {
+      section.description = value;
+    })
+  );
+  card.append(row, renderCommentsSection(page, section, true));
+  return card;
+}
+
 function imageUploadField(section) {
   const wrapper = element("label", "field image-uploader");
   wrapper.append(element("span", "", "上传图片"));
@@ -575,10 +680,7 @@ function renderPublicSite() {
 }
 
 function renderPublicSidebar(slug, pages) {
-  const sidebar = element("aside", "sidebar");
-  const brand = element("div", "brand");
-  brand.append(mark("CF"), textBlock("Modular Site", "Cloudflare Workers"));
-
+  const sidebar = element("aside", "sidebar public-sidebar");
   const nav = element("nav", "module-nav");
   nav.append(navLink("/", "HM", "主页入口", slug ? "所有分页面" : "当前页面", !slug));
 
@@ -587,7 +689,7 @@ function renderPublicSidebar(slug, pages) {
   }
 
   nav.append(navLink("/admin", "AD", "管理员", "管理页面和模块", false));
-  sidebar.append(brand, nav);
+  sidebar.append(nav);
   return sidebar;
 }
 
@@ -654,6 +756,11 @@ function renderPage(page) {
   }
 
   main.append(grid);
+
+  if (page.comments.enabled) {
+    main.append(renderCommentsSection(page, page.comments, false));
+  }
+
   app.append(main);
 }
 
@@ -666,6 +773,10 @@ function renderPublicSection(section, context) {
 
   if (section.type === "image") {
     return renderImageSection(section);
+  }
+
+  if (section.type === "comments") {
+    return renderCommentsSection(context.page, section, false);
   }
 
   return renderBlockCard(section);
@@ -702,8 +813,9 @@ function renderStatusStrip(items) {
 
 function renderPageEntry(page) {
   const card = element("article", "module-card entry-card");
+  applyEntryCardStyle(card, page.entry.backgroundImage);
   const header = element("header", "module-card-header");
-  header.append(mark("PG"), textBlock(page.title, page.description));
+  header.append(entryMark(page.entry), textBlock(page.entry.title || page.title, page.entry.description || page.description));
 
   const link = document.createElement("a");
   link.className = "button primary";
@@ -782,6 +894,138 @@ function renderImageSection(section) {
   return card;
 }
 
+function renderCommentsSection(page, source, adminMode) {
+  const card = element("article", adminMode ? "module-card comments-section admin-comments-section" : "module-card comments-section");
+  const header = element("header", "module-card-header no-toggle");
+  header.append(mark("CM"), textBlock(source.title || "评论", source.description || "留下你的想法。"));
+
+  const form = element("form", "comment-form");
+  const name = document.createElement("input");
+  name.className = "input";
+  name.name = "name";
+  name.placeholder = "你的名字";
+  name.maxLength = 40;
+  const body = document.createElement("textarea");
+  body.className = "textarea";
+  body.name = "body";
+  body.placeholder = "写下评论...";
+  body.maxLength = 1000;
+  body.required = true;
+  const submit = button("发表评论", "button primary", "submit");
+  const feedback = element("p", "form-hint");
+  form.append(name, body, submit, feedback);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submit.disabled = true;
+    submit.textContent = "提交中";
+    feedback.textContent = "";
+
+    try {
+      await api.postJson("/api/comments", {
+        page: page.slug,
+        name: name.value,
+        body: body.value
+      });
+      body.value = "";
+      feedback.textContent = "评论已发布。";
+      await loadComments(page.slug, list, adminMode);
+    } catch (error) {
+      feedback.textContent = error.message;
+    }
+
+    submit.disabled = false;
+    submit.textContent = "发表评论";
+  });
+
+  const list = element("div", "comments-list");
+  const adminActions = element("div", "module-actions");
+
+  if (adminMode) {
+    const clear = button("清空这个页面的评论", "button danger", "button");
+    clear.addEventListener("click", async () => {
+      if (!confirm(`确定清空 /${page.slug} 的所有评论？`)) {
+        return;
+      }
+
+      await api.postJson("/api/admin/comments", { page: page.slug, action: "clear" }, true);
+      await loadComments(page.slug, list, true);
+    });
+    adminActions.append(clear);
+  }
+
+  card.append(header, form);
+
+  if (adminMode) {
+    card.append(adminActions);
+  }
+
+  card.append(list);
+  loadComments(page.slug, list, adminMode);
+  return card;
+}
+
+function renderCommentsManager(page) {
+  const card = element("section", "comments-manager");
+  const head = element("div", "section-head action-head");
+  const copy = element("div");
+  copy.append(element("h2", "", "评论管理"));
+  copy.append(element("p", "", "这里可以删除某一条评论，或清空当前分页面的全部评论。"));
+  const clear = button("清空评论", "button danger", "button");
+  const list = element("div", "comments-list");
+  clear.addEventListener("click", async () => {
+    if (!confirm(`确定清空 /${page.slug} 的所有评论？`)) {
+      return;
+    }
+
+    await api.postJson("/api/admin/comments", { page: page.slug, action: "clear" }, true);
+    await loadComments(page.slug, list, true);
+  });
+  head.append(copy, clear);
+  card.append(head, list);
+  loadComments(page.slug, list, true);
+  return card;
+}
+
+async function loadComments(pageSlug, list, adminMode) {
+  list.replaceChildren(element("p", "form-hint", "正在加载评论..."));
+
+  try {
+    const payload = await api.getJson(`/api/comments?page=${encodeURIComponent(pageSlug)}`);
+    const comments = payload.comments || [];
+
+    if (comments.length === 0) {
+      list.replaceChildren(element("p", "empty-state", "还没有评论。"));
+      return;
+    }
+
+    list.replaceChildren(
+      ...comments.map((comment) => renderCommentItem(pageSlug, comment, adminMode, list))
+    );
+  } catch (error) {
+    list.replaceChildren(element("p", "form-error", error.message));
+  }
+}
+
+function renderCommentItem(pageSlug, comment, adminMode, list) {
+  const item = element("article", "comment-item");
+  const head = element("div", "comment-head");
+  head.append(element("strong", "", comment.name || "访客"));
+  head.append(element("span", "", `${comment.ip || "unknown"} · ${formatDate(comment.createdAt)}`));
+  const body = element("p", "", comment.body);
+  item.append(head, body);
+
+  if (adminMode) {
+    const remove = button("删除", "button danger", "button");
+    remove.addEventListener("click", async () => {
+      await api.postJson("/api/admin/comments", { page: pageSlug, action: "delete", id: comment.id }, true);
+      await loadComments(pageSlug, list, true);
+    });
+    item.append(remove);
+  }
+
+  return item;
+}
+
 function moduleContext(page) {
   const systemIds = page.sections.filter((section) => section.type === "system").map((section) => section.moduleId);
   const enabled = new Map(state.modules.map((module) => [module.id, systemIds.includes(module.id)]));
@@ -794,7 +1038,8 @@ function moduleContext(page) {
       activeModuleId: systemIds[0] || ""
     },
     refresh: renderPublicSite,
-    api
+    api,
+    page
   };
 }
 
@@ -823,7 +1068,9 @@ function hydratePage(page) {
     ...page,
     sections,
     modules: sections.filter((section) => section.type === "system").map((section) => section.moduleId),
-    blocks: sections.filter((section) => section.type === "text")
+    blocks: sections.filter((section) => section.type === "text"),
+    entry: hydrateEntry(page.entry),
+    comments: hydrateComments(page.comments)
   };
 }
 
@@ -854,6 +1101,15 @@ function hydrateSection(section) {
     };
   }
 
+  if (section.type === "comments") {
+    return {
+      id: section.id || crypto.randomUUID(),
+      type: "comments",
+      title: section.title || "评论",
+      description: section.description || "留下你的想法。"
+    };
+  }
+
   return {
     id: section.id || crypto.randomUUID(),
     type: "text",
@@ -861,6 +1117,24 @@ function hydrateSection(section) {
     title: section.title || "文本模块",
     description: section.description || "",
     body: section.body || ""
+  };
+}
+
+function hydrateEntry(entry) {
+  return {
+    title: entry?.title || "",
+    description: entry?.description || "",
+    iconText: (entry?.iconText || "PG").slice(0, 4).toUpperCase(),
+    iconImage: entry?.iconImage || "",
+    backgroundImage: entry?.backgroundImage || ""
+  };
+}
+
+function hydrateComments(comments) {
+  return {
+    enabled: Boolean(comments?.enabled),
+    title: comments?.title || "评论",
+    description: comments?.description || "留下你的想法。"
   };
 }
 
@@ -877,6 +1151,18 @@ function createPage() {
     title: `新分页面 ${index}`,
     description: "在这里填写页面说明。",
     visible: true,
+    entry: {
+      title: "",
+      description: "",
+      iconText: "PG",
+      iconImage: "",
+      backgroundImage: ""
+    },
+    comments: {
+      enabled: false,
+      title: "评论",
+      description: "留下你的想法。"
+    },
     modules: [],
     blocks: [],
     sections: []
@@ -913,6 +1199,15 @@ function createImageSection() {
     caption: "",
     display: "normal",
     fit: "cover"
+  };
+}
+
+function createCommentsSection() {
+  return {
+    id: crypto.randomUUID(),
+    type: "comments",
+    title: "评论",
+    description: "留下你的想法。"
   };
 }
 
@@ -1015,6 +1310,43 @@ function checkbox(label, checked, onChange) {
   return wrapper;
 }
 
+function imageValueField(label, value, onChange) {
+  const wrapper = element("div", "field image-value-field");
+  wrapper.append(element("span", "", label));
+  const input = document.createElement("input");
+  input.className = "input";
+  input.value = value || "";
+  input.placeholder = "粘贴图片地址或上传图片";
+  input.addEventListener("input", () => onChange(input.value));
+
+  const upload = document.createElement("input");
+  upload.type = "file";
+  upload.accept = "image/*";
+  upload.addEventListener("change", async () => {
+    const file = upload.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    state.saveStatus = "正在处理图片...";
+    renderAdminEditor();
+
+    try {
+      const dataUrl = await imageFileToDataUrl(file);
+      onChange(dataUrl);
+      state.saveStatus = "图片已加入预览，记得保存配置。";
+    } catch (error) {
+      state.saveStatus = error.message;
+    }
+
+    renderAdminEditor();
+  });
+
+  wrapper.append(input, upload, element("small", "", "留空则不使用自定义背景。"));
+  return wrapper;
+}
+
 async function imageFileToDataUrl(file) {
   if (!file.type.startsWith("image/")) {
     throw new Error("请选择图片文件。");
@@ -1067,6 +1399,17 @@ function button(label, className, type) {
 
 function mark(value) {
   return element("span", "module-icon", value);
+}
+
+function entryMark(entry) {
+  const icon = element("span", "module-icon entry-icon", entry.iconImage ? "" : entry.iconText || "PG");
+
+  if (entry.iconImage) {
+    icon.classList.add("has-image");
+    icon.style.backgroundImage = `url("${cssUrl(entry.iconImage)}")`;
+  }
+
+  return icon;
 }
 
 function textBlock(title, subtitle) {
@@ -1128,6 +1471,32 @@ function uniqueClientSlug(base) {
 
 function cssUrl(value) {
   return value.replace(/"/g, "%22").replace(/\)/g, "%29");
+}
+
+function applyEntryCardStyle(card, image) {
+  if (!image) {
+    return;
+  }
+
+  card.classList.add("has-entry-background");
+  card.style.backgroundImage = `linear-gradient(90deg, rgba(23, 32, 29, 0.82), rgba(23, 32, 29, 0.22)), url("${cssUrl(image)}")`;
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value || "";
+  }
+
+  return date.toLocaleString("zh-CN", {
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function drawFeatureMap(canvas, pages) {
