@@ -63,6 +63,17 @@ type PageComments = {
   description: string;
 };
 
+type SiteLink = {
+  id: string;
+  title: string;
+  description: string;
+  targetUrl: string;
+  visible: boolean;
+  iconText: string;
+  iconImage: string;
+  backgroundImage: string;
+};
+
 type PageSection = SystemSection | ContentBlock | ImageSection | CommentsSection;
 
 type SitePage = {
@@ -84,6 +95,7 @@ type SiteConfig = {
   homeTitle: string;
   homeDescription: string;
   homeImage: string;
+  links: SiteLink[];
   pages: SitePage[];
 };
 
@@ -114,6 +126,7 @@ const defaultSiteConfig: SiteConfig = {
   homeTitle: "功能入口",
   homeDescription: "这里是所有分页面的入口。管理员可以在 /admin 添加页面、分配模块和修改标题。",
   homeImage: "",
+  links: [],
   pages: [
     {
       id: "workspace",
@@ -386,6 +399,7 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
   const source = asRecord(value);
   const usedSlugs = new Set<string>();
   const rawPages = Array.isArray(source.pages) ? source.pages : defaultSiteConfig.pages;
+  const rawLinks = Array.isArray(source.links) ? source.links : defaultSiteConfig.links;
 
   const pages = rawPages.slice(0, 40).map((page, index) => {
     const record = asRecord(page);
@@ -429,7 +443,23 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
     homeTitle: limitText(asString(source.homeTitle) || defaultSiteConfig.homeTitle, 80),
     homeDescription: limitText(asString(source.homeDescription) || defaultSiteConfig.homeDescription, 220),
     homeImage: normalizeImageSrc(asString(source.homeImage)),
+    links: rawLinks.slice(0, 40).map(normalizeSiteLink),
     pages
+  };
+}
+
+function normalizeSiteLink(value: unknown, index: number): SiteLink {
+  const record = asRecord(value);
+
+  return {
+    id: asString(record.id) || crypto.randomUUID(),
+    title: limitText(asString(record.title) || `网站入口 ${index + 1}`, 80),
+    description: limitText(asString(record.description), 220),
+    targetUrl: normalizeExternalUrl(asString(record.targetUrl || record.url || record.href)),
+    visible: typeof record.visible === "boolean" ? record.visible : true,
+    iconText: limitText(asString(record.iconText) || "WEB", 4).toUpperCase(),
+    iconImage: normalizeImageSrc(asString(record.iconImage)),
+    backgroundImage: normalizeImageSrc(asString(record.backgroundImage))
   };
 }
 
@@ -530,6 +560,23 @@ function normalizeImageSrc(value: string): string {
     src.startsWith("/");
 
   return allowed ? src : "";
+}
+
+function normalizeExternalUrl(value: string): string {
+  const raw = limitText(value, 500).trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    const url = new URL(withProtocol);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
 }
 
 async function readComments(env: AppEnv, page: string): Promise<CommentRecord[]> {

@@ -9,6 +9,7 @@ const fallbackConfig = {
   homeTitle: "功能入口",
   homeDescription: "这里是所有分页面的入口。管理员可以在 /admin 添加页面、分配模块和修改标题。",
   homeImage: "",
+  links: [],
   pages: [
     {
       id: "workspace",
@@ -61,7 +62,9 @@ const state = {
   modules: [],
   config: fallbackConfig,
   token: localStorage.getItem(adminTokenKey) || "",
+  selectedItemType: "page",
   selectedPageId: "",
+  selectedLinkId: "",
   expandedSettings: "",
   expandedSections: new Set(),
   saveStatus: ""
@@ -141,7 +144,7 @@ async function renderAdmin() {
   try {
     const payload = await api.getJson("/api/admin/config", true);
     state.config = hydrateConfig(payload.config);
-    state.selectedPageId = state.selectedPageId || state.config.pages[0]?.id || "";
+    ensureAdminSelection();
     renderAdminEditor();
   } catch {
     state.token = "";
@@ -180,7 +183,7 @@ function renderLogin(message = "") {
       const payload = await api.postJson("/api/admin/login", { password: password.value });
       state.token = payload.token;
       state.config = hydrateConfig(payload.config);
-      state.selectedPageId = state.config.pages[0]?.id || "";
+      ensureAdminSelection();
       localStorage.setItem(adminTokenKey, state.token);
       renderAdminEditor();
     } catch (error) {
@@ -197,64 +200,54 @@ function renderLogin(message = "") {
 
 function renderAdminEditor() {
   setAppClass("admin-shell");
+  ensureAdminSelection();
 
   const sidebar = element("aside", "sidebar admin-sidebar");
   const brand = element("div", "brand");
   brand.append(mark("AD"), textBlock("站点后台", "预览式页面编辑"));
-  const selectedPage = getSelectedPage();
+  const selectedItem = getSelectedAdminItem();
+  const selectedPage = selectedItem?.type === "page" ? selectedItem.page : null;
+  const selectedLink = selectedItem?.type === "link" ? selectedItem.link : null;
 
   const pageNav = element("nav", "module-nav");
   for (const page of state.config.pages) {
     const group = element("section", "admin-page-nav-item");
     const item = document.createElement("button");
     item.type = "button";
-    item.classList.toggle("is-active", page.id === state.selectedPageId);
+    item.classList.toggle("is-active", state.selectedItemType === "page" && page.id === state.selectedPageId);
     item.append(mark(page.visible ? "PG" : "HD"), textBlock(page.title, `/${page.slug}`));
     item.addEventListener("click", () => {
+      state.selectedItemType = "page";
       state.selectedPageId = page.id;
+      state.expandedSettings = "";
       renderAdminEditor();
     });
-
-    const settings = element("div", "admin-page-settings");
-    settings.append(
-      sidebarField("标题", page.title, (value) => {
-        page.title = value;
-      })
-    );
-    settings.append(
-      sidebarField("后缀", page.slug, (value) => {
-        page.slug = normalizeSlug(value);
-      })
-    );
-    settings.append(
-      sidebarAreaField("说明", page.description, (value) => {
-        page.description = value;
-      })
-    );
-    settings.append(
-      checkbox("主页显示", page.visible, (checked) => {
-        page.visible = checked;
-        renderAdminEditor();
-      })
-    );
-    const settingActions = element("div", "sidebar-mini-actions");
-    const entryButton = button("入口卡片", state.expandedSettings === "entry" ? "button primary" : "button", "button");
-    entryButton.addEventListener("click", () => {
-      state.expandedSettings = state.expandedSettings === "entry" ? "" : "entry";
-      renderAdminEditor();
-    });
-    const commentsButton = button("评论区域", state.expandedSettings === "comments" ? "button primary" : "button", "button");
-    commentsButton.addEventListener("click", () => {
-      state.expandedSettings = state.expandedSettings === "comments" ? "" : "comments";
-      renderAdminEditor();
-    });
-    settingActions.append(entryButton, commentsButton);
-    settings.append(settingActions);
 
     group.append(item);
 
-    if (page.id === state.selectedPageId) {
-      group.append(settings);
+    if (state.selectedItemType === "page" && page.id === state.selectedPageId) {
+      group.append(renderPageSidebarSettings(page));
+    }
+
+    pageNav.append(group);
+  }
+
+  for (const link of state.config.links) {
+    const group = element("section", "admin-page-nav-item");
+    const item = document.createElement("button");
+    item.type = "button";
+    item.classList.toggle("is-active", state.selectedItemType === "link" && link.id === state.selectedLinkId);
+    item.append(linkMark(link), textBlock(link.title, externalLinkSubtitle(link)));
+    item.addEventListener("click", () => {
+      state.selectedItemType = "link";
+      state.selectedLinkId = link.id;
+      state.expandedSettings = "";
+      renderAdminEditor();
+    });
+    group.append(item);
+
+    if (state.selectedItemType === "link" && link.id === state.selectedLinkId) {
+      group.append(renderExternalLinkSidebarSettings(link));
     }
 
     pageNav.append(group);
@@ -264,7 +257,19 @@ function renderAdminEditor() {
   addPageButton.addEventListener("click", () => {
     const page = createPage();
     state.config.pages.push(page);
+    state.selectedItemType = "page";
     state.selectedPageId = page.id;
+    state.expandedSettings = "";
+    renderAdminEditor();
+  });
+
+  const addLinkButton = button("新增网站入口", "button", "button");
+  addLinkButton.addEventListener("click", () => {
+    const link = createExternalLink();
+    state.config.links.push(link);
+    state.selectedItemType = "link";
+    state.selectedLinkId = link.id;
+    state.expandedSettings = "";
     renderAdminEditor();
   });
 
@@ -281,7 +286,7 @@ function renderAdminEditor() {
   });
 
   const sidebarActions = element("div", "sidebar-actions");
-  sidebarActions.append(addPageButton, homeButton, logoutButton);
+  sidebarActions.append(addPageButton, addLinkButton, homeButton, logoutButton);
   sidebar.append(brand, pageNav, sidebarActions);
 
   const main = element("main", "admin-workspace");
@@ -294,10 +299,77 @@ function renderAdminEditor() {
 
   if (selectedPage) {
     main.append(renderPreviewEditor(selectedPage));
+  } else if (selectedLink) {
+    main.append(renderExternalLinkEditor(selectedLink));
   }
 
-  main.append(renderSaveBar(selectedPage));
+  main.append(renderSaveBar(selectedItem));
   app.replaceChildren(sidebar, main);
+}
+
+function renderPageSidebarSettings(page) {
+  const settings = element("div", "admin-page-settings");
+  settings.append(
+    sidebarField("标题", page.title, (value) => {
+      page.title = value;
+    })
+  );
+  settings.append(
+    sidebarField("后缀", page.slug, (value) => {
+      page.slug = normalizeSlug(value);
+    })
+  );
+  settings.append(
+    sidebarAreaField("说明", page.description, (value) => {
+      page.description = value;
+    })
+  );
+  settings.append(
+    checkbox("主页显示", page.visible, (checked) => {
+      page.visible = checked;
+      renderAdminEditor();
+    })
+  );
+  const settingActions = element("div", "sidebar-mini-actions");
+  const entryButton = button("入口卡片", state.expandedSettings === "entry" ? "button primary" : "button", "button");
+  entryButton.addEventListener("click", () => {
+    state.expandedSettings = state.expandedSettings === "entry" ? "" : "entry";
+    renderAdminEditor();
+  });
+  const commentsButton = button("评论区域", state.expandedSettings === "comments" ? "button primary" : "button", "button");
+  commentsButton.addEventListener("click", () => {
+    state.expandedSettings = state.expandedSettings === "comments" ? "" : "comments";
+    renderAdminEditor();
+  });
+  settingActions.append(entryButton, commentsButton);
+  settings.append(settingActions);
+  return settings;
+}
+
+function renderExternalLinkSidebarSettings(link) {
+  const settings = element("div", "admin-page-settings");
+  settings.append(
+    sidebarField("名称", link.title, (value) => {
+      link.title = value;
+    })
+  );
+  settings.append(
+    sidebarField("目标网址", link.targetUrl, (value) => {
+      link.targetUrl = value.trim();
+    })
+  );
+  settings.append(
+    sidebarAreaField("说明", link.description, (value) => {
+      link.description = value;
+    })
+  );
+  settings.append(
+    checkbox("显示入口", link.visible, (checked) => {
+      link.visible = checked;
+      renderAdminEditor();
+    })
+  );
+  return settings;
 }
 
 function renderHomeSettings() {
@@ -353,6 +425,54 @@ function renderPreviewEditor(page) {
 
   panel.append(head, canvas);
   return panel;
+}
+
+function renderExternalLinkEditor(link) {
+  const panel = element("section", "admin-panel external-link-editor");
+  const head = element("div", "section-head action-head");
+  const copy = element("div");
+  copy.append(element("h2", "", "外部网站入口"));
+  copy.append(element("p", "", "这个入口会出现在主页卡片和左侧导航里，点击后前往目标网站。"));
+
+  const headActions = element("div", "module-actions");
+  const targetUrl = normalizeExternalUrl(link.targetUrl);
+  const open = button("打开目标", "button", "button");
+  open.disabled = !targetUrl;
+  open.addEventListener("click", () => {
+    if (targetUrl) {
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+    }
+  });
+  const remove = button("删除入口", "button danger", "button");
+  remove.addEventListener("click", () => deleteExternalLink(link));
+  headActions.append(open, remove);
+  head.append(copy, headActions);
+
+  const iconRow = element("div", "admin-row");
+  iconRow.append(
+    field("图标文字", link.iconText, (value) => {
+      link.iconText = value.slice(0, 4).toUpperCase();
+    }, "未上传图标时，会先尝试使用目标网站图标；读取失败时显示这段文字。")
+  );
+  iconRow.append(imageValueField("自定义图标", link.iconImage, (value) => {
+    link.iconImage = value;
+  }));
+
+  const backgroundRow = element("div", "admin-row");
+  backgroundRow.append(imageValueField("入口背景", link.backgroundImage, (value) => {
+    link.backgroundImage = value;
+  }));
+  backgroundRow.append(renderExternalLinkPreview(link));
+
+  panel.append(head, iconRow, backgroundRow);
+  return panel;
+}
+
+function renderExternalLinkPreview(link) {
+  const wrapper = element("div", "entry-preview-wrap");
+  wrapper.append(element("span", "field-title", "入口预览"));
+  wrapper.append(renderExternalLinkEntry(link));
+  return wrapper;
 }
 
 function renderEditablePageHeader(page) {
@@ -683,17 +803,44 @@ function imageUploadField(section) {
   return wrapper;
 }
 
-function renderSaveBar(selectedPage) {
+function renderSaveBar(selectedItem) {
   const bar = element("div", "save-bar");
-  const preview = button(selectedPage ? `预览 /${selectedPage.slug}` : "预览主页", "button", "button");
+  const previewTarget = previewTargetFor(selectedItem);
+  const preview = button(previewTarget.label, "button", "button");
+  preview.disabled = !previewTarget.url;
   preview.addEventListener("click", () => {
-    window.open(selectedPage ? `/${selectedPage.slug}` : "/", "_blank", "noopener,noreferrer");
+    if (previewTarget.url) {
+      window.open(previewTarget.url, "_blank", "noopener,noreferrer");
+    }
   });
 
   const save = button("保存配置", "button primary", "button");
   save.addEventListener("click", saveAdminConfig);
   bar.append(element("span", "save-status", state.saveStatus), preview, save);
   return bar;
+}
+
+function previewTargetFor(selectedItem) {
+  if (selectedItem?.type === "page") {
+    return {
+      label: `预览 /${selectedItem.page.slug}`,
+      url: `/${selectedItem.page.slug}`
+    };
+  }
+
+  if (selectedItem?.type === "link") {
+    const url = normalizeExternalUrl(selectedItem.link.targetUrl);
+
+    return {
+      label: url ? "打开目标网址" : "目标网址未设置",
+      url
+    };
+  }
+
+  return {
+    label: "预览主页",
+    url: "/"
+  };
 }
 
 async function saveAdminConfig() {
@@ -703,6 +850,7 @@ async function saveAdminConfig() {
   try {
     const payload = await api.postJson("/api/admin/config", { config: state.config }, true);
     state.config = hydrateConfig(payload.config);
+    ensureAdminSelection();
     state.saveStatus = `已保存 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
     renderAdminEditor();
   } catch (error) {
@@ -714,13 +862,14 @@ async function saveAdminConfig() {
 function renderPublicSite() {
   const slug = getRouteSlug();
   const pages = state.config.pages.filter((page) => page.visible);
+  const links = state.config.links.filter((link) => link.visible && normalizeExternalUrl(link.targetUrl));
   const page = slug ? pages.find((item) => item.slug === slug) : null;
 
   setAppClass("app-shell");
-  app.append(renderPublicSidebar(slug, pages));
+  app.append(renderPublicSidebar(slug, pages, links));
 
   if (!slug) {
-    renderHome(pages);
+    renderHome(pages, links);
     return;
   }
 
@@ -732,7 +881,7 @@ function renderPublicSite() {
   renderPage(page);
 }
 
-function renderPublicSidebar(slug, pages) {
+function renderPublicSidebar(slug, pages, links) {
   const sidebar = element("aside", "sidebar public-sidebar");
   const nav = element("nav", "module-nav");
   nav.append(navLink("/", "HM", "主页入口", slug ? "所有分页面" : "当前页面", !slug));
@@ -741,12 +890,29 @@ function renderPublicSidebar(slug, pages) {
     nav.append(navLink(`/${page.slug}`, "PG", page.title, `/${page.slug}`, slug === page.slug));
   }
 
+  for (const link of links) {
+    nav.append(
+      navLink(
+        normalizeExternalUrl(link.targetUrl),
+        link.iconText || "WEB",
+        link.title,
+        externalLinkSubtitle(link),
+        false,
+        {
+          external: true,
+          iconImage: link.iconImage,
+          fallbackIcon: faviconUrl(link.targetUrl)
+        }
+      )
+    );
+  }
+
   nav.append(navLink("/admin", "AD", "管理员", "管理页面和模块", false));
   sidebar.append(nav);
   return sidebar;
 }
 
-function renderHome(pages) {
+function renderHome(pages, links) {
   document.title = state.config.homeTitle;
   const main = element("main", "workspace");
   const header = element("header", "workspace-header");
@@ -770,6 +936,7 @@ function renderHome(pages) {
   main.append(
     renderStatusStrip([
       ["分页面", String(pages.length)],
+      ["外部入口", String(links.length)],
       ["内容模块", String(pages.reduce((sum, page) => sum + page.sections.length, 0))],
       ["后台入口", "/admin"]
     ])
@@ -778,6 +945,9 @@ function renderHome(pages) {
   const grid = element("section", "module-grid");
   for (const page of pages) {
     grid.append(renderPageEntry(page));
+  }
+  for (const link of links) {
+    grid.append(renderExternalLinkEntry(link));
   }
   main.append(grid);
   app.append(main);
@@ -883,6 +1053,28 @@ function renderPageEntry(page) {
   link.textContent = "进入";
 
   card.append(header, link);
+  return card;
+}
+
+function renderExternalLinkEntry(link) {
+  const card = element("article", "module-card entry-card external-entry-card");
+  applyEntryCardStyle(card, link.backgroundImage);
+  const targetUrl = normalizeExternalUrl(link.targetUrl);
+  const header = element("header", "module-card-header");
+  header.append(linkMark(link), textBlock(link.title || "外部网站", link.description || externalLinkSubtitle(link)));
+
+  const anchor = document.createElement("a");
+  anchor.className = "button primary";
+  anchor.href = targetUrl || "#";
+  anchor.rel = "noreferrer";
+  anchor.textContent = targetUrl ? "前往" : "未设置网址";
+
+  if (!targetUrl) {
+    anchor.setAttribute("aria-disabled", "true");
+    anchor.addEventListener("click", (event) => event.preventDefault());
+  }
+
+  card.append(header, anchor);
   return card;
 }
 
@@ -1104,6 +1296,7 @@ function hydrateConfig(config) {
   return {
     ...fallbackConfig,
     ...next,
+    links: (next.links || fallbackConfig.links).map(hydrateExternalLink),
     pages: (next.pages || fallbackConfig.pages).map(hydratePage)
   };
 }
@@ -1193,6 +1386,50 @@ function hydrateComments(comments) {
   };
 }
 
+function hydrateExternalLink(link) {
+  return {
+    id: link?.id || crypto.randomUUID(),
+    title: link?.title || "网站入口",
+    description: link?.description || "",
+    targetUrl: link?.targetUrl || link?.url || "",
+    visible: link?.visible !== false,
+    iconText: (link?.iconText || "WEB").slice(0, 4).toUpperCase(),
+    iconImage: link?.iconImage || "",
+    backgroundImage: link?.backgroundImage || ""
+  };
+}
+
+function ensureAdminSelection() {
+  const links = state.config.links || [];
+  const pageExists = state.config.pages.some((page) => page.id === state.selectedPageId);
+  const linkExists = links.some((link) => link.id === state.selectedLinkId);
+
+  if (state.selectedItemType === "page" && pageExists) {
+    return;
+  }
+
+  if (state.selectedItemType === "link" && linkExists) {
+    return;
+  }
+
+  state.selectedItemType = "page";
+  state.selectedPageId = state.config.pages[0]?.id || "";
+  state.selectedLinkId = links[0]?.id || "";
+}
+
+function getSelectedAdminItem() {
+  if (state.selectedItemType === "link") {
+    const link = state.config.links.find((item) => item.id === state.selectedLinkId);
+
+    if (link) {
+      return { type: "link", link };
+    }
+  }
+
+  const page = getSelectedPage();
+  return page ? { type: "page", page } : null;
+}
+
 function getSelectedPage() {
   return state.config.pages.find((page) => page.id === state.selectedPageId) || state.config.pages[0] || null;
 }
@@ -1221,6 +1458,21 @@ function createPage() {
     modules: [],
     blocks: [],
     sections: []
+  };
+}
+
+function createExternalLink() {
+  const index = state.config.links.length + 1;
+
+  return {
+    id: crypto.randomUUID(),
+    title: `网站入口 ${index}`,
+    description: "点击前往外部网站。",
+    targetUrl: "",
+    visible: true,
+    iconText: "WEB",
+    iconImage: "",
+    backgroundImage: ""
   };
 }
 
@@ -1295,6 +1547,16 @@ function deletePage(page) {
     state.config.pages = state.config.pages.filter((item) => item.id !== page.id);
     state.selectedPageId = state.config.pages[0]?.id || "";
     state.expandedSettings = "";
+    renderAdminEditor();
+  }
+}
+
+function deleteExternalLink(link) {
+  if (confirm(`确定删除“${link.title}”？`)) {
+    state.config.links = state.config.links.filter((item) => item.id !== link.id);
+    state.selectedItemType = "page";
+    state.selectedPageId = state.config.pages[0]?.id || "";
+    state.selectedLinkId = state.config.links[0]?.id || "";
     renderAdminEditor();
   }
 }
@@ -1458,11 +1720,17 @@ function loadImage(src) {
   });
 }
 
-function navLink(href, icon, title, description, active) {
+function navLink(href, icon, title, description, active, options = {}) {
   const link = document.createElement("a");
   link.className = active ? "is-active" : "";
   link.href = href;
-  link.append(mark(icon), textBlock(title, description));
+
+  if (options.external) {
+    link.classList.add("is-external");
+    link.rel = "noreferrer";
+  }
+
+  link.append(iconMark(icon, options.iconImage || "", options.fallbackIcon || ""), textBlock(title, description));
   return link;
 }
 
@@ -1479,11 +1747,28 @@ function mark(value) {
 }
 
 function entryMark(entry) {
-  const icon = element("span", "module-icon entry-icon", entry.iconImage ? "" : entry.iconText || "PG");
+  return iconMark(entry.iconText || "PG", entry.iconImage || "");
+}
 
-  if (entry.iconImage) {
+function linkMark(link) {
+  return iconMark(link.iconText || "WEB", link.iconImage || "", faviconUrl(link.targetUrl));
+}
+
+function iconMark(text, image, fallbackImage = "") {
+  const icon = element("span", "module-icon entry-icon", text || "WEB");
+  const src = image || fallbackImage;
+
+  if (src) {
     icon.classList.add("has-image");
-    icon.style.backgroundImage = `url("${cssUrl(entry.iconImage)}")`;
+    icon.textContent = "";
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = src;
+    img.addEventListener("error", () => {
+      icon.classList.remove("has-image");
+      icon.replaceChildren(document.createTextNode(text || "WEB"));
+    });
+    icon.append(img);
   }
 
   return icon;
@@ -1557,6 +1842,55 @@ function applyEntryCardStyle(card, image) {
 
   card.classList.add("has-entry-background");
   card.style.backgroundImage = `linear-gradient(90deg, rgba(23, 32, 29, 0.82), rgba(23, 32, 29, 0.22)), url("${cssUrl(image)}")`;
+}
+
+function normalizeExternalUrl(value) {
+  const raw = (value || "").trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    const url = new URL(withProtocol);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function externalLinkSubtitle(link) {
+  return hostFromUrl(link.targetUrl) || "外部网站";
+}
+
+function hostFromUrl(value) {
+  const normalized = normalizeExternalUrl(value);
+
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    return new URL(normalized).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function faviconUrl(value) {
+  const normalized = normalizeExternalUrl(value);
+
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    return `${new URL(normalized).origin}/favicon.ico`;
+  } catch {
+    return "";
+  }
 }
 
 function formatDate(value) {
