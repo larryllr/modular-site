@@ -318,8 +318,22 @@ h1 {
   gap: 16px;
 }
 
+.home-entry-grid.layout-one {
+  grid-template-columns: 1fr;
+}
+
+.home-entry-grid.layout-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.page-module-grid {
+  grid-template-columns: repeat(var(--grid-columns, 1), minmax(0, 1fr));
+  align-items: start;
+}
+
 .module-card {
   display: grid;
+  align-content: start;
   gap: 16px;
   min-height: 280px;
   border: 1px solid var(--line);
@@ -920,6 +934,59 @@ h1 {
   box-shadow: none;
 }
 
+.layout-settings {
+  display: grid;
+  gap: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: rgba(255, 254, 250, 0.64);
+  padding: 12px;
+}
+
+.layout-settings h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.editable-section.is-locked {
+  border-color: rgba(15, 118, 110, 0.38);
+}
+
+.floating-view-control {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 254, 250, 0.94);
+  box-shadow: var(--shadow);
+  padding: 10px;
+}
+
+.floating-view-control span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.floating-view-control .input {
+  min-height: 34px;
+  width: auto;
+}
+
+.status-control-item {
+  display: grid;
+  gap: 8px;
+}
+
+.status-control-item .input {
+  min-height: 36px;
+}
+
 .field-title {
   font-weight: 700;
 }
@@ -935,6 +1002,14 @@ h1 {
   min-height: 0;
 }
 
+.bottom-comments-region {
+  display: grid;
+}
+
+.bottom-comments-region .comments-section {
+  min-height: 0;
+}
+
 .comment-form {
   display: grid;
   gap: 10px;
@@ -943,6 +1018,9 @@ h1 {
 .comments-list {
   display: grid;
   gap: 10px;
+  max-height: var(--comments-list-height, 320px);
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .comment-item {
@@ -1043,6 +1121,11 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .home-entry-grid.layout-two,
+  .page-module-grid {
+    grid-template-columns: 1fr;
+  }
+
   .admin-workspace {
     padding: 16px;
     padding-bottom: 132px;
@@ -1052,6 +1135,11 @@ h1 {
     right: 16px;
     left: 16px;
     bottom: 14px;
+  }
+
+  .floating-view-control {
+    right: 16px;
+    bottom: 86px;
   }
 }
 
@@ -1063,6 +1151,11 @@ h1 {
 
   .module-grid {
     grid-template-columns: 1fr;
+  }
+
+  .floating-view-control {
+    left: 16px;
+    justify-content: space-between;
   }
 
   .module-card-header {

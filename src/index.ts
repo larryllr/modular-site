@@ -15,6 +15,12 @@ type ServerModule = {
   endpoints: string[];
 };
 
+type SectionLayout = {
+  width: number;
+  minHeight: number;
+  locked: boolean;
+};
+
 type ContentBlock = {
   id: string;
   type: "text";
@@ -22,12 +28,14 @@ type ContentBlock = {
   title: string;
   description: string;
   body: string;
+  layout: SectionLayout;
 };
 
 type SystemSection = {
   id: string;
   type: "system";
   moduleId: string;
+  layout: SectionLayout;
 };
 
 type ImageSection = {
@@ -40,6 +48,7 @@ type ImageSection = {
   caption: string;
   display: "normal" | "background";
   fit: "cover" | "contain";
+  layout: SectionLayout;
 };
 
 type CommentsSection = {
@@ -47,6 +56,8 @@ type CommentsSection = {
   type: "comments";
   title: string;
   description: string;
+  listHeight: number;
+  layout: SectionLayout;
 };
 
 type PageEntry = {
@@ -54,13 +65,18 @@ type PageEntry = {
   description: string;
   iconText: string;
   iconImage: string;
+  sidebarIconText: string;
+  sidebarIconImage: string;
   backgroundImage: string;
 };
 
 type PageComments = {
   enabled: boolean;
+  mode: "bottom" | "module";
   title: string;
   description: string;
+  listHeight: number;
+  layout: SectionLayout;
 };
 
 type SiteLink = {
@@ -139,12 +155,17 @@ const defaultSiteConfig: SiteConfig = {
         description: "",
         iconText: "PG",
         iconImage: "",
+        sidebarIconText: "",
+        sidebarIconImage: "",
         backgroundImage: ""
       },
       comments: {
-        enabled: false,
+        enabled: true,
+        mode: "bottom",
         title: "评论",
-        description: "留下你的想法。"
+        description: "留下你的想法。",
+        listHeight: 320,
+        layout: defaultLayout("comments")
       },
       modules: ["overview", "notes", "api-status", "checklist"],
       blocks: [
@@ -154,21 +175,23 @@ const defaultSiteConfig: SiteConfig = {
           icon: "IN",
           title: "开始使用",
           description: "这个文本模块可以在后台修改或删除。",
-          body: "进入 /admin 后，可以新增分页面、修改页面标题、为页面勾选系统模块，也可以添加自定义文本模块。"
+          body: "进入 /admin 后，可以新增分页面、修改页面标题、为页面勾选系统模块，也可以添加自定义文本模块。",
+          layout: defaultLayout("text")
         }
       ],
       sections: [
-        { id: "section-overview", type: "system", moduleId: "overview" },
-        { id: "section-notes", type: "system", moduleId: "notes" },
-        { id: "section-api-status", type: "system", moduleId: "api-status" },
-        { id: "section-checklist", type: "system", moduleId: "checklist" },
+        { id: "section-overview", type: "system", moduleId: "overview", layout: defaultLayout("system") },
+        { id: "section-notes", type: "system", moduleId: "notes", layout: defaultLayout("system") },
+        { id: "section-api-status", type: "system", moduleId: "api-status", layout: defaultLayout("system") },
+        { id: "section-checklist", type: "system", moduleId: "checklist", layout: defaultLayout("system") },
         {
           id: "welcome",
           type: "text",
           icon: "IN",
           title: "开始使用",
           description: "这个文本模块可以在后台修改或删除。",
-          body: "进入 /admin 后，可以新增分页面、修改页面标题、为页面勾选系统模块，也可以添加自定义文本模块。"
+          body: "进入 /admin 后，可以新增分页面、修改页面标题、为页面勾选系统模块，也可以添加自定义文本模块。",
+          layout: defaultLayout("text")
         }
       ]
     }
@@ -482,10 +505,11 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
     const moduleId = limitText(asString(record.moduleId), 80);
 
     return moduleId
-      ? {
+        ? {
           id: asString(record.id) || crypto.randomUUID(),
           type: "system",
-          moduleId
+          moduleId,
+          layout: normalizeLayout(record.layout, "system")
         }
       : null;
   }
@@ -500,7 +524,8 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
       alt: limitText(asString(record.alt), 160),
       caption: limitText(asString(record.caption), 220),
       display: asString(record.display) === "background" ? "background" : "normal",
-      fit: asString(record.fit) === "contain" ? "contain" : "cover"
+      fit: asString(record.fit) === "contain" ? "contain" : "cover",
+      layout: normalizeLayout(record.layout, "image")
     };
   }
 
@@ -509,7 +534,9 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
       id: asString(record.id) || crypto.randomUUID(),
       type: "comments",
       title: limitText(asString(record.title) || "评论", 80),
-      description: limitText(asString(record.description) || "留下你的想法。", 160)
+      description: limitText(asString(record.description) || "留下你的想法。", 160),
+      listHeight: clampNumber(record.listHeight, 180, 900, 320),
+      layout: normalizeLayout(record.layout, "comments")
     };
   }
 
@@ -524,6 +551,8 @@ function normalizePageEntry(value: unknown, page: Record<string, unknown>): Page
     description: limitText(asString(record.description), 220),
     iconText: limitText(asString(record.iconText) || "PG", 4).toUpperCase(),
     iconImage: normalizeImageSrc(asString(record.iconImage)),
+    sidebarIconText: limitText(asString(record.sidebarIconText), 4).toUpperCase(),
+    sidebarIconImage: normalizeImageSrc(asString(record.sidebarIconImage)),
     backgroundImage: normalizeImageSrc(asString(record.backgroundImage || page.entryBackgroundImage))
   };
 }
@@ -532,9 +561,12 @@ function normalizePageComments(value: unknown): PageComments {
   const record = asRecord(value);
 
   return {
-    enabled: typeof record.enabled === "boolean" ? record.enabled : false,
+    enabled: typeof record.enabled === "boolean" ? record.enabled : true,
+    mode: asString(record.mode) === "module" ? "module" : "bottom",
     title: limitText(asString(record.title) || "评论", 80),
-    description: limitText(asString(record.description) || "留下你的想法。", 160)
+    description: limitText(asString(record.description) || "留下你的想法。", 160),
+    listHeight: clampNumber(record.listHeight, 180, 900, 320),
+    layout: normalizeLayout(record.layout, "comments")
   };
 }
 
@@ -547,7 +579,27 @@ function normalizeBlock(value: unknown, index: number): ContentBlock {
     icon: limitText(asString(record.icon) || "TX", 3).toUpperCase(),
     title: limitText(asString(record.title) || `文本模块 ${index + 1}`, 80),
     description: limitText(asString(record.description), 160),
-    body: limitText(asString(record.body), 1200)
+    body: limitText(asString(record.body), 1200),
+    layout: normalizeLayout(record.layout, "text")
+  };
+}
+
+function defaultLayout(type: string): SectionLayout {
+  return {
+    width: 0,
+    minHeight: type === "comments" ? 320 : 280,
+    locked: false
+  };
+}
+
+function normalizeLayout(value: unknown, type: string): SectionLayout {
+  const record = asRecord(value);
+  const base = defaultLayout(type);
+
+  return {
+    width: clampNumber(record.width, 0, 100, base.width),
+    minHeight: clampNumber(record.minHeight, 120, 900, base.minHeight),
+    locked: typeof record.locked === "boolean" ? record.locked : base.locked
   };
 }
 
@@ -790,6 +842,16 @@ function base64UrlDecodeToBytes(value: string): Uint8Array {
 
 function limitText(value: string, maxLength: number): string {
   return value.trim().slice(0, maxLength);
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const number = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, Math.round(number)));
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

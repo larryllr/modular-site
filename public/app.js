@@ -2,6 +2,8 @@ import { moduleLoaders } from "./modules/manifest.js";
 
 const app = document.querySelector("#app");
 const adminTokenKey = "cloudflare-modular-site.admin-token";
+const homeLayoutKey = "cloudflare-modular-site.home-entry-layout";
+const pageColumnsKeyPrefix = "cloudflare-modular-site.page-columns.";
 
 const fallbackConfig = {
   version: 1,
@@ -62,6 +64,7 @@ const state = {
   modules: [],
   config: fallbackConfig,
   token: localStorage.getItem(adminTokenKey) || "",
+  homeEntryLayout: localStorage.getItem(homeLayoutKey) === "two" ? "two" : "one",
   selectedItemType: "page",
   selectedPageId: "",
   selectedLinkId: "",
@@ -215,7 +218,7 @@ function renderAdminEditor() {
     const item = document.createElement("button");
     item.type = "button";
     item.classList.toggle("is-active", state.selectedItemType === "page" && page.id === state.selectedPageId);
-    item.append(mark(page.visible ? "PG" : "HD"), textBlock(page.title, `/${page.slug}`));
+    item.append(pageSidebarMark(page), textBlock(page.title, `/${page.slug}`));
     item.addEventListener("click", () => {
       state.selectedItemType = "page";
       state.selectedPageId = page.id;
@@ -330,19 +333,7 @@ function renderPageSidebarSettings(page) {
       renderAdminEditor();
     })
   );
-  const settingActions = element("div", "sidebar-mini-actions");
-  const entryButton = button("入口卡片", state.expandedSettings === "entry" ? "button primary" : "button", "button");
-  entryButton.addEventListener("click", () => {
-    state.expandedSettings = state.expandedSettings === "entry" ? "" : "entry";
-    renderAdminEditor();
-  });
-  const commentsButton = button("评论区域", state.expandedSettings === "comments" ? "button primary" : "button", "button");
-  commentsButton.addEventListener("click", () => {
-    state.expandedSettings = state.expandedSettings === "comments" ? "" : "comments";
-    renderAdminEditor();
-  });
-  settingActions.append(entryButton, commentsButton);
-  settings.append(settingActions);
+  settings.append(element("p", "form-hint", "图标、背景和评论区域在右侧模块编辑上方设置。"));
   return settings;
 }
 
@@ -423,7 +414,7 @@ function renderPreviewEditor(page) {
     canvas.append(element("p", "empty-state", "这个分页面还没有内容。可以从上面的插入条添加模块。"));
   }
 
-  panel.append(head, canvas);
+  panel.append(head, renderEntrySettings(page), renderBottomCommentsSettings(page), canvas);
   return panel;
 }
 
@@ -483,22 +474,14 @@ function renderEditablePageHeader(page) {
     element("p", "lead", page.description || "这个分页面还没有说明。")
   );
 
-  if (state.expandedSettings === "entry") {
-    header.append(renderEntrySettings(page));
-  }
-
-  if (state.expandedSettings === "comments") {
-    header.append(renderBottomCommentsSettings(page));
-  }
-
   return header;
 }
 
 function renderEntrySettings(page) {
   const panel = element("section", "entry-settings");
   const head = element("div", "section-head");
-  head.append(element("h2", "", "主页入口卡片"));
-  head.append(element("p", "", "控制主页里这个分页面入口卡片的背景、小方块背景和显示文字。"));
+  head.append(element("h2", "", "分页面入口显示"));
+  head.append(element("p", "", "左侧栏图标默认跟随主页入口卡片；单独设置后，左侧栏会使用自己的图标。"));
 
   const row = element("div", "admin-row");
   row.append(
@@ -514,12 +497,22 @@ function renderEntrySettings(page) {
 
   const iconRow = element("div", "admin-row");
   iconRow.append(
-    field("小方块文字", page.entry.iconText, (value) => {
+    field("主页图标文字", page.entry.iconText, (value) => {
       page.entry.iconText = value.slice(0, 4).toUpperCase();
     })
   );
-  iconRow.append(imageValueField("小方块背景", page.entry.iconImage, (value) => {
+  iconRow.append(imageValueField("主页图标图片", page.entry.iconImage, (value) => {
     page.entry.iconImage = value;
+  }));
+
+  const sidebarIconRow = element("div", "admin-row");
+  sidebarIconRow.append(
+    field("侧边栏图标文字", page.entry.sidebarIconText, (value) => {
+      page.entry.sidebarIconText = value.slice(0, 4).toUpperCase();
+    }, "留空时跟随主页图标文字。")
+  );
+  sidebarIconRow.append(imageValueField("侧边栏图标图片", page.entry.sidebarIconImage, (value) => {
+    page.entry.sidebarIconImage = value;
   }));
 
   const backgroundRow = element("div", "admin-row");
@@ -528,7 +521,7 @@ function renderEntrySettings(page) {
   }));
   backgroundRow.append(renderEntryPreview(page));
 
-  panel.append(head, row, iconRow, backgroundRow);
+  panel.append(head, row, iconRow, sidebarIconRow, backgroundRow);
   return panel;
 }
 
@@ -543,7 +536,7 @@ function renderBottomCommentsSettings(page) {
   const panel = element("section", "entry-settings comments-placement-settings");
   const head = element("div", "section-head");
   head.append(element("h2", "", "底部评论区"));
-  head.append(element("p", "", "开启后，评论区会固定显示在分页面内容底部；也可以通过插入条添加评论模块到任意位置。"));
+  head.append(element("p", "", "默认作为页面底部的独立区域；也可以改成和其它模块一样进入模块网格。"));
   const row = element("div", "admin-row");
   row.append(
     checkbox("在页面底部显示评论区", page.comments.enabled, (checked) => {
@@ -552,11 +545,39 @@ function renderBottomCommentsSettings(page) {
     })
   );
   row.append(
+    selectField(
+      "展示方式",
+      page.comments.mode,
+      [
+        ["bottom", "底部独立区域"],
+        ["module", "和其它模块一样"]
+      ],
+      (value) => {
+        page.comments.mode = value;
+        renderAdminEditor();
+      }
+    )
+  );
+  panel.append(head, row);
+
+  const titleRow = element("div", "admin-row");
+  titleRow.append(
     field("底部评论标题", page.comments.title, (value) => {
       page.comments.title = value;
     })
   );
-  panel.append(head, row);
+  titleRow.append(
+    numberField("评论列表高度(px)", page.comments.listHeight, 180, 900, 20, (value) => {
+      page.comments.listHeight = value;
+      renderAdminEditor();
+    })
+  );
+  panel.append(titleRow);
+
+  if (page.comments.mode === "module") {
+    panel.append(renderLayoutSettings(page.comments, "评论模块布局"));
+  }
+
   panel.append(
     field("底部评论说明", page.comments.description, (value) => {
       page.comments.description = value;
@@ -586,10 +607,14 @@ function renderInsertBar(page, index) {
 function renderEditableSection(page, section, index) {
   const shell = element("section", `editable-section editable-${section.type}`);
   const expanded = state.expandedSections.has(section.id);
+  const locked = Boolean(section.layout?.locked);
+  shell.classList.toggle("is-locked", locked);
   shell.classList.toggle("is-collapsed", !expanded);
   shell.append(renderSectionControls(page, section, index, expanded));
 
   if (expanded) {
+    shell.append(renderLayoutSettings(section, "模块布局", page, index));
+
     if (section.type === "system") {
       shell.append(renderEditableSystemSection(page, section));
     } else if (section.type === "image") {
@@ -606,6 +631,7 @@ function renderEditableSection(page, section, index) {
 
 function renderSectionControls(page, section, index, expanded) {
   const controls = element("div", "section-controls");
+  const locked = Boolean(section.layout?.locked);
   const toggle = button(expanded ? "▾" : "▸", "section-toggle", "button");
   toggle.setAttribute("aria-label", expanded ? "折叠模块" : "展开模块");
   toggle.addEventListener("click", () => {
@@ -616,16 +642,17 @@ function renderSectionControls(page, section, index, expanded) {
     }
     renderAdminEditor();
   });
-  controls.append(toggle, element("strong", "", sectionLabel(section)));
+  controls.append(toggle, element("strong", "", locked ? `${sectionLabel(section)}（已锁定）` : sectionLabel(section)));
 
   const tools = element("div", "section-tools");
   const up = button("上移", "button", "button");
-  up.disabled = index === 0;
+  up.disabled = locked || index === 0;
   up.addEventListener("click", () => moveSection(page, index, -1));
   const down = button("下移", "button", "button");
-  down.disabled = index === page.sections.length - 1;
+  down.disabled = locked || index === page.sections.length - 1;
   down.addEventListener("click", () => moveSection(page, index, 1));
   const remove = button("删除", "button danger", "button");
+  remove.disabled = locked;
   remove.addEventListener("click", () => {
     page.sections.splice(index, 1);
     renderAdminEditor();
@@ -633,6 +660,48 @@ function renderSectionControls(page, section, index, expanded) {
   tools.append(up, down, remove);
   controls.append(tools);
   return controls;
+}
+
+function renderLayoutSettings(target, title, page = null, index = -1) {
+  const layoutType = target.type || "comments";
+  target.layout = hydrateLayout(target.layout, layoutType);
+  const panel = element("section", "layout-settings");
+  panel.append(element("h3", "", title));
+  const row = element("div", "admin-row");
+  row.append(
+    numberField("宽度(%，0为自动)", target.layout.width, 0, 100, 5, (value) => {
+      target.layout.width = value;
+      renderAdminEditor();
+    })
+  );
+  row.append(
+    numberField("最小高度(px)", target.layout.minHeight, 120, 900, 20, (value) => {
+      target.layout.minHeight = value;
+      renderAdminEditor();
+    })
+  );
+  panel.append(row);
+
+  const controlRow = element("div", "admin-row");
+
+  if (page) {
+    controlRow.append(
+      numberField("位置序号", index + 1, 1, page.sections.length, 1, (value) => {
+        moveSectionTo(page, index, value - 1);
+      })
+    );
+  } else {
+    controlRow.append(element("p", "form-hint", "底部独立区域不占用模块网格位置。"));
+  }
+
+  controlRow.append(
+    checkbox("锁定位置和删除", target.layout.locked, (checked) => {
+      target.layout.locked = checked;
+      renderAdminEditor();
+    })
+  );
+  panel.append(controlRow);
+  return panel;
 }
 
 function renderEditableSystemSection(page, section) {
@@ -769,7 +838,14 @@ function renderEditableCommentsSection(page, section) {
       section.description = value;
     })
   );
-  card.append(row, renderCommentsSection(page, section, true));
+  const sizing = element("div", "admin-row");
+  sizing.append(
+    numberField("评论列表高度(px)", section.listHeight, 180, 900, 20, (value) => {
+      section.listHeight = value;
+      renderAdminEditor();
+    })
+  );
+  card.append(row, sizing, renderCommentsSection(page, section, true));
   return card;
 }
 
@@ -887,7 +963,9 @@ function renderPublicSidebar(slug, pages, links) {
   nav.append(navLink("/", "HM", "主页入口", slug ? "所有分页面" : "当前页面", !slug));
 
   for (const page of pages) {
-    nav.append(navLink(`/${page.slug}`, "PG", page.title, `/${page.slug}`, slug === page.slug));
+    nav.append(navLink(`/${page.slug}`, page.entry.sidebarIconText || page.entry.iconText || "PG", page.title, `/${page.slug}`, slug === page.slug, {
+      iconImage: page.entry.sidebarIconImage || page.entry.iconImage
+    }));
   }
 
   for (const link of links) {
@@ -942,7 +1020,7 @@ function renderHome(pages, links) {
     ])
   );
 
-  const grid = element("section", "module-grid");
+  const grid = element("section", `module-grid home-entry-grid layout-${state.homeEntryLayout}`);
   for (const page of pages) {
     grid.append(renderPageEntry(page));
   }
@@ -950,11 +1028,13 @@ function renderHome(pages, links) {
     grid.append(renderExternalLinkEntry(link));
   }
   main.append(grid);
+  main.append(renderHomeViewControl());
   app.append(main);
 }
 
 function renderPage(page) {
   document.title = page.title;
+  const columns = getPageColumnCount(page.slug);
   const main = element("main", "workspace");
   const header = element("header", "workspace-header compact");
   const copy = element("div");
@@ -962,23 +1042,25 @@ function renderPage(page) {
   copy.append(element("p", "lead", page.description));
   header.append(copy);
   main.append(header);
-  main.append(
-    renderStatusStrip([
-      ["系统模块", String(page.sections.filter((section) => section.type === "system").length)],
-      ["图片模块", String(page.sections.filter((section) => section.type === "image").length)],
-      ["网址后缀", `/${page.slug}`]
-    ])
-  );
+  main.append(renderPageStatusStrip(page, columns));
 
-  const grid = element("section", "module-grid");
+  const grid = element("section", "module-grid page-module-grid");
+  grid.style.setProperty("--grid-columns", String(columns));
   const context = moduleContext(page);
 
   for (const section of page.sections) {
     const node = renderPublicSection(section, context);
 
     if (node) {
+      applySectionLayout(node, section, columns);
       grid.append(node);
     }
+  }
+
+  if (page.comments.enabled && page.comments.mode === "module") {
+    const commentsNode = renderCommentsSection(page, page.comments, false);
+    applySectionLayout(commentsNode, page.comments, columns);
+    grid.append(commentsNode);
   }
 
   if (grid.childElementCount === 0) {
@@ -987,11 +1069,67 @@ function renderPage(page) {
 
   main.append(grid);
 
-  if (page.comments.enabled) {
-    main.append(renderCommentsSection(page, page.comments, false));
+  if (page.comments.enabled && page.comments.mode !== "module") {
+    const commentsRegion = element("section", "bottom-comments-region");
+    commentsRegion.append(renderCommentsSection(page, page.comments, false));
+    main.append(commentsRegion);
   }
 
   app.append(main);
+}
+
+function renderHomeViewControl() {
+  const control = element("div", "floating-view-control");
+  control.append(element("span", "", "主页入口"));
+  const select = document.createElement("select");
+  select.className = "input";
+  for (const [value, label] of [
+    ["one", "一个一行"],
+    ["two", "两个一行"]
+  ]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    select.append(option);
+  }
+  select.value = state.homeEntryLayout;
+  select.addEventListener("change", () => {
+    state.homeEntryLayout = select.value;
+    localStorage.setItem(homeLayoutKey, state.homeEntryLayout);
+    renderPublicSite();
+  });
+  control.append(select);
+  return control;
+}
+
+function renderPageStatusStrip(page, columns) {
+  const strip = element("section", "status-strip page-status-strip");
+  const viewItem = element("div", "status-control-item");
+  viewItem.append(element("span", "metric-label", "显示几个在这行"));
+  const select = document.createElement("select");
+  select.className = "input";
+  for (const value of [1, 2, 3, 4, 5]) {
+    const option = document.createElement("option");
+    option.value = String(value);
+    option.textContent = `${value} 个`;
+    select.append(option);
+  }
+  select.value = String(columns);
+  select.addEventListener("change", () => {
+    setPageColumnCount(page.slug, Number(select.value));
+    renderPublicSite();
+  });
+  viewItem.append(select);
+  strip.append(viewItem);
+
+  const countItem = element("div");
+  countItem.append(element("span", "metric-label", "模块数量"), element("strong", "", String(countPageModules(page))));
+  strip.append(countItem);
+
+  const slugItem = element("div");
+  slugItem.append(element("span", "metric-label", "网址后缀"), element("strong", "", `/${page.slug}`));
+  strip.append(slugItem);
+  return strip;
 }
 
 function renderPublicSection(section, context) {
@@ -1010,6 +1148,26 @@ function renderPublicSection(section, context) {
   }
 
   return renderBlockCard(section);
+}
+
+function applySectionLayout(node, section, columns) {
+  const layout = hydrateLayout(section.layout, section.type);
+  const span = layout.width > 0 ? Math.max(1, Math.min(columns, Math.round((layout.width / 100) * columns))) : 1;
+  node.style.gridColumn = `span ${span}`;
+  node.style.minHeight = `${layout.minHeight}px`;
+}
+
+function countPageModules(page) {
+  return page.sections.length + (page.comments.enabled ? 1 : 0);
+}
+
+function getPageColumnCount(slug) {
+  const value = Number(localStorage.getItem(`${pageColumnsKeyPrefix}${slug}`));
+  return Number.isFinite(value) ? Math.max(1, Math.min(5, value)) : 1;
+}
+
+function setPageColumnCount(slug, value) {
+  localStorage.setItem(`${pageColumnsKeyPrefix}${slug}`, String(Math.max(1, Math.min(5, value))));
 }
 
 function renderNotFound(slug) {
@@ -1143,6 +1301,7 @@ function renderImageSection(section) {
 
 function renderCommentsSection(page, source, adminMode) {
   const card = element("article", adminMode ? "module-card comments-section admin-comments-section" : "module-card comments-section");
+  card.style.setProperty("--comments-list-height", `${source.listHeight || 320}px`);
   const header = element("header", "module-card-header no-toggle");
   header.append(mark("CM"), textBlock(source.title || "评论", source.description || "留下你的想法。"));
 
@@ -1322,6 +1481,16 @@ function hydratePage(page) {
   };
 }
 
+function hydrateLayout(layout, type = "text") {
+  const defaultMinHeight = type === "comments" ? 320 : 280;
+
+  return {
+    width: clampNumber(Number(layout?.width ?? 0), 0, 100),
+    minHeight: clampNumber(Number(layout?.minHeight ?? defaultMinHeight), 120, 900),
+    locked: Boolean(layout?.locked)
+  };
+}
+
 function hydrateSection(section) {
   if (!section || typeof section !== "object") {
     return null;
@@ -1331,7 +1500,8 @@ function hydrateSection(section) {
     return {
       id: section.id || crypto.randomUUID(),
       type: "system",
-      moduleId: section.moduleId || state.modules[0]?.id || ""
+      moduleId: section.moduleId || state.modules[0]?.id || "",
+      layout: hydrateLayout(section.layout, "system")
     };
   }
 
@@ -1345,7 +1515,8 @@ function hydrateSection(section) {
       alt: section.alt || "",
       caption: section.caption || "",
       display: section.display === "background" ? "background" : "normal",
-      fit: section.fit === "contain" ? "contain" : "cover"
+      fit: section.fit === "contain" ? "contain" : "cover",
+      layout: hydrateLayout(section.layout, "image")
     };
   }
 
@@ -1354,7 +1525,9 @@ function hydrateSection(section) {
       id: section.id || crypto.randomUUID(),
       type: "comments",
       title: section.title || "评论",
-      description: section.description || "留下你的想法。"
+      description: section.description || "留下你的想法。",
+      listHeight: clampNumber(Number(section.listHeight ?? 320), 180, 900),
+      layout: hydrateLayout(section.layout, "comments")
     };
   }
 
@@ -1364,7 +1537,8 @@ function hydrateSection(section) {
     icon: section.icon || "TX",
     title: section.title || "文本模块",
     description: section.description || "",
-    body: section.body || ""
+    body: section.body || "",
+    layout: hydrateLayout(section.layout, "text")
   };
 }
 
@@ -1374,15 +1548,20 @@ function hydrateEntry(entry) {
     description: entry?.description || "",
     iconText: (entry?.iconText || "PG").slice(0, 4).toUpperCase(),
     iconImage: entry?.iconImage || "",
+    sidebarIconText: (entry?.sidebarIconText || "").slice(0, 4).toUpperCase(),
+    sidebarIconImage: entry?.sidebarIconImage || "",
     backgroundImage: entry?.backgroundImage || ""
   };
 }
 
 function hydrateComments(comments) {
   return {
-    enabled: Boolean(comments?.enabled),
+    enabled: comments?.enabled !== false,
+    mode: comments?.mode === "module" ? "module" : "bottom",
     title: comments?.title || "评论",
-    description: comments?.description || "留下你的想法。"
+    description: comments?.description || "留下你的想法。",
+    listHeight: clampNumber(Number(comments?.listHeight ?? 320), 180, 900),
+    layout: hydrateLayout(comments?.layout, "comments")
   };
 }
 
@@ -1448,12 +1627,17 @@ function createPage() {
       description: "",
       iconText: "PG",
       iconImage: "",
+      sidebarIconText: "",
+      sidebarIconImage: "",
       backgroundImage: ""
     },
     comments: {
-      enabled: false,
+      enabled: true,
+      mode: "bottom",
       title: "评论",
-      description: "留下你的想法。"
+      description: "留下你的想法。",
+      listHeight: 320,
+      layout: hydrateLayout(null, "comments")
     },
     modules: [],
     blocks: [],
@@ -1480,7 +1664,8 @@ function createSystemSection() {
   return {
     id: crypto.randomUUID(),
     type: "system",
-    moduleId: state.modules[0]?.id || ""
+    moduleId: state.modules[0]?.id || "",
+    layout: hydrateLayout(null, "system")
   };
 }
 
@@ -1491,7 +1676,8 @@ function createTextSection() {
     icon: "TX",
     title: "文本模块",
     description: "简短说明",
-    body: "在这里编辑正文。"
+    body: "在这里编辑正文。",
+    layout: hydrateLayout(null, "text")
   };
 }
 
@@ -1505,7 +1691,8 @@ function createImageSection() {
     alt: "",
     caption: "",
     display: "normal",
-    fit: "cover"
+    fit: "cover",
+    layout: hydrateLayout(null, "image")
   };
 }
 
@@ -1514,7 +1701,9 @@ function createCommentsSection() {
     id: crypto.randomUUID(),
     type: "comments",
     title: "评论",
-    description: "留下你的想法。"
+    description: "留下你的想法。",
+    listHeight: 320,
+    layout: hydrateLayout(null, "comments")
   };
 }
 
@@ -1531,8 +1720,45 @@ function moveSection(page, index, direction) {
     return;
   }
 
+  if (page.sections[index]?.layout?.locked || page.sections[nextIndex]?.layout?.locked) {
+    state.saveStatus = "锁定的模块不能移动或被跨过。";
+    renderAdminEditor();
+    return;
+  }
+
   const [section] = page.sections.splice(index, 1);
   page.sections.splice(nextIndex, 0, section);
+  renderAdminEditor();
+}
+
+function moveSectionTo(page, index, nextIndex) {
+  const targetIndex = Math.max(0, Math.min(page.sections.length - 1, nextIndex));
+
+  if (targetIndex === index) {
+    return;
+  }
+
+  if (page.sections[index]?.layout?.locked) {
+    state.saveStatus = "锁定的模块不能移动。";
+    renderAdminEditor();
+    return;
+  }
+
+  const start = Math.min(index, targetIndex);
+  const end = Math.max(index, targetIndex);
+  const crossesLocked = page.sections.slice(start, end + 1).some((section, sectionIndex) => {
+    const actualIndex = start + sectionIndex;
+    return actualIndex !== index && section.layout?.locked;
+  });
+
+  if (crossesLocked) {
+    state.saveStatus = "不能跨过已锁定模块。";
+    renderAdminEditor();
+    return;
+  }
+
+  const [section] = page.sections.splice(index, 1);
+  page.sections.splice(targetIndex, 0, section);
   renderAdminEditor();
 }
 
@@ -1636,6 +1862,25 @@ function selectField(label, value, options, onChange) {
   select.value = value;
   select.addEventListener("change", () => onChange(select.value));
   wrapper.append(select);
+  return wrapper;
+}
+
+function numberField(label, value, min, max, step, onChange) {
+  const wrapper = element("label", "field");
+  wrapper.append(element("span", "", label));
+  const input = document.createElement("input");
+  input.className = "input";
+  input.type = "number";
+  input.min = String(min);
+  input.max = String(max);
+  input.step = String(step);
+  input.value = String(value ?? min);
+  input.addEventListener("change", () => {
+    const next = clampNumber(Number(input.value), min, max);
+    input.value = String(next);
+    onChange(next);
+  });
+  wrapper.append(input);
   return wrapper;
 }
 
@@ -1750,6 +1995,13 @@ function entryMark(entry) {
   return iconMark(entry.iconText || "PG", entry.iconImage || "");
 }
 
+function pageSidebarMark(page) {
+  return iconMark(
+    page.entry.sidebarIconText || page.entry.iconText || (page.visible ? "PG" : "HD"),
+    page.entry.sidebarIconImage || page.entry.iconImage || ""
+  );
+}
+
 function linkMark(link) {
   return iconMark(link.iconText || "WEB", link.iconImage || "", faviconUrl(link.targetUrl));
 }
@@ -1833,6 +2085,14 @@ function uniqueClientSlug(base) {
 
 function cssUrl(value) {
   return value.replace(/"/g, "%22").replace(/\)/g, "%29");
+}
+
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.max(min, Math.min(max, Math.round(value)));
 }
 
 function applyEntryCardStyle(card, image) {
