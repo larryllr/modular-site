@@ -303,9 +303,15 @@ const apiRoutes: Record<string, ApiRoute> = {
     const body = asRecord(await readJson(request));
     const page = normalizeCommentPage(asString(body.page));
     const content = limitText(asString(body.body), 1000);
+    const isAdminComment = await isAdminRequest(request, env);
+    const customIp = limitText(asString(body.displayIp || body.ip), 80);
 
     if (!page || !content) {
       return json({ error: "评论内容不能为空" }, 400);
+    }
+
+    if (customIp && !isAdminComment) {
+      return json({ error: "自定义 IP 需要管理员登录" }, 401);
     }
 
     const comments = await readComments(env, page);
@@ -314,7 +320,7 @@ const apiRoutes: Record<string, ApiRoute> = {
       page,
       name: limitText(asString(body.name), 40) || "访客",
       body: content,
-      ip: getClientIp(request),
+      ip: isAdminComment && customIp ? customIp : getClientIp(request),
       device: getClientDevice(request),
       createdAt: new Date().toISOString()
     };
@@ -846,11 +852,18 @@ async function createAdminToken(env: AppEnv): Promise<string> {
 }
 
 async function requireAdmin(request: Request, env: AppEnv): Promise<Response | null> {
-  const header = request.headers.get("authorization") || "";
-  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
-  const isValid = await verifyAdminToken(token, env);
+  const isValid = await isAdminRequest(request, env);
 
   return isValid ? null : json({ error: "需要管理员登录" }, 401);
+}
+
+async function isAdminRequest(request: Request, env: AppEnv): Promise<boolean> {
+  return verifyAdminToken(getBearerToken(request), env);
+}
+
+function getBearerToken(request: Request): string {
+  const header = request.headers.get("authorization") || "";
+  return header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
 }
 
 async function verifyAdminToken(token: string, env: AppEnv): Promise<boolean> {

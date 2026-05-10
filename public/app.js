@@ -4,6 +4,7 @@ const app = document.querySelector("#app");
 const adminTokenKey = "cloudflare-modular-site.admin-token";
 const homeLayoutKey = "cloudflare-modular-site.home-entry-layout";
 const pageColumnsKeyPrefix = "cloudflare-modular-site.page-columns.";
+const adminCommentIpKeyPrefix = "cloudflare-modular-site.admin-comment-ip.";
 const maxUndoSteps = 50;
 
 const fallbackConfig = {
@@ -78,6 +79,9 @@ const state = {
   expandedSettings: "",
   expandedSections: new Set(),
   undoStack: [],
+  undoFingerprint: "",
+  commentCache: new Map(),
+  commentRequests: new Map(),
   saveStatus: ""
 };
 
@@ -156,6 +160,7 @@ async function renderAdmin() {
     const payload = await api.getJson("/api/admin/config", true);
     state.config = hydrateConfig(payload.config);
     state.undoStack = [];
+    state.undoFingerprint = "";
     ensureAdminSelection();
     renderAdminEditor();
   } catch {
@@ -196,6 +201,7 @@ function renderLogin(message = "") {
       state.token = payload.token;
       state.config = hydrateConfig(payload.config);
       state.undoStack = [];
+      state.undoFingerprint = "";
       ensureAdminSelection();
       localStorage.setItem(adminTokenKey, state.token);
       renderAdminEditor();
@@ -529,8 +535,8 @@ function renderEditablePageHeader(page) {
   titleInput.className = "inline-input inline-title-input";
   titleInput.value = page.title || "";
   titleInput.placeholder = "分页面标题";
+  trackUndoOnEdit(titleInput);
   titleInput.addEventListener("input", () => {
-    rememberConfigChange();
     page.title = titleInput.value;
   });
   titleInput.addEventListener("change", () => renderAdminEditor());
@@ -540,8 +546,8 @@ function renderEditablePageHeader(page) {
   descriptionInput.value = page.description || "";
   descriptionInput.placeholder = "这个分页面还没有说明。";
   descriptionInput.rows = 2;
+  trackUndoOnEdit(descriptionInput);
   descriptionInput.addEventListener("input", () => {
-    rememberConfigChange();
     page.description = descriptionInput.value;
   });
 
@@ -1004,6 +1010,8 @@ async function saveAdminConfig() {
   try {
     const payload = await api.postJson("/api/admin/config", { config: state.config }, true);
     state.config = hydrateConfig(payload.config);
+    state.undoStack = [];
+    state.undoFingerprint = "";
     ensureAdminSelection();
     state.saveStatus = `已保存 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
     renderAdminEditor();
@@ -1014,14 +1022,14 @@ async function saveAdminConfig() {
 }
 
 function rememberConfigChange() {
-  const snapshot = cloneConfig(state.config);
-  const previous = state.undoStack[state.undoStack.length - 1];
+  const serialized = JSON.stringify(state.config);
 
-  if (previous && JSON.stringify(previous) === JSON.stringify(snapshot)) {
+  if (state.undoStack.length > 0 && state.undoFingerprint === serialized) {
     return;
   }
 
-  state.undoStack.push(snapshot);
+  state.undoStack.push(JSON.parse(serialized));
+  state.undoFingerprint = serialized;
 
   if (state.undoStack.length > maxUndoSteps) {
     state.undoStack.shift();
@@ -1038,13 +1046,26 @@ function undoAdminChange() {
   }
 
   state.config = hydrateConfig(snapshot);
+  state.undoFingerprint = "";
   ensureAdminSelection();
   state.saveStatus = "已撤销上一步，记得保存配置。";
   renderAdminEditor();
 }
 
-function cloneConfig(config) {
-  return JSON.parse(JSON.stringify(config));
+function trackUndoOnEdit(control) {
+  let captured = false;
+  const capture = () => {
+    if (!captured) {
+      rememberConfigChange();
+      captured = true;
+    }
+  };
+
+  control.addEventListener("focus", capture);
+  control.addEventListener("beforeinput", capture);
+  control.addEventListener("blur", () => {
+    captured = false;
+  });
 }
 
 function renderPublicSite() {
@@ -1481,6 +1502,15 @@ function renderCommentsSection(page, source, adminMode) {
   name.name = "name";
   name.placeholder = "你的名字";
   name.maxLength = 40;
+  const displayIp = document.createElement("input");
+  displayIp.className = "input";
+  displayIp.name = "displayIp";
+  displayIp.placeholder = "管理员显示 IP（留空自动获取）";
+  displayIp.maxLength = 80;
+  displayIp.value = adminMode ? localStorage.getItem(`${adminCommentIpKeyPrefix}${page.slug}`) || "" : "";
+  displayIp.addEventListener("input", () => {
+    localStorage.setItem(`${adminCommentIpKeyPrefix}${page.slug}`, displayIp.value);
+  });
   const body = document.createElement("textarea");
   body.className = "textarea";
   body.name = "body";
@@ -1489,7 +1519,11 @@ function renderCommentsSection(page, source, adminMode) {
   body.required = true;
   const submit = button("发表评论", "button primary", "submit");
   const feedback = element("p", "form-hint");
-  form.append(name, body, submit, feedback);
+  form.append(name);
+  if (adminMode) {
+    form.append(displayIp);
+  }
+  form.append(body, submit, feedback);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     submit.disabled = true;
@@ -1497,14 +1531,16 @@ function renderCommentsSection(page, source, adminMode) {
     feedback.textContent = "";
 
     try {
-      await api.postJson("/api/comments", {
+      const payload = await api.postJson("/api/comments", {
         page: page.slug,
         name: name.value,
-        body: body.value
-      });
+        body: body.value,
+        displayIp: adminMode ? displayIp.value : ""
+      }, adminMode);
       body.value = "";
       feedback.textContent = "评论已发布。";
-      await loadComments(page.slug, list, adminMode);
+      updateCommentCache(page.slug, payload.comments || []);
+      refreshCommentLists(page.slug);
     } catch (error) {
       feedback.textContent = error.message;
     }
@@ -1523,8 +1559,9 @@ function renderCommentsSection(page, source, adminMode) {
         return;
       }
 
-      await api.postJson("/api/admin/comments", { page: page.slug, action: "clear" }, true);
-      await loadComments(page.slug, list, true);
+      const payload = await api.postJson("/api/admin/comments", { page: page.slug, action: "clear" }, true);
+      updateCommentCache(page.slug, payload.comments || []);
+      refreshCommentLists(page.slug);
     });
     adminActions.append(clear);
   }
@@ -1553,8 +1590,9 @@ function renderCommentsManager(page) {
       return;
     }
 
-    await api.postJson("/api/admin/comments", { page: page.slug, action: "clear" }, true);
-    await loadComments(page.slug, list, true);
+    const payload = await api.postJson("/api/admin/comments", { page: page.slug, action: "clear" }, true);
+    updateCommentCache(page.slug, payload.comments || []);
+    refreshCommentLists(page.slug);
   });
   head.append(copy, clear);
   card.append(head, list);
@@ -1562,24 +1600,76 @@ function renderCommentsManager(page) {
   return card;
 }
 
-async function loadComments(pageSlug, list, adminMode) {
+async function loadComments(pageSlug, list, adminMode, options = {}) {
+  list.dataset.commentsPage = pageSlug;
+  list.dataset.adminMode = adminMode ? "1" : "0";
+
+  if (!options.force && state.commentCache.has(pageSlug)) {
+    renderCommentsList(pageSlug, list, adminMode, state.commentCache.get(pageSlug));
+    return;
+  }
+
   list.replaceChildren(element("p", "form-hint", "正在加载评论..."));
 
   try {
-    const payload = await api.getJson(`/api/comments?page=${encodeURIComponent(pageSlug)}`);
-    const comments = payload.comments || [];
+    const comments = await getComments(pageSlug, options);
+    refreshCommentLists(pageSlug);
 
-    if (comments.length === 0) {
-      list.replaceChildren(element("p", "empty-state", "还没有评论。"));
+    if (!document.body.contains(list)) {
       return;
     }
 
-    list.replaceChildren(
-      ...comments.map((comment) => renderCommentItem(pageSlug, comment, adminMode, list))
-    );
+    renderCommentsList(pageSlug, list, adminMode, comments);
   } catch (error) {
     list.replaceChildren(element("p", "form-error", error.message));
   }
+}
+
+async function getComments(pageSlug, options = {}) {
+  if (!options.force && state.commentCache.has(pageSlug)) {
+    return state.commentCache.get(pageSlug);
+  }
+
+  if (!options.force && state.commentRequests.has(pageSlug)) {
+    return state.commentRequests.get(pageSlug);
+  }
+
+  const request = api
+    .getJson(`/api/comments?page=${encodeURIComponent(pageSlug)}`)
+    .then((payload) => {
+      const comments = payload.comments || [];
+      updateCommentCache(pageSlug, comments);
+      return comments;
+    })
+    .finally(() => {
+      state.commentRequests.delete(pageSlug);
+    });
+
+  state.commentRequests.set(pageSlug, request);
+  return request;
+}
+
+function updateCommentCache(pageSlug, comments) {
+  state.commentCache.set(pageSlug, Array.isArray(comments) ? comments : []);
+}
+
+function refreshCommentLists(pageSlug) {
+  const comments = state.commentCache.get(pageSlug) || [];
+
+  for (const list of document.querySelectorAll(".comments-list")) {
+    if (list.dataset.commentsPage === pageSlug) {
+      renderCommentsList(pageSlug, list, list.dataset.adminMode === "1", comments);
+    }
+  }
+}
+
+function renderCommentsList(pageSlug, list, adminMode, comments) {
+  if (!comments.length) {
+    list.replaceChildren(element("p", "empty-state", "还没有评论。"));
+    return;
+  }
+
+  list.replaceChildren(...comments.map((comment) => renderCommentItem(pageSlug, comment, adminMode, list)));
 }
 
 function renderCommentItem(pageSlug, comment, adminMode, list) {
@@ -1594,8 +1684,9 @@ function renderCommentItem(pageSlug, comment, adminMode, list) {
   if (adminMode) {
     const remove = button("删除", "button danger", "button");
     remove.addEventListener("click", async () => {
-      await api.postJson("/api/admin/comments", { page: pageSlug, action: "delete", id: comment.id }, true);
-      await loadComments(pageSlug, list, true);
+      const payload = await api.postJson("/api/admin/comments", { page: pageSlug, action: "delete", id: comment.id }, true);
+      updateCommentCache(pageSlug, payload.comments || []);
+      refreshCommentLists(pageSlug);
     });
     item.append(remove);
   }
@@ -1991,8 +2082,8 @@ function field(label, value, onInput, hint = "") {
   const input = document.createElement("input");
   input.className = "input";
   input.value = value || "";
+  trackUndoOnEdit(input);
   input.addEventListener("input", () => {
-    rememberConfigChange();
     onInput(input.value);
   });
   wrapper.append(input);
@@ -2009,8 +2100,8 @@ function sidebarField(label, value, onInput) {
   wrapper.append(element("span", "", label));
   const input = document.createElement("input");
   input.value = value || "";
+  trackUndoOnEdit(input);
   input.addEventListener("input", () => {
-    rememberConfigChange();
     onInput(input.value);
   });
   wrapper.append(input);
@@ -2022,8 +2113,8 @@ function sidebarAreaField(label, value, onInput) {
   wrapper.append(element("span", "", label));
   const textarea = document.createElement("textarea");
   textarea.value = value || "";
+  trackUndoOnEdit(textarea);
   textarea.addEventListener("input", () => {
-    rememberConfigChange();
     onInput(textarea.value);
   });
   wrapper.append(textarea);
@@ -2036,8 +2127,8 @@ function areaField(label, value, onInput) {
   const textarea = document.createElement("textarea");
   textarea.className = "textarea";
   textarea.value = value || "";
+  trackUndoOnEdit(textarea);
   textarea.addEventListener("input", () => {
-    rememberConfigChange();
     onInput(textarea.value);
   });
   wrapper.append(textarea);
@@ -2106,8 +2197,8 @@ function imageValueField(label, value, onChange) {
   input.className = "input";
   input.value = value || "";
   input.placeholder = "粘贴图片地址或上传图片";
+  trackUndoOnEdit(input);
   input.addEventListener("input", () => {
-    rememberConfigChange();
     onChange(input.value);
   });
 
