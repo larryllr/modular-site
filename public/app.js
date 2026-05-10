@@ -37,6 +37,8 @@ const fallbackConfig = {
         description: "",
         iconText: "PG",
         iconImage: "",
+        sidebarTitle: "",
+        sidebarDescription: "",
         backgroundImage: ""
       },
       comments: {
@@ -253,7 +255,7 @@ function renderAdminEditor() {
     const item = document.createElement("button");
     item.type = "button";
     item.classList.toggle("is-active", state.selectedItemType === "page" && page.id === state.selectedPageId);
-    item.append(pageSidebarMark(page), textBlock(page.title, `/${page.slug}`));
+    item.append(pageSidebarMark(page), textBlock(sidebarPageTitle(page), sidebarPageDescription(page)));
     item.addEventListener("click", () => {
       state.selectedItemType = "page";
       state.selectedPageId = page.id;
@@ -362,9 +364,9 @@ function renderAdminEditor() {
 function renderPageSidebarSettings(page) {
   const settings = element("div", "admin-page-settings");
   settings.append(
-    sidebarField("标题", page.title, (value) => {
-      page.title = value;
-    })
+    sidebarField("侧边栏标题", page.entry.sidebarTitle || "", (value) => {
+      page.entry.sidebarTitle = value;
+    }, "留空时跟随分页面标题。")
   );
   settings.append(
     sidebarField("后缀", page.slug, (value) => {
@@ -372,8 +374,8 @@ function renderPageSidebarSettings(page) {
     })
   );
   settings.append(
-    sidebarAreaField("说明", page.description, (value) => {
-      page.description = value;
+    sidebarAreaField("侧边栏说明", page.entry.sidebarDescription || "", (value) => {
+      page.entry.sidebarDescription = value;
     })
   );
   settings.append(
@@ -745,6 +747,16 @@ function renderEntrySettings(page) {
     field("入口说明", page.entry.description, (value) => {
       page.entry.description = value;
     }, "留空时使用页面说明。")
+  );
+  row.append(
+    field("侧边栏标题", page.entry.sidebarTitle, (value) => {
+      page.entry.sidebarTitle = value;
+    }, "留空时使用页面标题。")
+  );
+  row.append(
+    field("侧边栏说明", page.entry.sidebarDescription, (value) => {
+      page.entry.sidebarDescription = value;
+    }, "留空时显示网址后缀。")
   );
 
   const iconRow = element("div", "admin-row");
@@ -1554,6 +1566,7 @@ function renderPagePasswordGate(page) {
       });
       const fullPage = hydratePage(payload.page);
       rememberUnlockedPage(fullPage);
+      replaceConfigPage(fullPage);
       renderPublicSite();
     } catch (error) {
       feedback.textContent = error.message;
@@ -1569,7 +1582,14 @@ function renderPagePasswordGate(page) {
 function getUnlockedPage(slug) {
   try {
     const stored = sessionStorage.getItem(`${pageAccessKeyPrefix}${slug}`);
-    return stored ? hydratePage(JSON.parse(stored)) : null;
+    const parsed = stored ? JSON.parse(stored) : null;
+
+    if (!parsed?.__unlocked || parsed?.updatedAt !== state.config.updatedAt) {
+      sessionStorage.removeItem(`${pageAccessKeyPrefix}${slug}`);
+      return null;
+    }
+
+    return hydratePage(parsed);
   } catch {
     sessionStorage.removeItem(`${pageAccessKeyPrefix}${slug}`);
     return null;
@@ -1577,7 +1597,18 @@ function getUnlockedPage(slug) {
 }
 
 function rememberUnlockedPage(page) {
-  sessionStorage.setItem(`${pageAccessKeyPrefix}${page.slug}`, JSON.stringify(page));
+  sessionStorage.setItem(
+    `${pageAccessKeyPrefix}${page.slug}`,
+    JSON.stringify({ ...page, __unlocked: true, updatedAt: state.config.updatedAt })
+  );
+}
+
+function replaceConfigPage(page) {
+  const index = state.config.pages.findIndex((item) => item.id === page.id || item.slug === page.slug);
+
+  if (index >= 0) {
+    state.config.pages[index] = page;
+  }
 }
 
 function renderPageStatusStrip(page, columns) {
@@ -2257,6 +2288,8 @@ function hydrateEntry(entry) {
     description: entry?.description || "",
     iconText: (entry?.iconText || "PG").slice(0, 4).toUpperCase(),
     iconImage: entry?.iconImage || "",
+    sidebarTitle: entry?.sidebarTitle || "",
+    sidebarDescription: entry?.sidebarDescription || "",
     sidebarIconText: (entry?.sidebarIconText || "").slice(0, 4).toUpperCase(),
     sidebarIconImage: entry?.sidebarIconImage || "",
     backgroundImage: entry?.backgroundImage || ""
@@ -2351,6 +2384,8 @@ function createPage() {
       description: "",
       iconText: "PG",
       iconImage: "",
+      sidebarTitle: "",
+      sidebarDescription: "",
       sidebarIconText: "",
       sidebarIconImage: "",
       backgroundImage: ""
@@ -2777,6 +2812,14 @@ function pageSidebarMark(page) {
     page.entry.sidebarIconText || page.entry.iconText || (page.visible ? "PG" : "HD"),
     page.entry.sidebarIconImage || page.entry.iconImage || ""
   );
+}
+
+function sidebarPageTitle(page) {
+  return page.entry.sidebarTitle || page.entry.title || page.title;
+}
+
+function sidebarPageDescription(page) {
+  return page.entry.sidebarDescription || `/${page.slug}`;
 }
 
 function linkMark(link) {

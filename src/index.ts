@@ -77,6 +77,8 @@ type PageEntry = {
   description: string;
   iconText: string;
   iconImage: string;
+  sidebarTitle: string;
+  sidebarDescription: string;
   sidebarIconText: string;
   sidebarIconImage: string;
   backgroundImage: string;
@@ -206,6 +208,8 @@ const defaultSiteConfig: SiteConfig = {
         description: "",
         iconText: "PG",
         iconImage: "",
+        sidebarTitle: "",
+        sidebarDescription: "",
         sidebarIconText: "",
         sidebarIconImage: "",
         backgroundImage: ""
@@ -845,6 +849,8 @@ function normalizePageEntry(value: unknown, page: Record<string, unknown>): Page
     description: limitText(asString(record.description), 220),
     iconText: limitText(asString(record.iconText) || "PG", 4).toUpperCase(),
     iconImage: normalizeImageSrc(asString(record.iconImage)),
+    sidebarTitle: limitText(asString(record.sidebarTitle), 80),
+    sidebarDescription: limitText(asString(record.sidebarDescription), 120),
     sidebarIconText: limitText(asString(record.sidebarIconText), 4).toUpperCase(),
     sidebarIconImage: normalizeImageSrc(asString(record.sidebarIconImage)),
     backgroundImage: normalizeImageSrc(asString(record.backgroundImage || page.entryBackgroundImage))
