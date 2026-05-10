@@ -230,9 +230,22 @@ function renderAdminEditor() {
   const brand = element("div", "brand");
   brand.append(mark("AD"), textBlock("站点后台", "预览式页面编辑"));
   const selectedItem = getSelectedAdminItem();
+  const selectedHome = selectedItem?.type === "home";
   const selectedPage = selectedItem?.type === "page" ? selectedItem.page : null;
   const selectedLink = selectedItem?.type === "link" ? selectedItem.link : null;
   const selectedLogs = selectedItem?.type === "logs";
+
+  const homeSettingsNav = element("nav", "module-nav");
+  const homeSettingsButton = document.createElement("button");
+  homeSettingsButton.type = "button";
+  homeSettingsButton.classList.toggle("is-active", selectedHome);
+  homeSettingsButton.append(mark("HM"), textBlock("主页设置", "标题、公告和全站设置"));
+  homeSettingsButton.addEventListener("click", () => {
+    state.selectedItemType = "home";
+    state.expandedSettings = "";
+    renderAdminEditor();
+  });
+  homeSettingsNav.append(homeSettingsButton);
 
   const pageNav = element("nav", "module-nav");
   for (const page of state.config.pages) {
@@ -322,7 +335,7 @@ function renderAdminEditor() {
 
   const sidebarActions = element("div", "sidebar-actions");
   sidebarActions.append(addPageButton, addLinkButton, logsButton, homeButton, logoutButton);
-  sidebar.append(brand, pageNav, sidebarActions);
+  sidebar.append(brand, homeSettingsNav, pageNav, sidebarActions);
 
   const main = element("main", "admin-workspace");
   const title = element("header", "workspace-header compact");
@@ -334,11 +347,9 @@ function renderAdminEditor() {
 
   if (selectedLogs) {
     main.append(renderAccessLogsPanel());
-  } else {
+  } else if (selectedHome) {
     main.append(renderHomeSettings());
-  }
-
-  if (selectedPage) {
+  } else if (selectedPage) {
     main.append(renderPreviewEditor(selectedPage));
   } else if (selectedLink) {
     main.append(renderExternalLinkEditor(selectedLink));
@@ -2281,7 +2292,7 @@ function ensureAdminSelection() {
   const pageExists = state.config.pages.some((page) => page.id === state.selectedPageId);
   const linkExists = links.some((link) => link.id === state.selectedLinkId);
 
-  if (state.selectedItemType === "logs") {
+  if (state.selectedItemType === "logs" || state.selectedItemType === "home") {
     return;
   }
 
@@ -2299,6 +2310,10 @@ function ensureAdminSelection() {
 }
 
 function getSelectedAdminItem() {
+  if (state.selectedItemType === "home") {
+    return { type: "home" };
+  }
+
   if (state.selectedItemType === "logs") {
     return { type: "logs" };
   }
