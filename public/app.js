@@ -1137,6 +1137,7 @@ function renderEditableVideoSection(section) {
     })
   );
   const meta = element("div", "admin-row");
+  meta.append(videoUploadField(section));
   meta.append(
     field("封面图片", section.poster, (value) => {
       section.poster = value.trim();
@@ -1251,6 +1252,38 @@ function imageUploadField(section) {
     renderAdminEditor();
   });
   wrapper.append(input, element("small", "", "会自动压缩到适合放进配置的尺寸。"));
+  return wrapper;
+}
+
+function videoUploadField(section) {
+  const wrapper = element("label", "field video-uploader");
+  wrapper.append(element("span", "", "上传视频"));
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "video/*";
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    state.saveStatus = "正在处理视频...";
+    rememberConfigChange();
+    renderAdminEditor();
+
+    try {
+      section.src = await fileToDataUrl(file, "video/");
+      section.poster = section.poster || (await videoFileToPoster(file));
+      section.caption = section.caption || file.name.replace(/\.[^.]+$/, "");
+      state.saveStatus = "视频已加入预览，记得保存配置。";
+    } catch (error) {
+      state.saveStatus = error.message;
+    }
+
+    renderAdminEditor();
+  });
+  wrapper.append(input, element("small", "", "适合上传较短视频；大视频建议使用视频外链。"));
   return wrapper;
 }
 
@@ -2881,6 +2914,59 @@ async function imageFileToDataUrl(file) {
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+}
+
+function fileToDataUrl(file, expectedPrefix) {
+  if (!file.type.startsWith(expectedPrefix)) {
+    throw new Error(expectedPrefix === "video/" ? "请选择视频文件。" : "文件类型不正确。");
+  }
+
+  const maxBytes = 18 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error("视频太大了，请上传 18MB 以内的视频，或使用视频外链。");
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("文件读取失败。"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function videoFileToPoster(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.src = objectUrl;
+
+    const cleanup = () => URL.revokeObjectURL(objectUrl);
+    video.addEventListener("loadeddata", () => {
+      try {
+        const width = video.videoWidth || 1280;
+        const height = video.videoHeight || 720;
+        const maxSize = 1280;
+        const ratio = Math.min(1, maxSize / Math.max(width, height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(width * ratio));
+        canvas.height = Math.max(1, Math.round(height * ratio));
+        const context = canvas.getContext("2d");
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        cleanup();
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      } catch {
+        cleanup();
+        reject(new Error("视频封面生成失败。"));
+      }
+    });
+    video.addEventListener("error", () => {
+      cleanup();
+      reject(new Error("视频读取失败。"));
+    });
+  });
 }
 
 function loadImage(src) {

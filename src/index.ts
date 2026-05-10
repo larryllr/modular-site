@@ -830,7 +830,7 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
       type: "video",
       title: limitText(asString(record.title) || `视频模块 ${index + 1}`, 80),
       description: limitText(asString(record.description), 160),
-      src: limitText(asString(record.src), 1000),
+      src: asString(record.src),
       poster: normalizeImageSrc(asString(record.poster)),
       caption: limitText(asString(record.caption), 220),
       layout: normalizeLayout(record.layout, "video")
