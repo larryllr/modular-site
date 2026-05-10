@@ -170,6 +170,12 @@ textarea {
   margin-top: auto;
 }
 
+.sidebar-actions .is-active {
+  border-color: rgba(15, 118, 110, 0.38);
+  background: #0f766e;
+  color: #ffffff;
+}
+
 .public-sidebar {
   padding-top: 28px;
 }
@@ -1233,6 +1239,32 @@ h1 {
   border-radius: 8px;
   background: #ffffff;
   padding: 14px;
+}
+
+.access-logs-panel {
+  align-content: start;
+}
+
+.access-log-list {
+  display: grid;
+  gap: 10px;
+  max-height: 62vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.access-log-item {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.access-log-item p {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .save-bar {

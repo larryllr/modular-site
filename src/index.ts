@@ -138,12 +138,23 @@ type CommentRecord = {
   createdAt: string;
 };
 
+type AccessLogRecord = {
+  id: string;
+  ip: string;
+  path: string;
+  method: string;
+  device: string;
+  createdAt: string;
+};
+
 type ApiRoute = (request: Request, env: AppEnv) => Promise<Response> | Response;
 
 const configKey = "site-config";
 const commentsPrefix = "comments:";
+const accessLogsKey = "access-logs";
 const defaultAdminPassword = "llr20081209";
 const tokenMaxAgeMs = 12 * 60 * 60 * 1000;
+const maxAccessLogs = 1000;
 
 const defaultSiteConfig: SiteConfig = {
   version: 1,
@@ -253,6 +264,14 @@ const serverModules: ServerModule[] = [
     status: "active",
     description: "免登录发表评论，管理员可删除或清空。",
     endpoints: ["/api/comments", "/api/admin/comments"]
+  },
+  {
+    id: "access-logs",
+    name: "访问日志",
+    category: "admin",
+    status: "active",
+    description: "记录普通访客访问时间、IP、路径和设备信息，管理员可查看。",
+    endpoints: ["/api/admin/logs"]
   }
 ];
 
@@ -452,6 +471,41 @@ const apiRoutes: Record<string, ApiRoute> = {
       ok: true,
       comments: nextComments
     });
+  },
+
+  "/api/admin/logs": async (request, env) => {
+    const auth = await requireAdmin(request, env);
+
+    if (auth) {
+      return auth;
+    }
+
+    if (!env.SITE_CONFIG) {
+      return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+    }
+
+    if (request.method === "GET") {
+      return json({
+        logs: await readAccessLogs(env)
+      });
+    }
+
+    if (request.method === "POST") {
+      const body = asRecord(await readJson(request));
+
+      if (asString(body.action) !== "clear") {
+        return json({ error: "未知操作" }, 400);
+      }
+
+      await env.SITE_CONFIG.put(accessLogsKey, JSON.stringify([]));
+
+      return json({
+        ok: true,
+        logs: []
+      });
+    }
+
+    return json({ error: "Method Not Allowed" }, 405);
   },
 
   "/api/echo": async (request) => {
@@ -738,6 +792,73 @@ function normalizeComment(value: unknown): CommentRecord | null {
   };
 }
 
+async function readAccessLogs(env: AppEnv): Promise<AccessLogRecord[]> {
+  if (!env.SITE_CONFIG) {
+    return [];
+  }
+
+  const stored = await env.SITE_CONFIG.get(accessLogsKey, "json");
+
+  if (!Array.isArray(stored)) {
+    return [];
+  }
+
+  return stored.slice(0, maxAccessLogs).map(normalizeAccessLog).filter((log): log is AccessLogRecord => log !== null);
+}
+
+function normalizeAccessLog(value: unknown): AccessLogRecord | null {
+  const record = asRecord(value);
+  const id = asString(record.id);
+  const ip = limitText(asString(record.ip), 80);
+  const createdAt = limitText(asString(record.createdAt), 40);
+
+  if (!id || !ip || !createdAt) {
+    return null;
+  }
+
+  return {
+    id,
+    ip,
+    path: limitText(asString(record.path), 160) || "/",
+    method: limitText(asString(record.method), 12) || "GET",
+    device: limitText(asString(record.device), 120) || "未知设备",
+    createdAt
+  };
+}
+
+async function recordAccessLog(request: Request, env: AppEnv): Promise<void> {
+  if (!env.SITE_CONFIG || !shouldRecordAccess(request)) {
+    return;
+  }
+
+  const url = new URL(request.url);
+  const logs = await readAccessLogs(env);
+  const record: AccessLogRecord = {
+    id: crypto.randomUUID(),
+    ip: getClientIp(request),
+    path: limitText(`${url.pathname}${url.search}`, 160) || "/",
+    method: request.method,
+    device: getClientDevice(request),
+    createdAt: new Date().toISOString()
+  };
+
+  await env.SITE_CONFIG.put(accessLogsKey, JSON.stringify([record, ...logs].slice(0, maxAccessLogs)));
+}
+
+function shouldRecordAccess(request: Request): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return false;
+  }
+
+  const path = new URL(request.url).pathname;
+
+  if (path === "/admin" || path.startsWith("/admin/") || path.startsWith("/api/")) {
+    return false;
+  }
+
+  return !/\.(?:css|js|mjs|map|png|jpe?g|webp|gif|svg|ico|avif|woff2?|ttf|otf|txt|xml|json)$/i.test(path);
+}
+
 function commentKey(page: string): string {
   return `${commentsPrefix}${page}`;
 }
@@ -1019,7 +1140,7 @@ function json(payload: unknown, status = 200): Response {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const route = apiRoutes[url.pathname];
 
@@ -1030,6 +1151,8 @@ export default {
     if (url.pathname.startsWith("/api/")) {
       return json({ error: "API route not found", path: url.pathname }, 404);
     }
+
+    ctx.waitUntil(recordAccessLog(request, env as AppEnv));
 
     return env.ASSETS.fetch(request);
   }

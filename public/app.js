@@ -227,6 +227,7 @@ function renderAdminEditor() {
   const selectedItem = getSelectedAdminItem();
   const selectedPage = selectedItem?.type === "page" ? selectedItem.page : null;
   const selectedLink = selectedItem?.type === "link" ? selectedItem.link : null;
+  const selectedLogs = selectedItem?.type === "logs";
 
   const pageNav = element("nav", "module-nav");
   for (const page of state.config.pages) {
@@ -299,6 +300,14 @@ function renderAdminEditor() {
     window.location.href = "/";
   });
 
+  const logsButton = button("访问日志", "button", "button");
+  logsButton.classList.toggle("is-active", selectedLogs);
+  logsButton.addEventListener("click", () => {
+    state.selectedItemType = "logs";
+    state.expandedSettings = "";
+    renderAdminEditor();
+  });
+
   const logoutButton = button("退出登录", "button", "button");
   logoutButton.addEventListener("click", () => {
     state.token = "";
@@ -307,7 +316,7 @@ function renderAdminEditor() {
   });
 
   const sidebarActions = element("div", "sidebar-actions");
-  sidebarActions.append(addPageButton, addLinkButton, homeButton, logoutButton);
+  sidebarActions.append(addPageButton, addLinkButton, logsButton, homeButton, logoutButton);
   sidebar.append(brand, pageNav, sidebarActions);
 
   const main = element("main", "admin-workspace");
@@ -316,7 +325,13 @@ function renderAdminEditor() {
   titleText.append(element("p", "eyebrow", "Preview Admin"), element("h1", "", "预览模式编辑"));
   title.append(titleText);
 
-  main.append(title, renderHomeSettings());
+  main.append(title);
+
+  if (selectedLogs) {
+    main.append(renderAccessLogsPanel());
+  } else {
+    main.append(renderHomeSettings());
+  }
 
   if (selectedPage) {
     main.append(renderPreviewEditor(selectedPage));
@@ -511,6 +526,74 @@ function renderExternalLinkPreview(link) {
   wrapper.append(element("span", "field-title", "入口预览"));
   wrapper.append(renderExternalLinkEntry(link));
   return wrapper;
+}
+
+function renderAccessLogsPanel() {
+  const panel = element("section", "admin-panel access-logs-panel");
+  const head = element("div", "section-head action-head");
+  const copy = element("div");
+  copy.append(element("h2", "", "访问日志"));
+  copy.append(element("p", "", "只记录普通访客打开网站页面的 IP、时间、路径和设备信息；管理员后台和接口操作不会记录。"));
+  const actions = element("div", "module-actions");
+  const refresh = button("刷新", "button", "button");
+  const clear = button("清空日志", "button danger", "button");
+  const list = element("div", "access-log-list");
+
+  refresh.addEventListener("click", () => {
+    loadAccessLogs(list);
+  });
+
+  clear.addEventListener("click", async () => {
+    if (!confirm("确定清空全部访问日志？")) {
+      return;
+    }
+
+    clear.disabled = true;
+
+    try {
+      const payload = await api.postJson("/api/admin/logs", { action: "clear" }, true);
+      renderAccessLogsList(list, payload.logs || []);
+    } catch (error) {
+      list.replaceChildren(element("p", "form-error", error.message));
+    }
+
+    clear.disabled = false;
+  });
+
+  actions.append(refresh, clear);
+  head.append(copy, actions);
+  panel.append(head, list);
+  loadAccessLogs(list);
+  return panel;
+}
+
+async function loadAccessLogs(list) {
+  list.replaceChildren(element("p", "form-hint", "正在加载访问日志..."));
+
+  try {
+    const payload = await api.getJson("/api/admin/logs", true);
+    renderAccessLogsList(list, payload.logs || []);
+  } catch (error) {
+    list.replaceChildren(element("p", "form-error", error.message));
+  }
+}
+
+function renderAccessLogsList(list, logs) {
+  if (!logs.length) {
+    list.replaceChildren(element("p", "empty-state", "还没有访问记录。"));
+    return;
+  }
+
+  list.replaceChildren(...logs.map((log) => {
+    const item = element("article", "access-log-item");
+    const head = element("div", "comment-head");
+    head.append(element("strong", "", log.ip || "unknown"));
+    head.append(element("span", "comment-meta", formatDate(log.createdAt)));
+    item.append(head);
+    item.append(element("p", "", `${log.method || "GET"} ${log.path || "/"}`));
+    item.append(element("p", "form-hint", log.device || "未知设备"));
+    return item;
+  }));
 }
 
 function renderEditablePageHeader(page) {
@@ -1931,6 +2014,10 @@ function ensureAdminSelection() {
   const pageExists = state.config.pages.some((page) => page.id === state.selectedPageId);
   const linkExists = links.some((link) => link.id === state.selectedLinkId);
 
+  if (state.selectedItemType === "logs") {
+    return;
+  }
+
   if (state.selectedItemType === "page" && pageExists) {
     return;
   }
@@ -1945,6 +2032,10 @@ function ensureAdminSelection() {
 }
 
 function getSelectedAdminItem() {
+  if (state.selectedItemType === "logs") {
+    return { type: "logs" };
+  }
+
   if (state.selectedItemType === "link") {
     const link = state.config.links.find((item) => item.id === state.selectedLinkId);
 
