@@ -27,6 +27,7 @@ const fallbackConfig = {
       slug: "workspace",
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
+      backgroundImage: "",
       visible: true,
       entry: {
         title: "",
@@ -477,6 +478,7 @@ function renderPreviewEditor(page) {
   head.append(copy, headActions);
 
   const canvas = element("div", "page-preview");
+  applyPageBackground(canvas, page.backgroundImage);
   canvas.append(renderEditablePageHeader(page));
   canvas.append(renderInsertBar(page, 0));
 
@@ -701,6 +703,9 @@ function renderEntrySettings(page) {
   const backgroundRow = element("div", "admin-row");
   backgroundRow.append(imageValueField("入口卡片背景", page.entry.backgroundImage, (value) => {
     page.entry.backgroundImage = value;
+  }));
+  backgroundRow.append(imageValueField("分页面背景", page.backgroundImage, (value) => {
+    page.backgroundImage = value;
   }));
   backgroundRow.append(renderEntryPreview(page));
 
@@ -958,7 +963,7 @@ function renderEditableImageSection(section) {
       section.display,
       [
         ["normal", "正常图片"],
-        ["background", "作为背景"]
+        ["background", "展示图片"]
       ],
       (value) => {
         section.display = value;
@@ -1356,6 +1361,7 @@ function renderPage(page) {
   document.title = page.title;
   const columnMode = getPageColumnMode(page.slug);
   const main = element("main", "workspace");
+  applyPageBackground(main, page.backgroundImage);
   const header = element("header", "workspace-header compact");
   const copy = element("div");
   copy.append(element("p", "eyebrow", `/${page.slug}`), element("h1", "", page.title));
@@ -2012,6 +2018,7 @@ function hydratePage(page) {
     sections,
     modules: sections.filter((section) => section.type === "system").map((section) => section.moduleId),
     blocks: sections.filter((section) => section.type === "text"),
+    backgroundImage: page.backgroundImage || "",
     entry: hydrateEntry(page.entry),
     comments: hydrateComments(page.comments)
   };
@@ -2179,6 +2186,7 @@ function createPage() {
     slug: uniqueClientSlug(`page-${index}`),
     title: `新分页面 ${index}`,
     description: "在这里填写页面说明。",
+    backgroundImage: "",
     visible: true,
     entry: {
       title: "",
@@ -2731,6 +2739,15 @@ function applyEntryCardStyle(card, image) {
 
   card.classList.add("has-entry-background");
   card.style.backgroundImage = `linear-gradient(90deg, rgba(23, 32, 29, 0.82), rgba(23, 32, 29, 0.22)), url("${cssUrl(image)}")`;
+}
+
+function applyPageBackground(node, image) {
+  if (!image) {
+    return;
+  }
+
+  node.classList.add("has-page-background");
+  node.style.backgroundImage = `linear-gradient(180deg, rgba(251, 250, 246, 0.84), rgba(251, 250, 246, 0.68)), url("${cssUrl(image)}")`;
 }
 
 function normalizeExternalUrl(value) {

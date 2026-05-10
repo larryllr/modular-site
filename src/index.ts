@@ -116,6 +116,7 @@ type SitePage = {
   slug: string;
   title: string;
   description: string;
+  backgroundImage: string;
   visible: boolean;
   modules: string[];
   blocks: ContentBlock[];
@@ -193,6 +194,7 @@ const defaultSiteConfig: SiteConfig = {
       slug: "workspace",
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
+      backgroundImage: "",
       visible: true,
       entry: {
         title: "",
@@ -605,6 +607,7 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
       slug,
       title: limitText(asString(record.title) || `分页面 ${index + 1}`, 80),
       description: limitText(asString(record.description), 220),
+      backgroundImage: normalizeImageSrc(asString(record.backgroundImage)),
       visible: typeof record.visible === "boolean" ? record.visible : true,
       modules: [...new Set(modules)],
       blocks,

@@ -232,6 +232,17 @@ textarea {
   padding: 28px;
 }
 
+.workspace.has-page-background,
+.page-preview.has-page-background {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.workspace.has-page-background {
+  min-height: 100vh;
+}
+
 .workspace-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 520px);
@@ -811,6 +822,10 @@ h1 {
   border-radius: 8px;
   background: #f2f5ef;
   padding: 14px;
+}
+
+.page-preview.has-page-background {
+  background-color: #f2f5ef;
 }
 
 .preview-page-header {
