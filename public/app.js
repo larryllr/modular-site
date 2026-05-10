@@ -13,6 +13,7 @@ const fallbackConfig = {
   homeTitle: "功能入口",
   homeDescription: "这里是所有分页面的入口。管理员可以在 /admin 添加页面、分配模块和修改标题。",
   homeImage: "",
+  commentBlockWords: [],
   announcement: {
     enabled: false,
     title: "公告",
@@ -415,6 +416,7 @@ function renderHomeSettings() {
       state.config.homeImage = value;
     })
   );
+  panel.append(renderCommentBlockWordsSettings());
   const notice = element("section", "announcement-settings");
   notice.append(element("h3", "", "主页公告"));
   notice.append(
@@ -444,6 +446,17 @@ function renderHomeSettings() {
   notice.append(element("p", "form-hint", "填 0 秒表示不自动关闭；公告只在主页显示，会以弹幕形式横向滚动。"));
   panel.append(notice);
   return panel;
+}
+
+function renderCommentBlockWordsSettings() {
+  const section = element("section", "announcement-settings");
+  section.append(element("h3", "", "评论屏蔽词"));
+  section.append(
+    areaField("屏蔽词列表", (state.config.commentBlockWords || []).join("\n"), (value) => {
+      state.config.commentBlockWords = normalizeBlockWordsInput(value);
+    }, "每行一个词。评论名字或内容出现这些词时，将无法发送，并记录 IP、内容和命中词到访问日志。")
+  );
+  return section;
 }
 
 function renderPreviewEditor(page) {
@@ -586,11 +599,19 @@ function renderAccessLogsList(list, logs) {
 
   list.replaceChildren(...logs.map((log) => {
     const item = element("article", "access-log-item");
+    item.classList.toggle("is-blocked-comment", log.kind === "blocked-comment");
     const head = element("div", "comment-head");
-    head.append(element("strong", "", log.ip || "unknown"));
+    head.append(element("strong", "", log.kind === "blocked-comment" ? `评论拦截 · ${log.ip || "unknown"}` : log.ip || "unknown"));
     head.append(element("span", "comment-meta", formatDate(log.createdAt)));
     item.append(head);
-    item.append(element("p", "", `${log.method || "GET"} ${log.path || "/"}`));
+
+    if (log.kind === "blocked-comment") {
+      item.append(element("p", "", `页面 ${log.path || "/"} · 名称：${log.name || "访客"} · 命中：${log.matchedWord || "屏蔽词"}`));
+      item.append(element("p", "blocked-comment-body", log.body || ""));
+    } else {
+      item.append(element("p", "", `${log.method || "GET"} ${log.path || "/"}`));
+    }
+
     item.append(element("p", "form-hint", log.device || "未知设备"));
     return item;
   }));
@@ -1953,10 +1974,17 @@ function hydrateConfig(config) {
   return {
     ...fallbackConfig,
     ...next,
+    commentBlockWords: normalizeBlockWordsInput(next.commentBlockWords || []),
     announcement: hydrateAnnouncement(next.announcement),
     links: (next.links || fallbackConfig.links).map(hydrateExternalLink),
     pages: (next.pages || fallbackConfig.pages).map(hydratePage)
   };
+}
+
+function normalizeBlockWordsInput(value) {
+  const source = Array.isArray(value) ? value : String(value || "").split(/\r?\n/);
+  const words = source.map((word) => String(word || "").trim().slice(0, 60)).filter(Boolean).slice(0, 200);
+  return [...new Set(words)];
 }
 
 function hydrateAnnouncement(announcement) {
@@ -2401,7 +2429,7 @@ function sidebarAreaField(label, value, onInput) {
   return wrapper;
 }
 
-function areaField(label, value, onInput) {
+function areaField(label, value, onInput, hint = "") {
   const wrapper = element("label", "field");
   wrapper.append(element("span", "", label));
   const textarea = document.createElement("textarea");
@@ -2412,6 +2440,9 @@ function areaField(label, value, onInput) {
     onInput(textarea.value);
   });
   wrapper.append(textarea);
+  if (hint) {
+    wrapper.append(element("small", "", hint));
+  }
   return wrapper;
 }
 

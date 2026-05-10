@@ -1267,6 +1267,16 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.access-log-item.is-blocked-comment {
+  border-color: rgba(185, 28, 28, 0.28);
+  background: #fff8f6;
+}
+
+.blocked-comment-body {
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
 .save-bar {
   position: fixed;
   right: 28px;

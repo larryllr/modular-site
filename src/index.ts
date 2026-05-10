@@ -130,6 +130,7 @@ type SiteConfig = {
   homeTitle: string;
   homeDescription: string;
   homeImage: string;
+  commentBlockWords: string[];
   announcement: HomeAnnouncement;
   links: SiteLink[];
   pages: SitePage[];
@@ -152,10 +153,14 @@ type CommentRecord = {
 
 type AccessLogRecord = {
   id: string;
+  kind: "visit" | "blocked-comment";
   ip: string;
   path: string;
   method: string;
   device: string;
+  name: string;
+  body: string;
+  matchedWord: string;
   createdAt: string;
 };
 
@@ -174,6 +179,7 @@ const defaultSiteConfig: SiteConfig = {
   homeTitle: "功能入口",
   homeDescription: "这里是所有分页面的入口。管理员可以在 /admin 添加页面、分配模块和修改标题。",
   homeImage: "",
+  commentBlockWords: [],
   announcement: {
     enabled: false,
     title: "公告",
@@ -309,7 +315,7 @@ const apiRoutes: Record<string, ApiRoute> = {
 
   "/api/site-config": async (_request, env) =>
     json({
-      config: await readSiteConfig(env)
+      config: toPublicSiteConfig(await readSiteConfig(env))
     }),
 
   "/api/comments": async (request, env) => {
@@ -333,9 +339,12 @@ const apiRoutes: Record<string, ApiRoute> = {
 
     const body = asRecord(await readJson(request));
     const page = normalizeCommentPage(asString(body.page));
+    const name = limitText(asString(body.name), 40) || "访客";
     const content = limitText(asString(body.body), 1000);
     const isAdminComment = await isAdminRequest(request, env);
     const customIp = limitText(asString(body.displayIp || body.ip), 80);
+    const ip = isAdminComment && customIp ? customIp : getClientIp(request);
+    const device = getClientDevice(request);
 
     if (!page || !content) {
       return json({ error: "评论内容不能为空" }, 400);
@@ -345,14 +354,30 @@ const apiRoutes: Record<string, ApiRoute> = {
       return json({ error: "自定义 IP 需要管理员登录" }, 401);
     }
 
+    const config = await readSiteConfig(env);
+    const matchedWord = findBlockedCommentWord(config.commentBlockWords, name, content);
+
+    if (matchedWord) {
+      await recordBlockedCommentLog(request, env, {
+        page,
+        name,
+        body: content,
+        ip,
+        device,
+        matchedWord
+      });
+
+      return json({ error: "评论包含管理员设置的屏蔽词，无法发送。" }, 400);
+    }
+
     const comments = await readComments(env, page);
     const comment: CommentRecord = {
       id: crypto.randomUUID(),
       page,
-      name: limitText(asString(body.name), 40) || "访客",
+      name,
       body: content,
-      ip: isAdminComment && customIp ? customIp : getClientIp(request),
-      device: getClientDevice(request),
+      ip,
+      device,
       createdAt: new Date().toISOString()
     };
     const nextComments = [comment, ...comments].slice(0, 300);
@@ -544,6 +569,13 @@ async function readSiteConfig(env: AppEnv): Promise<SiteConfig> {
   return normalizeSiteConfig(stored ?? defaultSiteConfig);
 }
 
+function toPublicSiteConfig(config: SiteConfig): SiteConfig {
+  return {
+    ...config,
+    commentBlockWords: []
+  };
+}
+
 function normalizeSiteConfig(value: unknown): SiteConfig {
   const source = asRecord(value);
   const usedSlugs = new Set<string>();
@@ -592,10 +624,24 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
     homeTitle: limitText(asString(source.homeTitle) || defaultSiteConfig.homeTitle, 80),
     homeDescription: limitText(asString(source.homeDescription) || defaultSiteConfig.homeDescription, 220),
     homeImage: normalizeImageSrc(asString(source.homeImage)),
+    commentBlockWords: normalizeCommentBlockWords(source.commentBlockWords),
     announcement: normalizeAnnouncement(source.announcement),
     links: rawLinks.slice(0, 40).map(normalizeSiteLink),
     pages
   };
+}
+
+function normalizeCommentBlockWords(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const words = value
+    .map((word) => limitText(asString(word), 60))
+    .filter(Boolean)
+    .slice(0, 200);
+
+  return [...new Set(words)];
 }
 
 function normalizeAnnouncement(value: unknown): HomeAnnouncement {
@@ -844,10 +890,14 @@ function normalizeAccessLog(value: unknown): AccessLogRecord | null {
 
   return {
     id,
+    kind: asString(record.kind) === "blocked-comment" ? "blocked-comment" : "visit",
     ip,
     path: limitText(asString(record.path), 160) || "/",
     method: limitText(asString(record.method), 12) || "GET",
     device: limitText(asString(record.device), 120) || "未知设备",
+    name: limitText(asString(record.name), 40),
+    body: limitText(asString(record.body), 1000),
+    matchedWord: limitText(asString(record.matchedWord), 60),
     createdAt
   };
 }
@@ -861,14 +911,58 @@ async function recordAccessLog(request: Request, env: AppEnv): Promise<void> {
   const logs = await readAccessLogs(env);
   const record: AccessLogRecord = {
     id: crypto.randomUUID(),
+    kind: "visit",
     ip: getClientIp(request),
     path: limitText(`${url.pathname}${url.search}`, 160) || "/",
     method: request.method,
     device: getClientDevice(request),
+    name: "",
+    body: "",
+    matchedWord: "",
     createdAt: new Date().toISOString()
   };
 
   await env.SITE_CONFIG.put(accessLogsKey, JSON.stringify([record, ...logs].slice(0, maxAccessLogs)));
+}
+
+async function recordBlockedCommentLog(
+  request: Request,
+  env: AppEnv,
+  details: { page: string; name: string; body: string; ip: string; device: string; matchedWord: string }
+): Promise<void> {
+  if (!env.SITE_CONFIG) {
+    return;
+  }
+
+  const logs = await readAccessLogs(env);
+  const record: AccessLogRecord = {
+    id: crypto.randomUUID(),
+    kind: "blocked-comment",
+    ip: details.ip,
+    path: `/${details.page}`,
+    method: request.method,
+    device: details.device,
+    name: details.name,
+    body: details.body,
+    matchedWord: details.matchedWord,
+    createdAt: new Date().toISOString()
+  };
+
+  await env.SITE_CONFIG.put(accessLogsKey, JSON.stringify([record, ...logs].slice(0, maxAccessLogs)));
+}
+
+function findBlockedCommentWord(words: string[], name: string, body: string): string {
+  const content = `${name}\n${body}`.toLowerCase();
+
+  for (const word of words) {
+    const normalized = word.trim().toLowerCase();
+
+    if (normalized && content.includes(normalized)) {
+      return word;
+    }
+  }
+
+  return "";
 }
 
 function shouldRecordAccess(request: Request): boolean {
