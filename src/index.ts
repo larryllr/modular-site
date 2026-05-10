@@ -170,7 +170,8 @@ type ApiRoute = (request: Request, env: AppEnv) => Promise<Response> | Response;
 const configKey = "site-config";
 const commentsPrefix = "comments:";
 const accessLogsKey = "access-logs";
-const defaultAdminPassword = "llr20081209";
+const adminPasswordKey = "admin-password";
+const defaultAdminPassword = "admin";
 const tokenMaxAgeMs = 12 * 60 * 60 * 1000;
 const maxAccessLogs = 1000;
 
@@ -267,7 +268,7 @@ const serverModules: ServerModule[] = [
     category: "system",
     status: "active",
     description: "通过管理员密码修改站点配置。",
-    endpoints: ["/api/admin/login", "/api/admin/config"]
+    endpoints: ["/api/admin/login", "/api/admin/password", "/api/admin/config"]
   },
   {
     id: "echo",
@@ -400,7 +401,7 @@ const apiRoutes: Record<string, ApiRoute> = {
 
     const body = asRecord(await readJson(request));
     const password = asString(body.password);
-    const isValid = await verifyPassword(password, getAdminPassword(env));
+    const isValid = await verifyPassword(password, await getAdminPassword(env));
 
     if (!isValid) {
       return json({ error: "管理员密码不正确" }, 401);
@@ -409,6 +410,42 @@ const apiRoutes: Record<string, ApiRoute> = {
     return json({
       token: await createAdminToken(env),
       config: await readSiteConfig(env)
+    });
+  },
+
+  "/api/admin/password": async (request, env) => {
+    const auth = await requireAdmin(request, env);
+
+    if (auth) {
+      return auth;
+    }
+
+    if (request.method !== "POST") {
+      return json({ error: "Method Not Allowed" }, 405);
+    }
+
+    if (!env.SITE_CONFIG) {
+      return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+    }
+
+    const body = asRecord(await readJson(request));
+    const currentPassword = asString(body.currentPassword);
+    const newPassword = limitText(asString(body.newPassword), 120);
+    const isValid = await verifyPassword(currentPassword, await getAdminPassword(env));
+
+    if (!isValid) {
+      return json({ error: "当前密码不正确" }, 401);
+    }
+
+    if (newPassword.length < 4) {
+      return json({ error: "新密码至少需要 4 个字符" }, 400);
+    }
+
+    await env.SITE_CONFIG.put(adminPasswordKey, newPassword);
+
+    return json({
+      ok: true,
+      token: await createAdminToken(env)
     });
   },
 
@@ -1112,8 +1149,9 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
-function getAdminPassword(env: AppEnv): string {
-  return env.admin || env.ADMIN_PASSWORD || defaultAdminPassword;
+async function getAdminPassword(env: AppEnv): Promise<string> {
+  const stored = env.SITE_CONFIG ? await env.SITE_CONFIG.get(adminPasswordKey) : "";
+  return stored || env.admin || env.ADMIN_PASSWORD || defaultAdminPassword;
 }
 
 async function verifyPassword(input: string, expected: string): Promise<boolean> {
@@ -1128,7 +1166,7 @@ async function createAdminToken(env: AppEnv): Promise<string> {
     exp: Date.now() + tokenMaxAgeMs
   };
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
-  const signature = await sign(encodedPayload, getAdminPassword(env));
+  const signature = await sign(encodedPayload, await getAdminPassword(env));
 
   return `${encodedPayload}.${signature}`;
 }
@@ -1155,7 +1193,7 @@ async function verifyAdminToken(token: string, env: AppEnv): Promise<boolean> {
     return false;
   }
 
-  const expected = await sign(encodedPayload, getAdminPassword(env));
+  const expected = await sign(encodedPayload, await getAdminPassword(env));
 
   if (!timingSafeEqual(base64UrlDecodeToBytes(signature), base64UrlDecodeToBytes(expected))) {
     return false;

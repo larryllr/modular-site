@@ -417,6 +417,7 @@ function renderHomeSettings() {
       state.config.homeImage = value;
     })
   );
+  panel.append(renderAdminPasswordSettings());
   panel.append(renderCommentBlockWordsSettings());
   const notice = element("section", "announcement-settings");
   notice.append(element("h3", "", "主页公告"));
@@ -447,6 +448,58 @@ function renderHomeSettings() {
   notice.append(element("p", "form-hint", "填 0 秒表示不自动关闭；公告只在主页显示，会以弹幕形式横向滚动。"));
   panel.append(notice);
   return panel;
+}
+
+function renderAdminPasswordSettings() {
+  const section = element("section", "announcement-settings");
+  section.append(element("h3", "", "管理员密码"));
+  const form = element("form", "password-form");
+  const row = element("div", "admin-row");
+  const current = document.createElement("input");
+  current.className = "input";
+  current.type = "password";
+  current.placeholder = "当前密码";
+  current.autocomplete = "current-password";
+  current.required = true;
+  const next = document.createElement("input");
+  next.className = "input";
+  next.type = "password";
+  next.placeholder = "新密码（至少 4 位）";
+  next.autocomplete = "new-password";
+  next.required = true;
+  next.minLength = 4;
+  row.append(current, next);
+  const actions = element("div", "module-actions");
+  const save = button("修改密码", "button primary", "submit");
+  const feedback = element("p", "form-hint");
+  actions.append(save);
+  form.append(row, actions, feedback);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    save.textContent = "修改中";
+    feedback.textContent = "";
+
+    try {
+      const payload = await api.postJson("/api/admin/password", {
+        currentPassword: current.value,
+        newPassword: next.value
+      }, true);
+      state.token = payload.token;
+      localStorage.setItem(adminTokenKey, state.token);
+      current.value = "";
+      next.value = "";
+      feedback.textContent = "密码已修改，下次登录请使用新密码。";
+    } catch (error) {
+      feedback.textContent = error.message;
+    }
+
+    save.disabled = false;
+    save.textContent = "修改密码";
+  });
+  section.append(form);
+  section.append(element("p", "form-hint", "默认密码现在是 admin。后台修改后会保存在 Cloudflare KV 中。"));
+  return section;
 }
 
 function renderCommentBlockWordsSettings() {

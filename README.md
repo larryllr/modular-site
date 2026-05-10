@@ -37,8 +37,9 @@ npm run wrangler -- kv namespace create SITE_CONFIG
 ## 管理员后台
 
 - 访问 `/admin` 进入管理员界面。
-- 默认管理员密码：`llr20081209`。
+- 默认管理员密码：`admin`。
 - 登录页不会显示默认密码，避免把密码直接暴露在界面上。
+- 管理员界面可以直接修改管理员密码，修改后会保存在 Cloudflare KV 中。
 - 管理员界面可以新增分页面、修改页面标题和说明、设置网址后缀、控制是否在主页显示入口、为页面勾选系统模块、添加自定义文本模块。
 - 管理员界面现在是预览式编辑：在页面预览中插入系统模块、文本模块和图片模块，并用上移/下移控制它们在分页面里的位置。
 - 图片模块支持粘贴图片地址或上传本地图片；可以选择正常图片显示，也可以作为背景图片显示。
@@ -48,7 +49,7 @@ npm run wrangler -- kv namespace create SITE_CONFIG
 - `/` 是默认主页，会自动显示所有启用分页面的入口。
 - 每个分页面通过自己的后缀进入，例如后缀是 `workspace`，访问路径就是 `/workspace`。
 
-修改管理员密码建议使用 Cloudflare secret。线上运行：
+也可以使用 Cloudflare secret 修改管理员密码。线上运行：
 
 ```bash
 npm run wrangler -- secret put admin
