@@ -5,6 +5,7 @@ const adminTokenKey = "cloudflare-modular-site.admin-token";
 const homeLayoutKey = "cloudflare-modular-site.home-entry-layout";
 const pageColumnsKeyPrefix = "cloudflare-modular-site.page-columns.";
 const adminCommentIpKeyPrefix = "cloudflare-modular-site.admin-comment-ip.";
+const pageAccessKeyPrefix = "cloudflare-modular-site.page-access.";
 const maxUndoSteps = 50;
 
 const fallbackConfig = {
@@ -28,6 +29,8 @@ const fallbackConfig = {
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
       backgroundImage: "",
+      passwordEnabled: false,
+      pagePassword: "",
       visible: true,
       entry: {
         title: "",
@@ -762,7 +765,23 @@ function renderEntrySettings(page) {
   }));
   backgroundRow.append(renderEntryPreview(page));
 
-  panel.append(head, row, iconRow, sidebarIconRow, backgroundRow);
+  const passwordPanel = element("section", "entry-settings page-password-settings");
+  passwordPanel.append(element("h3", "", "分页面密码"));
+  const passwordRow = element("div", "admin-row");
+  passwordRow.append(
+    checkbox("进入这个分页面需要密码", page.passwordEnabled, (checked) => {
+      page.passwordEnabled = checked;
+      renderAdminEditor();
+    })
+  );
+  passwordRow.append(
+    field("分页面专属密码", page.pagePassword, (value) => {
+      page.pagePassword = value;
+    }, "开启后，访客输入正确密码前不会看到这个分页面的标题、模块、评论和背景。")
+  );
+  passwordPanel.append(passwordRow);
+
+  panel.append(head, row, iconRow, sidebarIconRow, backgroundRow, passwordPanel);
   return panel;
 }
 
@@ -1300,6 +1319,18 @@ function renderPublicSite() {
     return;
   }
 
+  if (page.passwordEnabled) {
+    const cachedPage = getUnlockedPage(slug);
+
+    if (cachedPage) {
+      renderPage(cachedPage);
+      return;
+    }
+
+    renderPagePasswordGate(page);
+    return;
+  }
+
   renderPage(page);
 }
 
@@ -1481,6 +1512,61 @@ function renderHomeViewControl() {
   });
   control.append(select);
   return control;
+}
+
+function renderPagePasswordGate(page) {
+  document.title = "需要密码";
+  const main = element("main", "workspace page-password-workspace");
+  const panel = element("section", "login-panel page-password-panel");
+  const brand = element("div", "brand");
+  brand.append(mark(page.entry?.iconText || "PG"), textBlock(page.entry?.title || page.title || "受保护分页面", "请输入该分页面密码"));
+  const form = element("form", "login-form");
+  const input = document.createElement("input");
+  input.className = "input";
+  input.type = "password";
+  input.placeholder = "分页面密码";
+  input.autocomplete = "current-password";
+  input.required = true;
+  const submit = button("进入分页面", "button primary", "submit");
+  const feedback = element("p", "form-error");
+  form.append(input, submit, feedback);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submit.disabled = true;
+    submit.textContent = "验证中";
+    feedback.textContent = "";
+
+    try {
+      const payload = await api.postJson("/api/page-access", {
+        slug: page.slug,
+        password: input.value
+      });
+      const fullPage = hydratePage(payload.page);
+      rememberUnlockedPage(fullPage);
+      renderPublicSite();
+    } catch (error) {
+      feedback.textContent = error.message;
+      submit.disabled = false;
+      submit.textContent = "进入分页面";
+    }
+  });
+  panel.append(brand, form);
+  main.append(panel);
+  app.append(main);
+}
+
+function getUnlockedPage(slug) {
+  try {
+    const stored = sessionStorage.getItem(`${pageAccessKeyPrefix}${slug}`);
+    return stored ? hydratePage(JSON.parse(stored)) : null;
+  } catch {
+    sessionStorage.removeItem(`${pageAccessKeyPrefix}${slug}`);
+    return null;
+  }
+}
+
+function rememberUnlockedPage(page) {
+  sessionStorage.setItem(`${pageAccessKeyPrefix}${page.slug}`, JSON.stringify(page));
 }
 
 function renderPageStatusStrip(page, columns) {
@@ -2072,6 +2158,8 @@ function hydratePage(page) {
     modules: sections.filter((section) => section.type === "system").map((section) => section.moduleId),
     blocks: sections.filter((section) => section.type === "text"),
     backgroundImage: page.backgroundImage || "",
+    passwordEnabled: Boolean(page.passwordEnabled),
+    pagePassword: page.pagePassword || "",
     entry: hydrateEntry(page.entry),
     comments: hydrateComments(page.comments)
   };
@@ -2240,6 +2328,8 @@ function createPage() {
     title: `新分页面 ${index}`,
     description: "在这里填写页面说明。",
     backgroundImage: "",
+    passwordEnabled: false,
+    pagePassword: "",
     visible: true,
     entry: {
       title: "",

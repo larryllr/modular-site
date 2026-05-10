@@ -117,6 +117,8 @@ type SitePage = {
   title: string;
   description: string;
   backgroundImage: string;
+  passwordEnabled: boolean;
+  pagePassword: string;
   visible: boolean;
   modules: string[];
   blocks: ContentBlock[];
@@ -196,6 +198,8 @@ const defaultSiteConfig: SiteConfig = {
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
       backgroundImage: "",
+      passwordEnabled: false,
+      pagePassword: "",
       visible: true,
       entry: {
         title: "",
@@ -320,6 +324,32 @@ const apiRoutes: Record<string, ApiRoute> = {
     json({
       config: toPublicSiteConfig(await readSiteConfig(env))
     }),
+
+  "/api/page-access": async (request, env) => {
+    if (request.method !== "POST") {
+      return json({ error: "Method Not Allowed" }, 405);
+    }
+
+    const body = asRecord(await readJson(request));
+    const slug = normalizeSlug(asString(body.slug), 0);
+    const password = asString(body.password);
+    const config = await readSiteConfig(env);
+    const page = config.pages.find((item) => item.slug === slug && item.visible);
+
+    if (!page) {
+      return json({ error: "页面不存在" }, 404);
+    }
+
+    if (!page.passwordEnabled) {
+      return json({ ok: true, page: toPublicPage(page) });
+    }
+
+    if (!page.pagePassword || !(await verifyPassword(password, page.pagePassword))) {
+      return json({ error: "分页面密码不正确" }, 401);
+    }
+
+    return json({ ok: true, page: toPublicPage(page) });
+  },
 
   "/api/comments": async (request, env) => {
     const url = new URL(request.url);
@@ -611,7 +641,31 @@ async function readSiteConfig(env: AppEnv): Promise<SiteConfig> {
 function toPublicSiteConfig(config: SiteConfig): SiteConfig {
   return {
     ...config,
-    commentBlockWords: []
+    commentBlockWords: [],
+    pages: config.pages.map((page) => (page.passwordEnabled ? toLockedPublicPage(page) : toPublicPage(page)))
+  };
+}
+
+function toPublicPage(page: SitePage): SitePage {
+  return {
+    ...page,
+    pagePassword: ""
+  };
+}
+
+function toLockedPublicPage(page: SitePage): SitePage {
+  return {
+    ...page,
+    description: "",
+    backgroundImage: "",
+    pagePassword: "",
+    modules: [],
+    blocks: [],
+    sections: [],
+    comments: {
+      ...page.comments,
+      enabled: false
+    }
   };
 }
 
@@ -645,6 +699,8 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
       title: limitText(asString(record.title) || `分页面 ${index + 1}`, 80),
       description: limitText(asString(record.description), 220),
       backgroundImage: normalizeImageSrc(asString(record.backgroundImage)),
+      passwordEnabled: typeof record.passwordEnabled === "boolean" ? record.passwordEnabled : false,
+      pagePassword: limitText(asString(record.pagePassword), 120),
       visible: typeof record.visible === "boolean" ? record.visible : true,
       modules: [...new Set(modules)],
       blocks,

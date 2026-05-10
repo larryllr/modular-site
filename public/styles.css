@@ -243,6 +243,15 @@ textarea {
   min-height: 100vh;
 }
 
+.page-password-workspace {
+  min-height: 100vh;
+  place-items: center;
+}
+
+.page-password-panel {
+  width: min(100%, 460px);
+}
+
 .workspace-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 520px);
