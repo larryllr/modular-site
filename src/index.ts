@@ -60,6 +60,18 @@ type CommentsSection = {
   layout: SectionLayout;
 };
 
+type LinkSection = {
+  id: string;
+  type: "link";
+  title: string;
+  description: string;
+  targetUrl: string;
+  iconText: string;
+  iconImage: string;
+  backgroundImage: string;
+  layout: SectionLayout;
+};
+
 type PageEntry = {
   title: string;
   description: string;
@@ -97,7 +109,7 @@ type HomeAnnouncement = {
   durationSeconds: number;
 };
 
-type PageSection = SystemSection | ContentBlock | ImageSection | CommentsSection;
+type PageSection = SystemSection | ContentBlock | ImageSection | CommentsSection | LinkSection;
 
 type SitePage = {
   id: string;
@@ -663,6 +675,20 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
       description: limitText(asString(record.description) || "留下你的想法。", 160),
       listHeight: clampNumber(record.listHeight, 180, 900, 320),
       layout: normalizeLayout(record.layout, "comments")
+    };
+  }
+
+  if (type === "link") {
+    return {
+      id: asString(record.id) || crypto.randomUUID(),
+      type: "link",
+      title: limitText(asString(record.title) || "网站入口", 80),
+      description: limitText(asString(record.description), 160),
+      targetUrl: normalizeExternalUrl(asString(record.targetUrl)),
+      iconText: limitText(asString(record.iconText) || "WEB", 4).toUpperCase(),
+      iconImage: normalizeImageSrc(asString(record.iconImage)),
+      backgroundImage: normalizeImageSrc(asString(record.backgroundImage)),
+      layout: normalizeLayout(record.layout, "link")
     };
   }
 

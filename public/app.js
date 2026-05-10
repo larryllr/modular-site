@@ -761,8 +761,10 @@ function renderInsertBar(page, index) {
   image.addEventListener("click", () => insertSection(page, index, createImageSection()));
   const comments = button("评论模块", "button", "button");
   comments.addEventListener("click", () => insertSection(page, index, createCommentsSection()));
+  const link = button("网站模块", "button", "button");
+  link.addEventListener("click", () => insertSection(page, index, createLinkSection()));
 
-  bar.append(system, text, image, comments);
+  bar.append(system, text, image, link, comments);
   return bar;
 }
 
@@ -781,6 +783,8 @@ function renderEditableSection(page, section, index) {
       shell.append(renderEditableSystemSection(page, section));
     } else if (section.type === "image") {
       shell.append(renderEditableImageSection(section));
+    } else if (section.type === "link") {
+      shell.append(renderEditableLinkSection(section));
     } else if (section.type === "comments") {
       shell.append(renderEditableCommentsSection(page, section));
     } else {
@@ -986,6 +990,53 @@ function renderEditableImageSection(section) {
   card.append(meta);
   card.append(renderImageSection(section));
   return card;
+}
+
+function renderEditableLinkSection(section) {
+  const card = element("article", "module-card inline-editor-card link-editor-card");
+  const row = element("div", "admin-row");
+  row.append(
+    field("网站标题", section.title, (value) => {
+      section.title = value;
+    })
+  );
+  row.append(
+    field("目标网址", section.targetUrl, (value) => {
+      section.targetUrl = value.trim();
+    }, "可以填完整 https:// 地址，也可以直接填域名。")
+  );
+  card.append(row);
+  card.append(
+    field("网站说明", section.description, (value) => {
+      section.description = value;
+    }, "留空时会显示目标域名。")
+  );
+
+  const iconRow = element("div", "admin-row");
+  iconRow.append(
+    field("图标文字", section.iconText, (value) => {
+      section.iconText = value.slice(0, 4).toUpperCase();
+    }, "没有手动图标时，会自动尝试显示目标网站图标。")
+  );
+  iconRow.append(imageValueField("手动图标图片", section.iconImage, (value) => {
+    section.iconImage = value;
+  }));
+  card.append(iconRow);
+
+  const backgroundRow = element("div", "admin-row");
+  backgroundRow.append(imageValueField("模块背景", section.backgroundImage, (value) => {
+    section.backgroundImage = value;
+  }));
+  backgroundRow.append(renderLinkSectionPreview(section));
+  card.append(backgroundRow);
+  return card;
+}
+
+function renderLinkSectionPreview(section) {
+  const wrapper = element("div", "entry-preview-wrap");
+  wrapper.append(element("span", "field-title", "模块预览"));
+  wrapper.append(renderLinkSection(section));
+  return wrapper;
 }
 
 function renderEditableCommentsSection(page, section) {
@@ -1397,6 +1448,10 @@ function renderPublicSection(section, context) {
     return renderImageSection(section);
   }
 
+  if (section.type === "link") {
+    return renderLinkSection(section);
+  }
+
   if (section.type === "comments") {
     return renderCommentsSection(context.page, section, false);
   }
@@ -1494,6 +1549,28 @@ function renderExternalLinkEntry(link) {
   const targetUrl = normalizeExternalUrl(link.targetUrl);
   const header = element("header", "module-card-header");
   header.append(linkMark(link), textBlock(link.title || "外部网站", link.description || externalLinkSubtitle(link)));
+
+  const anchor = document.createElement("a");
+  anchor.className = "button primary";
+  anchor.href = targetUrl || "#";
+  anchor.rel = "noreferrer";
+  anchor.textContent = targetUrl ? "前往" : "未设置网址";
+
+  if (!targetUrl) {
+    anchor.setAttribute("aria-disabled", "true");
+    anchor.addEventListener("click", (event) => event.preventDefault());
+  }
+
+  card.append(header, anchor);
+  return card;
+}
+
+function renderLinkSection(section) {
+  const card = element("article", "module-card entry-card external-entry-card link-section-card");
+  applyEntryCardStyle(card, section.backgroundImage);
+  const targetUrl = normalizeExternalUrl(section.targetUrl);
+  const header = element("header", "module-card-header no-toggle");
+  header.append(linkMark(section), textBlock(section.title || "网站入口", section.description || externalLinkSubtitle(section)));
 
   const anchor = document.createElement("a");
   anchor.className = "button primary";
@@ -1962,6 +2039,20 @@ function hydrateSection(section) {
     };
   }
 
+  if (section.type === "link") {
+    return {
+      id: section.id || crypto.randomUUID(),
+      type: "link",
+      title: section.title || "网站入口",
+      description: section.description || "",
+      targetUrl: normalizeExternalUrl(section.targetUrl || ""),
+      iconText: (section.iconText || "WEB").slice(0, 4).toUpperCase(),
+      iconImage: section.iconImage || "",
+      backgroundImage: section.backgroundImage || "",
+      layout: hydrateLayout(section.layout, "link")
+    };
+  }
+
   return {
     id: section.id || crypto.randomUUID(),
     type: "text",
@@ -2146,6 +2237,20 @@ function createCommentsSection() {
   };
 }
 
+function createLinkSection() {
+  return {
+    id: crypto.randomUUID(),
+    type: "link",
+    title: "网站入口",
+    description: "点击前往目标网站。",
+    targetUrl: "",
+    iconText: "WEB",
+    iconImage: "",
+    backgroundImage: "",
+    layout: hydrateLayout(null, "link")
+  };
+}
+
 function insertSection(page, index, section) {
   rememberConfigChange();
   page.sections.splice(index, 0, section);
@@ -2238,6 +2343,14 @@ function sectionLabel(section) {
 
   if (section.type === "image") {
     return section.title || "图片模块";
+  }
+
+  if (section.type === "link") {
+    return section.title || "网站模块";
+  }
+
+  if (section.type === "comments") {
+    return section.title || "评论模块";
   }
 
   return section.title || "文本模块";
