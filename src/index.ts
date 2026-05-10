@@ -51,6 +51,17 @@ type ImageSection = {
   layout: SectionLayout;
 };
 
+type VideoSection = {
+  id: string;
+  type: "video";
+  title: string;
+  description: string;
+  src: string;
+  poster: string;
+  caption: string;
+  layout: SectionLayout;
+};
+
 type CommentsSection = {
   id: string;
   type: "comments";
@@ -111,7 +122,7 @@ type HomeAnnouncement = {
   durationSeconds: number;
 };
 
-type PageSection = SystemSection | ContentBlock | ImageSection | CommentsSection | LinkSection;
+type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | CommentsSection | LinkSection;
 
 type SitePage = {
   id: string;
@@ -810,6 +821,19 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
       display: asString(record.display) === "background" ? "background" : "normal",
       fit: asString(record.fit) === "contain" ? "contain" : "cover",
       layout: normalizeLayout(record.layout, "image")
+    };
+  }
+
+  if (type === "video") {
+    return {
+      id: asString(record.id) || crypto.randomUUID(),
+      type: "video",
+      title: limitText(asString(record.title) || `视频模块 ${index + 1}`, 80),
+      description: limitText(asString(record.description), 160),
+      src: limitText(asString(record.src), 1000),
+      poster: normalizeImageSrc(asString(record.poster)),
+      caption: limitText(asString(record.caption), 220),
+      layout: normalizeLayout(record.layout, "video")
     };
   }
 

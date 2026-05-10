@@ -880,12 +880,14 @@ function renderInsertBar(page, index) {
   text.addEventListener("click", () => insertSection(page, index, createTextSection()));
   const image = button("图片模块", "button primary", "button");
   image.addEventListener("click", () => insertSection(page, index, createImageSection()));
+  const video = button("视频模块", "button", "button");
+  video.addEventListener("click", () => insertSection(page, index, createVideoSection()));
   const comments = button("评论模块", "button", "button");
   comments.addEventListener("click", () => insertSection(page, index, createCommentsSection()));
   const link = button("网站模块", "button", "button");
   link.addEventListener("click", () => insertSection(page, index, createLinkSection()));
 
-  bar.append(system, text, image, link, comments);
+  bar.append(system, text, image, video, link, comments);
   return bar;
 }
 
@@ -904,6 +906,8 @@ function renderEditableSection(page, section, index) {
       shell.append(renderEditableSystemSection(page, section));
     } else if (section.type === "image") {
       shell.append(renderEditableImageSection(section));
+    } else if (section.type === "video") {
+      shell.append(renderEditableVideoSection(section));
     } else if (section.type === "link") {
       shell.append(renderEditableLinkSection(section));
     } else if (section.type === "comments") {
@@ -1110,6 +1114,41 @@ function renderEditableImageSection(section) {
   );
   card.append(meta);
   card.append(renderImageSection(section));
+  return card;
+}
+
+function renderEditableVideoSection(section) {
+  const card = element("article", "module-card inline-editor-card video-editor-card");
+  const row = element("div", "admin-row");
+  row.append(
+    field("视频标题", section.title, (value) => {
+      section.title = value;
+    })
+  );
+  row.append(
+    field("视频地址", section.src, (value) => {
+      section.src = value.trim();
+    }, "粘贴 mp4/webm/ogg 等浏览器可播放的视频地址。")
+  );
+  card.append(row);
+  card.append(
+    field("视频说明", section.description, (value) => {
+      section.description = value;
+    })
+  );
+  const meta = element("div", "admin-row");
+  meta.append(
+    field("封面图片", section.poster, (value) => {
+      section.poster = value.trim();
+    }, "可选，未播放前显示。")
+  );
+  meta.append(
+    field("视频注释", section.caption, (value) => {
+      section.caption = value;
+    })
+  );
+  card.append(meta);
+  card.append(renderVideoSection(section));
   return card;
 }
 
@@ -1656,6 +1695,10 @@ function renderPublicSection(section, context) {
     return renderImageSection(section);
   }
 
+  if (section.type === "video") {
+    return renderVideoSection(section);
+  }
+
   if (section.type === "link") {
     return renderLinkSection(section);
   }
@@ -1855,6 +1898,48 @@ function renderImageSection(section) {
     card.append(body);
   }
 
+  return card;
+}
+
+function renderVideoSection(section) {
+  const card = element("article", "module-card video-section");
+  const header = element("header", "module-card-header no-toggle");
+  header.append(mark("VD"), textBlock(section.title || "视频", section.description));
+  card.append(header);
+
+  const frame = element("figure", "video-frame");
+  if (section.src) {
+    const video = document.createElement("video");
+    video.src = section.src;
+    video.controls = true;
+    video.preload = "metadata";
+    video.playsInline = true;
+
+    if (section.poster) {
+      video.poster = section.poster;
+    }
+
+    const play = button("播放", "button primary video-play-button", "button");
+    play.addEventListener("click", async () => {
+      try {
+        await video.play();
+        play.classList.add("is-hidden");
+      } catch {
+        play.textContent = "点击视频播放";
+      }
+    });
+    video.addEventListener("play", () => play.classList.add("is-hidden"));
+    video.addEventListener("pause", () => play.classList.remove("is-hidden"));
+    frame.append(video, play);
+  } else {
+    frame.append(element("div", "video-placeholder", "还没有设置视频"));
+  }
+
+  if (section.caption) {
+    frame.append(element("figcaption", "", section.caption));
+  }
+
+  card.append(frame);
   return card;
 }
 
@@ -2246,6 +2331,19 @@ function hydrateSection(section) {
     };
   }
 
+  if (section.type === "video") {
+    return {
+      id: section.id || crypto.randomUUID(),
+      type: "video",
+      title: section.title || "视频模块",
+      description: section.description || "",
+      src: section.src || "",
+      poster: section.poster || "",
+      caption: section.caption || "",
+      layout: hydrateLayout(section.layout, "video")
+    };
+  }
+
   if (section.type === "comments") {
     return {
       id: section.id || crypto.randomUUID(),
@@ -2455,6 +2553,19 @@ function createImageSection() {
   };
 }
 
+function createVideoSection() {
+  return {
+    id: crypto.randomUUID(),
+    type: "video",
+    title: "视频模块",
+    description: "点击播放视频。",
+    src: "",
+    poster: "",
+    caption: "",
+    layout: hydrateLayout(null, "video")
+  };
+}
+
 function createCommentsSection() {
   return {
     id: crypto.randomUUID(),
@@ -2572,6 +2683,10 @@ function sectionLabel(section) {
 
   if (section.type === "image") {
     return section.title || "图片模块";
+  }
+
+  if (section.type === "video") {
+    return section.title || "视频模块";
   }
 
   if (section.type === "link") {

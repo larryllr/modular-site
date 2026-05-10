@@ -1037,18 +1037,22 @@ h1 {
 }
 
 .image-section,
-.image-background-section {
+.image-background-section,
+.video-section {
   overflow: hidden;
 }
 
-.image-frame {
+.image-frame,
+.video-frame {
   display: grid;
   gap: 8px;
   margin: 0;
 }
 
 .image-frame img,
-.image-placeholder {
+.image-placeholder,
+.video-frame video,
+.video-placeholder {
   width: 100%;
   min-height: 220px;
   max-height: 520px;
@@ -1057,21 +1061,38 @@ h1 {
   background: #eef3ea;
 }
 
-.image-frame img {
+.image-frame img,
+.video-frame video {
   display: block;
   object-fit: cover;
 }
 
-.image-placeholder {
+.image-placeholder,
+.video-placeholder {
   display: grid;
   place-items: center;
   color: var(--muted);
 }
 
-.image-frame figcaption {
+.image-frame figcaption,
+.video-frame figcaption {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.video-frame {
+  position: relative;
+}
+
+.video-play-button {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+}
+
+.video-play-button.is-hidden {
+  display: none;
 }
 
 .image-background-section {
