@@ -1582,7 +1582,7 @@ function renderCommentsManager(page) {
   const head = element("div", "section-head action-head");
   const copy = element("div");
   copy.append(element("h2", "", "评论管理"));
-  copy.append(element("p", "", "这里可以删除某一条评论，或清空当前分页面的全部评论。"));
+  copy.append(element("p", "", "这里可以编辑或删除某一条评论，也可以清空当前分页面的全部评论。"));
   const clear = button("清空评论", "button danger", "button");
   const list = element("div", "comments-list");
   clear.addEventListener("click", async () => {
@@ -1682,16 +1682,92 @@ function renderCommentItem(pageSlug, comment, adminMode, list) {
   item.append(head, body);
 
   if (adminMode) {
+    const editor = element("div", "comment-editor-host");
+    const actions = element("div", "comment-actions");
+    const edit = button("编辑", "button", "button");
     const remove = button("删除", "button danger", "button");
+
+    edit.addEventListener("click", () => {
+      editor.replaceChildren(renderCommentEditForm(pageSlug, comment, () => {
+        editor.replaceChildren();
+      }));
+    });
+
     remove.addEventListener("click", async () => {
       const payload = await api.postJson("/api/admin/comments", { page: pageSlug, action: "delete", id: comment.id }, true);
       updateCommentCache(pageSlug, payload.comments || []);
       refreshCommentLists(pageSlug);
     });
-    item.append(remove);
+
+    actions.append(edit, remove);
+    item.append(actions, editor);
   }
 
   return item;
+}
+
+function renderCommentEditForm(pageSlug, comment, onCancel) {
+  const form = element("form", "comment-edit-form");
+  const fields = element("div", "comment-edit-grid");
+  const name = document.createElement("input");
+  name.className = "input";
+  name.name = "name";
+  name.maxLength = 40;
+  name.placeholder = "评论名字";
+  name.value = comment.name || "";
+  const ip = document.createElement("input");
+  ip.className = "input";
+  ip.name = "ip";
+  ip.maxLength = 80;
+  ip.placeholder = "显示 IP";
+  ip.value = comment.ip || "";
+  const device = document.createElement("input");
+  device.className = "input";
+  device.name = "device";
+  device.maxLength = 120;
+  device.placeholder = "设备信息";
+  device.value = comment.device || "";
+  const body = document.createElement("textarea");
+  body.className = "textarea";
+  body.name = "body";
+  body.maxLength = 1000;
+  body.required = true;
+  body.value = comment.body || "";
+  const feedback = element("p", "form-hint");
+  const controls = element("div", "comment-edit-actions");
+  const cancel = button("取消", "button", "button");
+  const save = button("保存修改", "button primary", "submit");
+
+  cancel.addEventListener("click", onCancel);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    save.textContent = "保存中";
+    feedback.textContent = "";
+
+    try {
+      const payload = await api.postJson("/api/admin/comments", {
+        page: pageSlug,
+        action: "update",
+        id: comment.id,
+        name: name.value,
+        body: body.value,
+        ip: ip.value,
+        device: device.value
+      }, true);
+      updateCommentCache(pageSlug, payload.comments || []);
+      refreshCommentLists(pageSlug);
+    } catch (error) {
+      feedback.textContent = error.message;
+      save.disabled = false;
+      save.textContent = "保存修改";
+    }
+  });
+
+  fields.append(name, ip, device);
+  controls.append(cancel, save);
+  form.append(fields, body, controls, feedback);
+  return form;
 }
 
 function moduleContext(page) {

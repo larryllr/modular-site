@@ -406,7 +406,45 @@ const apiRoutes: Record<string, ApiRoute> = {
     const action = asString(body.action);
     const id = asString(body.id);
     const comments = await readComments(env, page);
-    const nextComments = action === "clear" ? [] : comments.filter((comment) => comment.id !== id);
+    let nextComments: CommentRecord[];
+
+    if (action === "clear") {
+      nextComments = [];
+    } else if (action === "delete") {
+      nextComments = comments.filter((comment) => comment.id !== id);
+    } else if (action === "update") {
+      const nextName = limitText(asString(body.name), 40) || "访客";
+      const nextBody = limitText(asString(body.body), 1000);
+      const nextIp = limitText(asString(body.displayIp) || asString(body.ip), 80);
+      const nextDevice = limitText(asString(body.device), 120);
+
+      if (!id || !nextBody) {
+        return json({ error: "评论内容不能为空" }, 400);
+      }
+
+      let found = false;
+      nextComments = comments.map((comment) => {
+        if (comment.id !== id) {
+          return comment;
+        }
+
+        found = true;
+
+        return {
+          ...comment,
+          name: nextName,
+          body: nextBody,
+          ip: nextIp || comment.ip,
+          device: nextDevice || comment.device
+        };
+      });
+
+      if (!found) {
+        return json({ error: "评论不存在" }, 404);
+      }
+    } else {
+      return json({ error: "未知操作" }, 400);
+    }
 
     await env.SITE_CONFIG.put(commentKey(page), JSON.stringify(nextComments));
 

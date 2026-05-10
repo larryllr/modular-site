@@ -1197,6 +1197,35 @@ h1 {
   white-space: pre-wrap;
 }
 
+.comment-actions,
+.comment-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.comment-editor-host:empty {
+  display: none;
+}
+
+.comment-edit-form {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.comment-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.comment-edit-form .textarea {
+  min-height: 92px;
+}
+
 .comments-manager {
   display: grid;
   gap: 12px;
