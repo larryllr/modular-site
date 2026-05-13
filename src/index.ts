@@ -4,6 +4,7 @@ type AppEnv = Env & {
   SITE_CONFIG?: KVNamespace;
   admin?: string;
   ADMIN_PASSWORD?: string;
+  LIMITED_ADMIN_PASSWORD?: string;
 };
 
 type ServerModule = {
@@ -153,7 +154,7 @@ type SiteConfig = {
 };
 
 type TokenPayload = {
-  sub: "admin";
+  sub: "admin" | "limited";
   exp: number;
 };
 
@@ -186,7 +187,9 @@ const configKey = "site-config";
 const commentsPrefix = "comments:";
 const accessLogsKey = "access-logs";
 const adminPasswordKey = "admin-password";
+const limitedAdminPasswordKey = "limited-admin-password";
 const defaultAdminPassword = "admin";
+const defaultLimitedAdminPassword = "limited";
 const tokenMaxAgeMs = 12 * 60 * 60 * 1000;
 const maxAccessLogs = 1000;
 
@@ -446,20 +449,24 @@ const apiRoutes: Record<string, ApiRoute> = {
 
     const body = asRecord(await readJson(request));
     const password = asString(body.password);
-    const isValid = await verifyPassword(password, await getAdminPassword(env));
+    const isAdmin = await verifyPassword(password, await getAdminPassword(env));
+    const isLimited = !isAdmin && (await verifyPassword(password, await getLimitedAdminPassword(env)));
 
-    if (!isValid) {
+    if (!isAdmin && !isLimited) {
       return json({ error: "管理员密码不正确" }, 401);
     }
 
+    const role = isAdmin ? "admin" : "limited";
+
     return json({
-      token: await createAdminToken(env),
+      token: await createAdminToken(env, role),
+      role,
       config: await readSiteConfig(env)
     });
   },
 
   "/api/admin/password": async (request, env) => {
-    const auth = await requireAdmin(request, env);
+    const auth = await requireFullAdmin(request, env);
 
     if (auth) {
       return auth;
@@ -490,19 +497,58 @@ const apiRoutes: Record<string, ApiRoute> = {
 
     return json({
       ok: true,
-      token: await createAdminToken(env)
+      token: await createAdminToken(env, "admin"),
+      role: "admin"
     });
   },
 
-  "/api/admin/config": async (request, env) => {
-    const auth = await requireAdmin(request, env);
+  "/api/admin/limited-password": async (request, env) => {
+    const auth = await requireFullAdmin(request, env);
 
     if (auth) {
       return auth;
     }
 
+    if (request.method !== "POST") {
+      return json({ error: "Method Not Allowed" }, 405);
+    }
+
+    if (!env.SITE_CONFIG) {
+      return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+    }
+
+    const body = asRecord(await readJson(request));
+    const currentPassword = asString(body.currentPassword);
+    const newPassword = limitText(asString(body.newPassword), 120);
+    const isValid = await verifyPassword(currentPassword, await getAdminPassword(env));
+
+    if (!isValid) {
+      return json({ error: "当前管理员密码不正确" }, 401);
+    }
+
+    if (newPassword.length < 4) {
+      return json({ error: "低权限密码至少需要 4 个字符" }, 400);
+    }
+
+    if (await verifyPassword(newPassword, await getAdminPassword(env))) {
+      return json({ error: "低权限密码不能和管理员密码相同" }, 400);
+    }
+
+    await env.SITE_CONFIG.put(limitedAdminPasswordKey, newPassword);
+
+    return json({ ok: true });
+  },
+
+  "/api/admin/config": async (request, env) => {
+    const auth = await requireAdmin(request, env);
+
+    if (auth instanceof Response) {
+      return auth;
+    }
+
     if (request.method === "GET") {
       return json({
+        role: auth.sub,
         config: await readSiteConfig(env)
       });
     }
@@ -512,7 +558,9 @@ const apiRoutes: Record<string, ApiRoute> = {
     }
 
     const body = asRecord(await readJson(request));
-    const config = normalizeSiteConfig(body.config);
+    const currentConfig = await readSiteConfig(env);
+    const requestedConfig = normalizeSiteConfig(body.config);
+    const config = auth.sub === "limited" ? mergeLimitedConfig(currentConfig, requestedConfig) : requestedConfig;
 
     if (!env.SITE_CONFIG) {
       return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
@@ -522,12 +570,13 @@ const apiRoutes: Record<string, ApiRoute> = {
 
     return json({
       ok: true,
+      role: auth.sub,
       config
     });
   },
 
   "/api/admin/comments": async (request, env) => {
-    const auth = await requireAdmin(request, env);
+    const auth = await requireFullAdmin(request, env);
 
     if (auth) {
       return auth;
@@ -595,7 +644,7 @@ const apiRoutes: Record<string, ApiRoute> = {
   },
 
   "/api/admin/logs": async (request, env) => {
-    const auth = await requireAdmin(request, env);
+    const auth = await requireFullAdmin(request, env);
 
     if (auth) {
       return auth;
@@ -681,6 +730,42 @@ function toLockedPublicPage(page: SitePage): SitePage {
       ...page.comments,
       enabled: false
     }
+  };
+}
+
+function mergeLimitedConfig(current: SiteConfig, requested: SiteConfig): SiteConfig {
+  const requestedPages = new Map(requested.pages.map((page) => [page.id, page]));
+  const pages = current.pages.map((page) => {
+    const requestedPage = requestedPages.get(page.id);
+
+    if (!requestedPage) {
+      return page;
+    }
+
+    const existingSections = new Map(page.sections.map((section) => [section.id, section]));
+    const nextSections = requestedPage.sections.map((section) => existingSections.get(section.id) || section);
+    const requestedIds = new Set(nextSections.map((section) => section.id));
+
+    for (const section of page.sections) {
+      if (!requestedIds.has(section.id)) {
+        nextSections.push(section);
+      }
+    }
+
+    return {
+      ...page,
+      sections: nextSections,
+      modules: nextSections
+        .filter((section): section is SystemSection => section.type === "system")
+        .map((section) => section.moduleId),
+      blocks: nextSections.filter((section): section is ContentBlock => section.type === "text")
+    };
+  });
+
+  return {
+    ...current,
+    updatedAt: new Date().toISOString(),
+    pages
   };
 }
 
@@ -1240,15 +1325,20 @@ async function getAdminPassword(env: AppEnv): Promise<string> {
   return stored || env.admin || env.ADMIN_PASSWORD || defaultAdminPassword;
 }
 
+async function getLimitedAdminPassword(env: AppEnv): Promise<string> {
+  const stored = env.SITE_CONFIG ? await env.SITE_CONFIG.get(limitedAdminPasswordKey) : "";
+  return stored || env.LIMITED_ADMIN_PASSWORD || defaultLimitedAdminPassword;
+}
+
 async function verifyPassword(input: string, expected: string): Promise<boolean> {
   const [inputHash, expectedHash] = await Promise.all([sha256(input), sha256(expected)]);
 
   return timingSafeEqual(inputHash, expectedHash);
 }
 
-async function createAdminToken(env: AppEnv): Promise<string> {
+async function createAdminToken(env: AppEnv, role: TokenPayload["sub"] = "admin"): Promise<string> {
   const payload: TokenPayload = {
-    sub: "admin",
+    sub: role,
     exp: Date.now() + tokenMaxAgeMs
   };
   const encodedPayload = base64UrlEncode(JSON.stringify(payload));
@@ -1257,14 +1347,24 @@ async function createAdminToken(env: AppEnv): Promise<string> {
   return `${encodedPayload}.${signature}`;
 }
 
-async function requireAdmin(request: Request, env: AppEnv): Promise<Response | null> {
-  const isValid = await isAdminRequest(request, env);
+async function requireAdmin(request: Request, env: AppEnv): Promise<TokenPayload | Response> {
+  const payload = await getAdminTokenPayload(request, env);
 
-  return isValid ? null : json({ error: "需要管理员登录" }, 401);
+  return payload ? payload : json({ error: "需要管理员登录" }, 401);
+}
+
+async function requireFullAdmin(request: Request, env: AppEnv): Promise<Response | null> {
+  const payload = await getAdminTokenPayload(request, env);
+
+  if (!payload) {
+    return json({ error: "需要管理员登录" }, 401);
+  }
+
+  return payload.sub === "admin" ? null : json({ error: "低权限管理员不能执行这个操作" }, 403);
 }
 
 async function isAdminRequest(request: Request, env: AppEnv): Promise<boolean> {
-  return verifyAdminToken(getBearerToken(request), env);
+  return Boolean(await getAdminTokenPayload(request, env));
 }
 
 function getBearerToken(request: Request): string {
@@ -1272,25 +1372,33 @@ function getBearerToken(request: Request): string {
   return header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
 }
 
-async function verifyAdminToken(token: string, env: AppEnv): Promise<boolean> {
+async function getAdminTokenPayload(request: Request, env: AppEnv): Promise<TokenPayload | null> {
+  return verifyAdminToken(getBearerToken(request), env);
+}
+
+async function verifyAdminToken(token: string, env: AppEnv): Promise<TokenPayload | null> {
   const [encodedPayload, signature] = token.split(".");
 
   if (!encodedPayload || !signature) {
-    return false;
+    return null;
   }
 
   const expected = await sign(encodedPayload, await getAdminPassword(env));
 
   if (!timingSafeEqual(base64UrlDecodeToBytes(signature), base64UrlDecodeToBytes(expected))) {
-    return false;
+    return null;
   }
 
   try {
     const payload = JSON.parse(base64UrlDecodeToText(encodedPayload)) as Partial<TokenPayload>;
 
-    return payload.sub === "admin" && typeof payload.exp === "number" && payload.exp > Date.now();
+    if ((payload.sub === "admin" || payload.sub === "limited") && typeof payload.exp === "number" && payload.exp > Date.now()) {
+      return payload as TokenPayload;
+    }
+
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 

@@ -2,6 +2,7 @@ import { moduleLoaders } from "./modules/manifest.js";
 
 const app = document.querySelector("#app");
 const adminTokenKey = "cloudflare-modular-site.admin-token";
+const adminRoleKey = "cloudflare-modular-site.admin-role";
 const homeLayoutKey = "cloudflare-modular-site.home-entry-layout";
 const pageColumnsKeyPrefix = "cloudflare-modular-site.page-columns.";
 const adminCommentIpKeyPrefix = "cloudflare-modular-site.admin-comment-ip.";
@@ -79,6 +80,7 @@ const state = {
   modules: [],
   config: fallbackConfig,
   token: localStorage.getItem(adminTokenKey) || "",
+  adminRole: localStorage.getItem(adminRoleKey) || "admin",
   homeEntryLayout: localStorage.getItem(homeLayoutKey) === "two" ? "two" : "one",
   selectedItemType: "page",
   selectedPageId: "",
@@ -166,13 +168,17 @@ async function renderAdmin() {
   try {
     const payload = await api.getJson("/api/admin/config", true);
     state.config = hydrateConfig(payload.config);
+    state.adminRole = payload.role || state.adminRole || "admin";
+    localStorage.setItem(adminRoleKey, state.adminRole);
     state.undoStack = [];
     state.undoFingerprint = "";
     ensureAdminSelection();
     renderAdminEditor();
   } catch {
     state.token = "";
+    state.adminRole = "admin";
     localStorage.removeItem(adminTokenKey);
+    localStorage.removeItem(adminRoleKey);
     renderLogin("登录已过期，请重新输入管理员密码。");
   }
 }
@@ -206,11 +212,13 @@ function renderLogin(message = "") {
     try {
       const payload = await api.postJson("/api/admin/login", { password: password.value });
       state.token = payload.token;
+      state.adminRole = payload.role || "admin";
       state.config = hydrateConfig(payload.config);
       state.undoStack = [];
       state.undoFingerprint = "";
       ensureAdminSelection();
       localStorage.setItem(adminTokenKey, state.token);
+      localStorage.setItem(adminRoleKey, state.adminRole);
       renderAdminEditor();
     } catch (error) {
       feedback.textContent = error.message;
@@ -236,11 +244,13 @@ function renderAdminEditor() {
   const selectedPage = selectedItem?.type === "page" ? selectedItem.page : null;
   const selectedLink = selectedItem?.type === "link" ? selectedItem.link : null;
   const selectedLogs = selectedItem?.type === "logs";
+  const limited = isLimitedAdmin();
 
   const homeSettingsNav = element("nav", "module-nav");
   const homeSettingsButton = document.createElement("button");
   homeSettingsButton.type = "button";
   homeSettingsButton.classList.toggle("is-active", selectedHome);
+  homeSettingsButton.disabled = limited;
   homeSettingsButton.append(mark("HM"), textBlock("主页设置", "标题、公告和全站设置"));
   homeSettingsButton.addEventListener("click", () => {
     state.selectedItemType = "home";
@@ -265,14 +275,14 @@ function renderAdminEditor() {
 
     group.append(item);
 
-    if (state.selectedItemType === "page" && page.id === state.selectedPageId) {
+    if (!limited && state.selectedItemType === "page" && page.id === state.selectedPageId) {
       group.append(renderPageSidebarSettings(page));
     }
 
     pageNav.append(group);
   }
 
-  for (const link of state.config.links) {
+  for (const link of limited ? [] : state.config.links) {
     const group = element("section", "admin-page-nav-item");
     const item = document.createElement("button");
     item.type = "button";
@@ -294,6 +304,7 @@ function renderAdminEditor() {
   }
 
   const addPageButton = button("新增分页面", "button primary", "button");
+  addPageButton.disabled = limited;
   addPageButton.addEventListener("click", () => {
     rememberConfigChange();
     const page = createPage();
@@ -305,6 +316,7 @@ function renderAdminEditor() {
   });
 
   const addLinkButton = button("新增网站入口", "button", "button");
+  addLinkButton.disabled = limited;
   addLinkButton.addEventListener("click", () => {
     rememberConfigChange();
     const link = createExternalLink();
@@ -322,6 +334,7 @@ function renderAdminEditor() {
 
   const logsButton = button("访问日志", "button", "button");
   logsButton.classList.toggle("is-active", selectedLogs);
+  logsButton.disabled = limited;
   logsButton.addEventListener("click", () => {
     state.selectedItemType = "logs";
     state.expandedSettings = "";
@@ -331,7 +344,9 @@ function renderAdminEditor() {
   const logoutButton = button("退出登录", "button", "button");
   logoutButton.addEventListener("click", () => {
     state.token = "";
+    state.adminRole = "admin";
     localStorage.removeItem(adminTokenKey);
+    localStorage.removeItem(adminRoleKey);
     renderLogin();
   });
 
@@ -343,6 +358,9 @@ function renderAdminEditor() {
   const title = element("header", "workspace-header compact");
   const titleText = element("div");
   titleText.append(element("p", "eyebrow", "Preview Admin"), element("h1", "", "预览模式编辑"));
+  if (limited) {
+    titleText.append(element("p", "form-hint", "低权限模式：只能添加模块、移动模块和保存模块顺序。"));
+  }
   title.append(titleText);
 
   main.append(title);
@@ -433,8 +451,10 @@ function renderHomeSettings() {
       state.config.homeImage = value;
     })
   );
-  panel.append(renderAdminPasswordSettings());
-  panel.append(renderCommentBlockWordsSettings());
+  if (!isLimitedAdmin()) {
+    panel.append(renderAdminPasswordSettings());
+    panel.append(renderCommentBlockWordsSettings());
+  }
   const notice = element("section", "announcement-settings");
   notice.append(element("h3", "", "主页公告"));
   notice.append(
@@ -515,6 +535,52 @@ function renderAdminPasswordSettings() {
   });
   section.append(form);
   section.append(element("p", "form-hint", "默认密码现在是 admin。后台修改后会保存在 Cloudflare KV 中。"));
+
+  const limitedForm = element("form", "password-form");
+  limitedForm.append(element("h3", "", "低权限密码"));
+  const limitedRow = element("div", "admin-row");
+  const adminPassword = document.createElement("input");
+  adminPassword.className = "input";
+  adminPassword.type = "password";
+  adminPassword.placeholder = "当前管理员密码";
+  adminPassword.autocomplete = "current-password";
+  adminPassword.required = true;
+  const limitedPassword = document.createElement("input");
+  limitedPassword.className = "input";
+  limitedPassword.type = "password";
+  limitedPassword.placeholder = "新的低权限密码（至少 4 位）";
+  limitedPassword.autocomplete = "new-password";
+  limitedPassword.required = true;
+  limitedPassword.minLength = 4;
+  limitedRow.append(adminPassword, limitedPassword);
+  const limitedActions = element("div", "module-actions");
+  const limitedSave = button("修改低权限密码", "button", "submit");
+  const limitedFeedback = element("p", "form-hint");
+  limitedActions.append(limitedSave);
+  limitedForm.append(limitedRow, limitedActions, limitedFeedback);
+  limitedForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    limitedSave.disabled = true;
+    limitedSave.textContent = "修改中";
+    limitedFeedback.textContent = "";
+
+    try {
+      await api.postJson("/api/admin/limited-password", {
+        currentPassword: adminPassword.value,
+        newPassword: limitedPassword.value
+      }, true);
+      adminPassword.value = "";
+      limitedPassword.value = "";
+      limitedFeedback.textContent = "低权限密码已修改，可在同一个登录页使用。";
+    } catch (error) {
+      limitedFeedback.textContent = error.message;
+    }
+
+    limitedSave.disabled = false;
+    limitedSave.textContent = "修改低权限密码";
+  });
+  section.append(limitedForm);
+  section.append(element("p", "form-hint", "低权限默认密码是 limited，只能添加和移动模块。"));
   return section;
 }
 
@@ -530,6 +596,7 @@ function renderCommentBlockWordsSettings() {
 }
 
 function renderPreviewEditor(page) {
+  const limited = isLimitedAdmin();
   const panel = element("section", "admin-panel preview-editor");
   const head = element("div", "section-head action-head");
   const copy = element("div");
@@ -542,13 +609,16 @@ function renderPreviewEditor(page) {
     window.open(`/${page.slug}`, "_blank", "noopener,noreferrer");
   });
   const removePage = button("删除页面", "button danger", "button");
+  removePage.disabled = limited;
   removePage.addEventListener("click", () => deletePage(page));
   headActions.append(view, removePage);
   head.append(copy, headActions);
 
   const canvas = element("div", "page-preview");
   applyPageBackground(canvas, page.backgroundImage);
-  canvas.append(renderEditablePageHeader(page));
+  if (!limited) {
+    canvas.append(renderEditablePageHeader(page));
+  }
   canvas.append(renderInsertBar(page, 0));
 
   page.sections.forEach((section, index) => {
@@ -560,7 +630,11 @@ function renderPreviewEditor(page) {
     canvas.append(element("p", "empty-state", "这个分页面还没有内容。可以从上面的插入条添加模块。"));
   }
 
-  panel.append(head, renderEntrySettings(page), renderBottomCommentsSettings(page), canvas);
+  if (limited) {
+    panel.append(head, canvas);
+  } else {
+    panel.append(head, renderEntrySettings(page), renderBottomCommentsSettings(page), canvas);
+  }
   return panel;
 }
 
@@ -899,7 +973,7 @@ function renderEditableSection(page, section, index) {
   shell.classList.toggle("is-collapsed", !expanded);
   shell.append(renderSectionControls(page, section, index, expanded));
 
-  if (expanded) {
+  if (expanded && !isLimitedAdmin()) {
     shell.append(renderLayoutSettings(section, "模块布局", page, index));
 
     if (section.type === "system") {
@@ -943,7 +1017,7 @@ function renderSectionControls(page, section, index, expanded) {
   down.disabled = locked || index === page.sections.length - 1;
   down.addEventListener("click", () => moveSection(page, index, 1));
   const remove = button("删除", "button danger", "button");
-  remove.disabled = locked;
+  remove.disabled = locked || isLimitedAdmin();
   remove.addEventListener("click", () => {
     rememberConfigChange();
     page.sections.splice(index, 1);
@@ -1337,6 +1411,8 @@ async function saveAdminConfig() {
   try {
     const payload = await api.postJson("/api/admin/config", { config: state.config }, true);
     state.config = hydrateConfig(payload.config);
+    state.adminRole = payload.role || state.adminRole;
+    localStorage.setItem(adminRoleKey, state.adminRole);
     state.undoStack = [];
     state.undoFingerprint = "";
     ensureAdminSelection();
@@ -1943,23 +2019,42 @@ function renderVideoSection(section) {
   const frame = element("figure", "video-frame");
   if (section.src) {
     const video = document.createElement("video");
-    video.src = section.src;
     video.controls = true;
     video.preload = "metadata";
     video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    const source = document.createElement("source");
+    source.src = section.src;
+    const mimeType = videoMimeType(section.src);
+
+    if (mimeType) {
+      source.type = mimeType;
+    }
+
+    video.append(source);
 
     if (section.poster) {
       video.poster = section.poster;
     }
 
     const play = button("播放", "button primary video-play-button", "button");
-    play.addEventListener("click", async () => {
+    const startVideo = async () => {
       try {
+        video.load();
         await video.play();
         play.classList.add("is-hidden");
       } catch {
         play.textContent = "点击视频播放";
       }
+    };
+    play.addEventListener("click", startVideo);
+    frame.addEventListener("click", (event) => {
+      if (event.target === play || event.target === video) {
+        return;
+      }
+
+      startVideo();
     });
     video.addEventListener("play", () => play.classList.add("is-hidden"));
     video.addEventListener("pause", () => play.classList.remove("is-hidden"));
@@ -2456,6 +2551,16 @@ function ensureAdminSelection() {
   const pageExists = state.config.pages.some((page) => page.id === state.selectedPageId);
   const linkExists = links.some((link) => link.id === state.selectedLinkId);
 
+  if (isLimitedAdmin()) {
+    if (state.selectedItemType === "page" && pageExists) {
+      return;
+    }
+
+    state.selectedItemType = "page";
+    state.selectedPageId = state.config.pages[0]?.id || "";
+    return;
+  }
+
   if (state.selectedItemType === "logs" || state.selectedItemType === "home") {
     return;
   }
@@ -2471,6 +2576,10 @@ function ensureAdminSelection() {
   state.selectedItemType = "page";
   state.selectedPageId = state.config.pages[0]?.id || "";
   state.selectedLinkId = links[0]?.id || "";
+}
+
+function isLimitedAdmin() {
+  return state.adminRole === "limited";
 }
 
 function getSelectedAdminItem() {
@@ -2932,6 +3041,24 @@ function fileToDataUrl(file, expectedPrefix) {
     reader.onerror = () => reject(new Error("文件读取失败。"));
     reader.readAsDataURL(file);
   });
+}
+
+function videoMimeType(src) {
+  if (!src) {
+    return "";
+  }
+
+  const dataMatch = src.match(/^data:([^;,]+)/);
+  if (dataMatch) {
+    return dataMatch[1];
+  }
+
+  const clean = src.split(/[?#]/)[0].toLowerCase();
+  if (clean.endsWith(".mp4") || clean.endsWith(".m4v")) return "video/mp4";
+  if (clean.endsWith(".webm")) return "video/webm";
+  if (clean.endsWith(".ogv") || clean.endsWith(".ogg")) return "video/ogg";
+  if (clean.endsWith(".mov")) return "video/quicktime";
+  return "";
 }
 
 function videoFileToPoster(file) {
