@@ -128,6 +128,11 @@ async function init() {
   }
 
   state.config = hydrateConfig(await loadPublicConfig());
+  if (getRouteSlug() === "p2p") {
+    renderP2PTransferPage();
+    return;
+  }
+
   renderPublicSite();
 }
 
@@ -956,12 +961,14 @@ function renderInsertBar(page, index) {
   image.addEventListener("click", () => insertSection(page, index, createImageSection()));
   const video = button("视频模块", "button", "button");
   video.addEventListener("click", () => insertSection(page, index, createVideoSection()));
+  const p2p = button("传输模块", "button", "button");
+  p2p.addEventListener("click", () => insertSection(page, index, createP2PSection()));
   const comments = button("评论模块", "button", "button");
   comments.addEventListener("click", () => insertSection(page, index, createCommentsSection()));
   const link = button("网站模块", "button", "button");
   link.addEventListener("click", () => insertSection(page, index, createLinkSection()));
 
-  bar.append(system, text, image, video, link, comments);
+  bar.append(system, text, image, video, p2p, link, comments);
   return bar;
 }
 
@@ -982,6 +989,8 @@ function renderEditableSection(page, section, index) {
       shell.append(renderEditableImageSection(section));
     } else if (section.type === "video") {
       shell.append(renderEditableVideoSection(section));
+    } else if (section.type === "p2p") {
+      shell.append(renderEditableP2PSection(section));
     } else if (section.type === "link") {
       shell.append(renderEditableLinkSection(section));
     } else if (section.type === "comments") {
@@ -1224,6 +1233,29 @@ function renderEditableVideoSection(section) {
   );
   card.append(meta);
   card.append(renderVideoSection(section));
+  return card;
+}
+
+function renderEditableP2PSection(section) {
+  const card = element("article", "module-card inline-editor-card p2p-editor-card");
+  const row = element("div", "admin-row");
+  row.append(
+    field("模块标题", section.title, (value) => {
+      section.title = value;
+    })
+  );
+  row.append(
+    field("房间号", section.room, (value) => {
+      section.room = normalizeRoomId(value);
+    }, "同一个房间号的人会进入同一个传输房间。")
+  );
+  card.append(row);
+  card.append(
+    field("模块说明", section.description, (value) => {
+      section.description = value;
+    })
+  );
+  card.append(renderP2PEntrySection(section));
   return card;
 }
 
@@ -1808,6 +1840,10 @@ function renderPublicSection(section, context) {
     return renderVideoSection(section);
   }
 
+  if (section.type === "p2p") {
+    return renderP2PEntrySection(section);
+  }
+
   if (section.type === "link") {
     return renderLinkSection(section);
   }
@@ -1857,6 +1893,386 @@ function setPageColumnMode(slug, value) {
   }
 
   localStorage.setItem(`${pageColumnsKeyPrefix}${slug}`, String(Math.max(1, Math.min(5, count))));
+}
+
+function renderP2PTransferPage() {
+  setAppClass("app-shell");
+  const room = normalizeRoomId(new URLSearchParams(window.location.search).get("room") || "public");
+  const main = element("main", "workspace p2p-workspace");
+  const header = element("header", "workspace-header compact");
+  const copy = element("div");
+  copy.append(element("p", "eyebrow", "WebRTC"), element("h1", "", "P2P 文件传输"));
+  copy.append(element("p", "lead", `房间 ${room}。浏览器会尝试直接连接，NAT 太严格时可能需要 TURN 中继。`));
+  header.append(copy);
+  main.append(header, renderP2PTransferPanel(room));
+  app.append(renderPublicSidebar("p2p", state.config.pages.filter((page) => page.visible), state.config.links.filter((link) => link.visible)));
+  app.append(main);
+}
+
+function renderP2PTransferPanel(room) {
+  const panel = element("section", "module-card p2p-panel");
+  const status = element("p", "form-hint", "尚未加入房间。");
+  const hint = element("p", "form-hint", "协议和端口用于显示设备状态；浏览器实际传输仍使用 WebRTC。对方输入你的串流密码后，你的浏览器会弹出屏幕共享确认。完整管理员可免密码发起请求，但仍需要被串流设备同意浏览器共享。");
+  const peersList = element("div", "p2p-peer-list");
+  const log = element("div", "p2p-log");
+  const name = document.createElement("input");
+  name.className = "input";
+  name.placeholder = "你的名字";
+  name.value = localStorage.getItem("cloudflare-modular-site.p2p-name") || "";
+  const join = button("加入房间", "button primary", "button");
+  const protocol = document.createElement("select");
+  protocol.className = "input";
+  for (const value of ["WebRTC", "TCP", "UDP"]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    protocol.append(option);
+  }
+  const port = document.createElement("input");
+  port.className = "input";
+  port.placeholder = "端口，例如 8080";
+  port.inputMode = "numeric";
+  const streamPassword = document.createElement("input");
+  streamPassword.className = "input";
+  streamPassword.type = "password";
+  streamPassword.placeholder = "本机串流密码";
+  const file = document.createElement("input");
+  file.type = "file";
+  file.disabled = true;
+  const send = button("发送文件", "button", "button");
+  send.disabled = true;
+  const row = element("div", "admin-row");
+  row.append(name, join);
+  const networkRow = element("div", "admin-row");
+  networkRow.append(protocol, port, streamPassword);
+  const sendRow = element("div", "admin-row");
+  sendRow.append(file, send);
+  const remoteStreams = element("div", "p2p-streams");
+  panel.append(row, networkRow, sendRow, hint, status, peersList, remoteStreams, log);
+
+  let session = null;
+  const writeLog = (message) => {
+    log.prepend(element("p", "", `${new Date().toLocaleTimeString("zh-CN", { hour12: false })} ${message}`));
+  };
+
+  join.addEventListener("click", () => {
+    if (session) {
+      session.close();
+    }
+
+    localStorage.setItem("cloudflare-modular-site.p2p-name", name.value.trim());
+    session = createP2PSession(room, name.value.trim() || "访客", {
+      status,
+      peersList,
+      remoteStreams,
+      file,
+      send,
+      protocol,
+      port,
+      streamPassword,
+      writeLog
+    });
+    session.start();
+    join.textContent = "重新加入";
+  });
+
+  send.addEventListener("click", () => {
+    const selected = file.files?.[0];
+
+    if (!selected || !session) {
+      return;
+    }
+
+    session.sendFile(selected);
+  });
+
+  return panel;
+}
+
+function createP2PSession(room, name, ui) {
+  const peerId = crypto.randomUUID();
+  const peers = new Map();
+  const processed = new Set();
+  let since = 0;
+  let timer = 0;
+  let closed = false;
+  let lastPeerList = [];
+  const channels = new Map();
+  const incoming = new Map();
+  const profiles = new Map();
+  const streamCards = new Map();
+  let localStream = null;
+  const rtcConfig = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:global.stun.twilio.com:3478" }] };
+
+  const log = (message) => ui.writeLog(message);
+  const postSignal = (type, payload = {}, to = "") =>
+    api.postJson(`/api/p2p-signal?room=${encodeURIComponent(room)}`, { peerId, name, type, to, payload }, type === "stream-request");
+  const profilePayload = () => ({
+    name,
+    protocol: ui.protocol.value,
+    port: ui.port.value.trim()
+  });
+  const setStatus = () => {
+    const openCount = [...channels.values()].filter((channel) => channel.readyState === "open").length;
+    ui.status.textContent = `已加入：${name}。已连接 ${openCount} 个用户。`;
+    ui.file.disabled = openCount === 0;
+    ui.send.disabled = openCount === 0;
+  };
+  const renderPeers = (list) => {
+    lastPeerList = list;
+    ui.peersList.replaceChildren(...list.filter((peer) => peer.id !== peerId).map((peer) => {
+      const stateText = channels.get(peer.id)?.readyState || "连接中";
+      const profile = profiles.get(peer.id) || {};
+      const item = element("div", "p2p-peer-item");
+      const requestPassword = document.createElement("input");
+      requestPassword.className = "input";
+      requestPassword.type = "password";
+      requestPassword.placeholder = "对方串流密码";
+      const stream = button("请求串流", "button", "button");
+      stream.addEventListener("click", () => requestStream(peer.id, requestPassword.value));
+      item.append(
+        element("p", "form-hint", `${profile.name || peer.name || "访客"}：${stateText} · ${profile.protocol || "WebRTC"} ${profile.port || "未填端口"}`),
+        requestPassword,
+        stream
+      );
+      return item;
+    }));
+  };
+  const handleProfileEvent = (event) => {
+    if (!event.detail || !peers.has(event.detail.remoteId)) {
+      return;
+    }
+
+    profiles.set(event.detail.remoteId, event.detail.profile);
+    renderPeers(lastPeerList);
+  };
+  window.addEventListener("p2p-profile", handleProfileEvent);
+  const sendProfile = (channel) => {
+    if (channel.readyState === "open") {
+      channel.send(JSON.stringify({ kind: "profile", ...profilePayload() }));
+    }
+  };
+  const broadcastProfile = () => {
+    for (const channel of channels.values()) {
+      sendProfile(channel);
+    }
+  };
+  ui.protocol.addEventListener("change", broadcastProfile);
+  ui.port.addEventListener("input", broadcastProfile);
+  const setupChannel = (remoteId, channel) => {
+    channels.set(remoteId, channel);
+    channel.binaryType = "arraybuffer";
+    channel.addEventListener("open", () => {
+      sendProfile(channel);
+      log("已建立点对点连接。");
+      setStatus();
+    });
+    channel.addEventListener("close", setStatus);
+    channel.addEventListener("message", (event) => handleP2PData(remoteId, event.data, incoming, log));
+  };
+  const ensurePeer = (remoteId, polite) => {
+    if (remoteId === peerId) return null;
+    if (peers.has(remoteId)) return peers.get(remoteId);
+    const pc = new RTCPeerConnection(rtcConfig);
+    peers.set(remoteId, pc);
+    pc.addEventListener("icecandidate", (event) => {
+      if (event.candidate) {
+        postSignal("candidate", event.candidate.toJSON(), remoteId).catch(() => {});
+      }
+    });
+    pc.addEventListener("connectionstatechange", () => {
+      if (["failed", "disconnected"].includes(pc.connectionState)) {
+        log("连接失败或中断，严格 NAT 环境可能需要 TURN 中继。");
+      }
+      setStatus();
+    });
+    pc.addEventListener("datachannel", (event) => setupChannel(remoteId, event.channel));
+    pc.addEventListener("track", (event) => {
+      showRemoteStream(remoteId, event.streams[0]);
+    });
+
+    if (!polite) {
+      setupChannel(remoteId, pc.createDataChannel("files"));
+      pc.createOffer().then((offer) => pc.setLocalDescription(offer)).then(() => postSignal("offer", pc.localDescription, remoteId)).catch(() => {
+        log("创建连接失败。");
+      });
+    }
+
+    return pc;
+  };
+  const handleSignal = async (message) => {
+    if (processed.has(message.id) || message.from === peerId) return;
+    processed.add(message.id);
+    const polite = peerId > message.from;
+    const pc = ensurePeer(message.from, polite);
+    if (!pc) return;
+
+    if (message.type === "stream-request") {
+      await handleStreamRequest(message.from, message.payload || {});
+    } else if (message.type === "offer") {
+      await pc.setRemoteDescription(message.payload);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await postSignal("answer", pc.localDescription, message.from);
+    } else if (message.type === "answer") {
+      await pc.setRemoteDescription(message.payload);
+    } else if (message.type === "candidate") {
+      await pc.addIceCandidate(message.payload);
+    }
+  };
+  const requestStream = async (remoteId, password) => {
+    ensurePeer(remoteId, false);
+    await postSignal("stream-request", { password }, remoteId);
+    log("已发送串流请求。");
+  };
+  const handleStreamRequest = async (remoteId, payload) => {
+    const expected = ui.streamPassword.value;
+    if (!payload.admin && (!expected || payload.password !== expected)) {
+      log("收到串流请求，但密码不正确。");
+      return;
+    }
+
+    await startLocalStream(remoteId);
+  };
+  const startLocalStream = async (remoteId) => {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      log("当前浏览器不支持屏幕串流。");
+      return;
+    }
+
+    const pc = ensurePeer(remoteId, false);
+    if (!pc) return;
+    if (!localStream) {
+      localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      log("已开始共享屏幕。");
+    }
+
+    for (const track of localStream.getTracks()) {
+      if (!pc.getSenders().some((sender) => sender.track === track)) {
+        pc.addTrack(track, localStream);
+      }
+    }
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await postSignal("offer", pc.localDescription, remoteId);
+  };
+  const showRemoteStream = (remoteId, stream) => {
+    if (!stream || streamCards.has(remoteId)) {
+      return;
+    }
+
+    const card = element("article", "module-card p2p-stream-card");
+    const video = document.createElement("video");
+    video.autoplay = true;
+    video.controls = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    card.append(element("h3", "", "远程串流"), video);
+    ui.remoteStreams.prepend(card);
+    streamCards.set(remoteId, card);
+    log("正在播放远程串流。");
+  };
+  const poll = async () => {
+    if (closed) return;
+    try {
+      await postSignal("heartbeat");
+      const payload = await api.getJson(`/api/p2p-signal?room=${encodeURIComponent(room)}&peer=${encodeURIComponent(peerId)}&since=${since}`);
+      since = payload.now || since;
+      renderPeers(payload.peers || []);
+      for (const peer of payload.peers || []) {
+        if (peer.id !== peerId && peerId < peer.id) ensurePeer(peer.id, false);
+      }
+      for (const message of payload.messages || []) {
+        await handleSignal(message);
+      }
+      setStatus();
+    } catch (error) {
+      log(error.message || "信令失败。");
+    }
+    timer = window.setTimeout(poll, 1600);
+  };
+
+  return {
+    start() {
+      ui.status.textContent = "正在加入房间...";
+      poll();
+    },
+    close() {
+      closed = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("p2p-profile", handleProfileEvent);
+      ui.protocol.removeEventListener("change", broadcastProfile);
+      ui.port.removeEventListener("input", broadcastProfile);
+      if (localStream) {
+        for (const track of localStream.getTracks()) track.stop();
+      }
+      for (const pc of peers.values()) pc.close();
+      peers.clear();
+      channels.clear();
+    },
+    sendFile(file) {
+      const openChannels = [...channels.values()].filter((channel) => channel.readyState === "open");
+      if (openChannels.length === 0) {
+        log("还没有可用连接。");
+        return;
+      }
+      for (const channel of openChannels) sendFileOverChannel(channel, file, log);
+    }
+  };
+}
+
+function sendFileOverChannel(channel, file, log) {
+  const chunkSize = 64 * 1024;
+  const transferId = crypto.randomUUID();
+  channel.send(JSON.stringify({ kind: "file-meta", id: transferId, name: file.name, size: file.size, type: file.type }));
+  let offset = 0;
+  const reader = new FileReader();
+  reader.onload = () => {
+    channel.send(reader.result);
+    offset += reader.result.byteLength;
+    if (offset < file.size) {
+      readNext();
+    } else {
+      channel.send(JSON.stringify({ kind: "file-end", id: transferId }));
+      log(`已发送 ${file.name}`);
+    }
+  };
+  const readNext = () => reader.readAsArrayBuffer(file.slice(offset, offset + chunkSize));
+  readNext();
+}
+
+function handleP2PData(remoteId, data, incoming, log) {
+  if (typeof data === "string") {
+    const message = JSON.parse(data);
+    if (message.kind === "profile") {
+      const event = new CustomEvent("p2p-profile", { detail: { remoteId, profile: message } });
+      window.dispatchEvent(event);
+    } else if (message.kind === "file-meta") {
+      incoming.set(message.id, { ...message, chunks: [], received: 0 });
+      log(`开始接收 ${message.name}`);
+    } else if (message.kind === "file-end") {
+      const transfer = incoming.get(message.id);
+      if (!transfer) return;
+      const blob = new Blob(transfer.chunks, { type: transfer.type || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = transfer.name || `file-from-${remoteId}`;
+      link.textContent = `下载 ${transfer.name || "文件"}`;
+      link.className = "button";
+      log(`接收完成：${transfer.name}`);
+      document.querySelector(".p2p-log")?.prepend(link);
+      incoming.delete(message.id);
+    }
+    return;
+  }
+
+  const latest = [...incoming.values()].at(-1);
+  if (latest) {
+    latest.chunks.push(data);
+    latest.received += data.byteLength || data.size || 0;
+  }
 }
 
 function renderNotFound(slug) {
@@ -1944,6 +2360,18 @@ function renderLinkSection(section) {
   }
 
   card.append(header, anchor);
+  return card;
+}
+
+function renderP2PEntrySection(section) {
+  const card = element("article", "module-card entry-card p2p-entry-card");
+  const header = element("header", "module-card-header no-toggle");
+  header.append(mark("P2P"), textBlock(section.title || "P2P 文件传输", section.description || "进入房间后尝试点对点传文件。"));
+  const link = document.createElement("a");
+  link.className = "button primary";
+  link.href = `/p2p?room=${encodeURIComponent(section.room || section.id)}`;
+  link.textContent = "进入房间";
+  card.append(header, element("p", "form-hint", `房间：${section.room || section.id}`), link);
   return card;
 }
 
@@ -2472,6 +2900,17 @@ function hydrateSection(section) {
     };
   }
 
+  if (section.type === "p2p") {
+    return {
+      id: section.id || crypto.randomUUID(),
+      type: "p2p",
+      title: section.title || "P2P 文件传输",
+      description: section.description || "进入房间后尝试点对点传文件。",
+      room: normalizeRoomId(section.room || section.id || "p2p-room"),
+      layout: hydrateLayout(section.layout, "p2p")
+    };
+  }
+
   if (section.type === "comments") {
     return {
       id: section.id || crypto.randomUUID(),
@@ -2708,6 +3147,17 @@ function createVideoSection() {
   };
 }
 
+function createP2PSection() {
+  return {
+    id: crypto.randomUUID(),
+    type: "p2p",
+    title: "P2P 文件传输",
+    description: "进入房间后尝试点对点传文件。",
+    room: `room-${Math.random().toString(36).slice(2, 8)}`,
+    layout: hydrateLayout(null, "p2p")
+  };
+}
+
 function createCommentsSection() {
   return {
     id: crypto.randomUUID(),
@@ -2829,6 +3279,10 @@ function sectionLabel(section) {
 
   if (section.type === "video") {
     return section.title || "视频模块";
+  }
+
+  if (section.type === "p2p") {
+    return section.title || "传输模块";
   }
 
   if (section.type === "link") {
@@ -3294,6 +3748,10 @@ function normalizeExternalUrl(value) {
   } catch {
     return "";
   }
+}
+
+function normalizeRoomId(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "public";
 }
 
 function externalLinkSubtitle(link) {

@@ -1095,6 +1095,46 @@ h1 {
   display: none;
 }
 
+.p2p-panel,
+.p2p-entry-card {
+  gap: 16px;
+}
+
+.p2p-peer-list,
+.p2p-log {
+  display: grid;
+  gap: 8px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 56px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.p2p-peer-item {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 220px) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.p2p-streams {
+  display: grid;
+  gap: 12px;
+}
+
+.p2p-stream-card video {
+  width: 100%;
+  max-height: 520px;
+  border-radius: 8px;
+  background: #111;
+}
+
+.p2p-log {
+  max-height: 280px;
+  overflow: auto;
+}
+
 .image-background-section {
   min-height: 360px;
   align-content: end;

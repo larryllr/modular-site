@@ -63,6 +63,15 @@ type VideoSection = {
   layout: SectionLayout;
 };
 
+type P2PSection = {
+  id: string;
+  type: "p2p";
+  title: string;
+  description: string;
+  room: string;
+  layout: SectionLayout;
+};
+
 type CommentsSection = {
   id: string;
   type: "comments";
@@ -123,7 +132,27 @@ type HomeAnnouncement = {
   durationSeconds: number;
 };
 
-type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | CommentsSection | LinkSection;
+type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | P2PSection | CommentsSection | LinkSection;
+
+type P2PPeer = {
+  id: string;
+  name: string;
+  lastSeen: number;
+};
+
+type P2PMessage = {
+  id: string;
+  from: string;
+  to: string;
+  type: string;
+  payload: unknown;
+  createdAt: number;
+};
+
+type P2PRoom = {
+  peers: P2PPeer[];
+  messages: P2PMessage[];
+};
 
 type SitePage = {
   id: string;
@@ -186,6 +215,7 @@ type ApiRoute = (request: Request, env: AppEnv) => Promise<Response> | Response;
 const configKey = "site-config";
 const commentsPrefix = "comments:";
 const accessLogsKey = "access-logs";
+const p2pRoomPrefix = "p2p-room:";
 const adminPasswordKey = "admin-password";
 const limitedAdminPasswordKey = "limited-admin-password";
 const defaultAdminPassword = "admin";
@@ -315,6 +345,14 @@ const serverModules: ServerModule[] = [
     status: "active",
     description: "记录普通访客访问时间、IP、路径和设备信息，管理员可查看。",
     endpoints: ["/api/admin/logs"]
+  },
+  {
+    id: "p2p-transfer",
+    name: "P2P 文件传输",
+    category: "network",
+    status: "active",
+    description: "用 WebRTC DataChannel 尝试点对点文件传输，Worker 只负责房间信令。",
+    endpoints: ["/api/p2p-signal"]
   }
 ];
 
@@ -439,6 +477,81 @@ const apiRoutes: Record<string, ApiRoute> = {
       ok: true,
       comment,
       comments: nextComments
+    });
+  },
+
+  "/api/p2p-signal": async (request, env) => {
+    if (!env.SITE_CONFIG) {
+      return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+    }
+
+    const url = new URL(request.url);
+    const roomId = normalizeP2PRoom(url.searchParams.get("room") || "");
+
+    if (!roomId) {
+      return json({ error: "房间号不能为空" }, 400);
+    }
+
+    if (request.method === "GET") {
+      const peerId = limitText(url.searchParams.get("peer") || "", 80);
+      const since = Number(url.searchParams.get("since") || 0);
+      const room = await readP2PRoom(env, roomId);
+      const now = Date.now();
+      room.peers = room.peers.filter((peer) => now - peer.lastSeen < 120000);
+      const messages = room.messages.filter((message) => message.createdAt > since && (!message.to || message.to === peerId));
+      await writeP2PRoom(env, roomId, room);
+
+      return json({
+        now,
+        peers: room.peers,
+        messages
+      });
+    }
+
+    if (request.method !== "POST") {
+      return json({ error: "Method Not Allowed" }, 405);
+    }
+
+    const body = asRecord(await readJson(request));
+    const peerId = limitText(asString(body.peerId), 80);
+    const name = limitText(asString(body.name), 40) || "访客";
+    const type = limitText(asString(body.type), 40);
+    const to = limitText(asString(body.to), 80);
+    const payload = body.payload;
+
+    if (!peerId) {
+      return json({ error: "peerId 不能为空" }, 400);
+    }
+
+    const room = await readP2PRoom(env, roomId);
+    const now = Date.now();
+    room.peers = upsertP2PPeer(room.peers, { id: peerId, name, lastSeen: now }).filter((peer) => now - peer.lastSeen < 120000);
+
+    if (type && type !== "heartbeat") {
+      const safePayload =
+        type === "stream-request"
+          ? {
+            ...asRecord(payload),
+            admin: await isFullAdminRequest(request, env)
+          }
+          : payload;
+      room.messages.push({
+        id: crypto.randomUUID(),
+        from: peerId,
+        to,
+        type,
+        payload: safePayload,
+        createdAt: now
+      });
+      room.messages = room.messages.slice(-300);
+    }
+
+    await writeP2PRoom(env, roomId, room);
+
+    return json({
+      ok: true,
+      now,
+      peers: room.peers
     });
   },
 
@@ -922,6 +1035,17 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
     };
   }
 
+  if (type === "p2p") {
+    return {
+      id: asString(record.id) || crypto.randomUUID(),
+      type: "p2p",
+      title: limitText(asString(record.title) || "P2P 文件传输", 80),
+      description: limitText(asString(record.description) || "进入房间后尝试点对点传文件。", 160),
+      room: normalizeP2PRoom(asString(record.room)) || `room-${index + 1}`,
+      layout: normalizeLayout(record.layout, "p2p")
+    };
+  }
+
   if (type === "comments") {
     return {
       id: asString(record.id) || crypto.randomUUID(),
@@ -977,6 +1101,10 @@ function normalizePageComments(value: unknown): PageComments {
     listHeight: clampNumber(record.listHeight, 180, 900, 320),
     layout: normalizeLayout(record.layout, "comments")
   };
+}
+
+function normalizeP2PRoom(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
 function normalizeBlock(value: unknown, index: number): ContentBlock {
@@ -1111,6 +1239,44 @@ function normalizeAccessLog(value: unknown): AccessLogRecord | null {
     matchedWord: limitText(asString(record.matchedWord), 60),
     createdAt
   };
+}
+
+async function readP2PRoom(env: AppEnv, roomId: string): Promise<P2PRoom> {
+  const stored = env.SITE_CONFIG ? await env.SITE_CONFIG.get(`${p2pRoomPrefix}${roomId}`) : "";
+  const record = asRecord(stored ? JSON.parse(stored) : {});
+  const peers = Array.isArray(record.peers) ? record.peers.map(normalizeP2PPeer).filter((peer): peer is P2PPeer => Boolean(peer)) : [];
+  const messages = Array.isArray(record.messages)
+    ? record.messages.map(normalizeP2PMessage).filter((message): message is P2PMessage => Boolean(message))
+    : [];
+
+  return { peers, messages };
+}
+
+async function writeP2PRoom(env: AppEnv, roomId: string, room: P2PRoom): Promise<void> {
+  await env.SITE_CONFIG?.put(`${p2pRoomPrefix}${roomId}`, JSON.stringify(room), { expirationTtl: 3600 });
+}
+
+function normalizeP2PPeer(value: unknown): P2PPeer | null {
+  const record = asRecord(value);
+  const id = limitText(asString(record.id), 80);
+
+  return id ? { id, name: limitText(asString(record.name), 40) || "访客", lastSeen: Number(record.lastSeen) || 0 } : null;
+}
+
+function normalizeP2PMessage(value: unknown): P2PMessage | null {
+  const record = asRecord(value);
+  const id = limitText(asString(record.id), 80);
+  const from = limitText(asString(record.from), 80);
+  const type = limitText(asString(record.type), 40);
+
+  return id && from && type
+    ? { id, from, to: limitText(asString(record.to), 80), type, payload: record.payload, createdAt: Number(record.createdAt) || 0 }
+    : null;
+}
+
+function upsertP2PPeer(peers: P2PPeer[], nextPeer: P2PPeer): P2PPeer[] {
+  const others = peers.filter((peer) => peer.id !== nextPeer.id);
+  return [...others, nextPeer].slice(-20);
 }
 
 async function recordAccessLog(request: Request, env: AppEnv): Promise<void> {
@@ -1365,6 +1531,11 @@ async function requireFullAdmin(request: Request, env: AppEnv): Promise<Response
 
 async function isAdminRequest(request: Request, env: AppEnv): Promise<boolean> {
   return Boolean(await getAdminTokenPayload(request, env));
+}
+
+async function isFullAdminRequest(request: Request, env: AppEnv): Promise<boolean> {
+  const payload = await getAdminTokenPayload(request, env);
+  return payload?.sub === "admin";
 }
 
 function getBearerToken(request: Request): string {
