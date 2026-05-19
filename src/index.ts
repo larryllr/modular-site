@@ -331,6 +331,46 @@ const serverModules: ServerModule[] = [
     endpoints: ["/api/echo"]
   },
   {
+    id: "calculator",
+    name: "计算器",
+    category: "tools",
+    status: "active",
+    description: "在浏览器本地完成基础四则运算和常用数值计算。",
+    endpoints: []
+  },
+  {
+    id: "unit-converter",
+    name: "单位换算",
+    category: "tools",
+    status: "active",
+    description: "在浏览器本地完成长度、重量和数据容量换算。",
+    endpoints: []
+  },
+  {
+    id: "timer",
+    name: "倒计时和秒表",
+    category: "tools",
+    status: "active",
+    description: "提供本地倒计时、秒表和重置控制。",
+    endpoints: []
+  },
+  {
+    id: "randomizer",
+    name: "随机抽取",
+    category: "tools",
+    status: "active",
+    description: "从候选名单中随机抽取，也可生成随机数。",
+    endpoints: []
+  },
+  {
+    id: "text-tools",
+    name: "文本工具",
+    category: "tools",
+    status: "active",
+    description: "统计字数、清理空行、转换大小写和复制文本。",
+    endpoints: []
+  },
+  {
     id: "comments",
     name: "评论",
     category: "community",

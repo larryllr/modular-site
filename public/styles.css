@@ -1135,6 +1135,55 @@ h1 {
   overflow: auto;
 }
 
+.tool-module {
+  display: grid;
+  gap: 12px;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  align-items: center;
+}
+
+.tool-display,
+.timer-display,
+.tool-result {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.tool-display,
+.timer-display {
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.timer-display {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-keypad {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tool-keypad .button {
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+.tool-result {
+  min-height: 54px;
+  color: var(--ink);
+  word-break: break-word;
+}
+
 .image-background-section {
   min-height: 360px;
   align-content: end;
