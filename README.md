@@ -49,6 +49,27 @@ npm run wrangler -- kv namespace create SITE_CONFIG
 - `/` 是默认主页，会自动显示所有启用分页面的入口。
 - 每个分页面通过自己的后缀进入，例如后缀是 `workspace`，访问路径就是 `/workspace`。
 
+## 本地客户端
+
+`client/` 目录提供一个 Electron 桌面客户端，用来补足网页做不到的本机能力：
+
+- 显示同一 Cloudflare 信令房间内的在线设备。
+- 声明本机协议和端口，启动本机 `127.0.0.1` TCP/UDP 监听。
+- 通过 WebRTC DataChannel 传输文件。
+- 通过系统屏幕捕获发起串流。
+
+注意：Cloudflare Worker 负责在线列表和 WebRTC 信令，不会直接转发 TCP/UDP 流量。真正跨 NAT 的端口转发需要客户端双方在线，并继续基于 WebRTC 数据通道实现协议适配；浏览器网页本身无法监听或转发任意本机 TCP/UDP 端口。
+
+客户端构建：
+
+```bash
+cd client
+npm install
+npm run pack
+```
+
+安装包会生成在 `client/dist/`。
+
 也可以使用 Cloudflare secret 修改管理员密码。线上运行：
 
 ```bash

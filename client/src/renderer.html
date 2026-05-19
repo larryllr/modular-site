@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Modular Site Client</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <aside>
+      <div class="brand"><span>MS</span><div><strong>Modular Client</strong><small>Cloudflare + WebRTC</small></div></div>
+      <label>站点地址<input id="site" value="https://neyc.de5.net" /></label>
+      <label>房间号<input id="room" value="public" /></label>
+      <label>设备名<input id="name" /></label>
+      <label>串流密码<input id="streamPassword" type="password" placeholder="别人请求你串流时使用" /></label>
+      <button id="join" class="primary">连接</button>
+      <button id="share">共享屏幕</button>
+    </aside>
+    <main>
+      <section class="hero">
+        <div>
+          <p>LOCAL CLIENT</p>
+          <h1>文件传输、在线设备和本地端口声明</h1>
+          <span id="status">未连接</span>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>本机端口</h2>
+        <div class="grid">
+          <select id="protocol"><option value="tcp">TCP</option><option value="udp">UDP</option></select>
+          <input id="port" placeholder="端口，例如 8080" />
+          <button id="startPort">启动监听</button>
+        </div>
+        <p class="hint">客户端可以监听本机 TCP/UDP 端口；跨 NAT 转发会通过 WebRTC 数据通道演进，不经过浏览器直接开放端口。</p>
+      </section>
+      <section class="panel">
+        <h2>在线设备</h2>
+        <div id="peers" class="list"></div>
+      </section>
+      <section class="panel">
+        <h2>文件传输</h2>
+        <div class="grid">
+          <button id="pickFile">选择文件</button>
+          <button id="sendFile" class="primary" disabled>发送给已连接设备</button>
+        </div>
+        <p id="fileInfo" class="hint">尚未选择文件。</p>
+      </section>
+      <section class="panel">
+        <h2>远程串流</h2>
+        <div id="streams" class="streams"></div>
+      </section>
+      <section class="panel">
+        <h2>日志</h2>
+        <div id="log" class="log"></div>
+      </section>
+    </main>
+    <script type="module" src="./renderer.js"></script>
+  </body>
+</html>

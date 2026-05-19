@@ -1,0 +1,148 @@
+:root {
+  --ink: #17201d;
+  --muted: #6f7d78;
+  --line: #dfe7df;
+  --accent: #0f8176;
+  --bg: #fbfaf6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
+}
+
+aside {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 24px;
+  border-right: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+main {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  padding: 28px;
+}
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.brand span {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  background: #e8f5f3;
+  color: var(--accent);
+  font-weight: 900;
+}
+
+label,
+.panel,
+.hero {
+  display: grid;
+  gap: 8px;
+}
+
+input,
+select,
+button {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+button.primary,
+button:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.hero,
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 34px;
+}
+
+.hero p,
+.hint,
+small {
+  margin: 0;
+  color: var(--muted);
+}
+
+.grid,
+.peer {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  align-items: center;
+}
+
+.list,
+.log,
+.streams {
+  display: grid;
+  gap: 10px;
+}
+
+.peer,
+.log p,
+.stream-card {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.stream-card video {
+  width: 100%;
+  max-height: 420px;
+  border-radius: 8px;
+  background: #111;
+}
+
+@media (max-width: 860px) {
+  body {
+    grid-template-columns: 1fr;
+  }
+
+  aside {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
