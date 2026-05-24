@@ -8,6 +8,12 @@ const pageColumnsKeyPrefix = "cloudflare-modular-site.page-columns.";
 const adminCommentIpKeyPrefix = "cloudflare-modular-site.admin-comment-ip.";
 const pageAccessKeyPrefix = "cloudflare-modular-site.page-access.";
 const maxUndoSteps = 50;
+const visitorSummaryFallback = {
+  ip: "获取中",
+  region: "获取中",
+  isp: "获取中",
+  recentVisits: "获取中"
+};
 
 const fallbackConfig = {
   version: 1,
@@ -91,6 +97,7 @@ const state = {
   undoFingerprint: "",
   commentCache: new Map(),
   commentRequests: new Map(),
+  visitorSummary: null,
   saveStatus: ""
 };
 
@@ -1598,13 +1605,9 @@ function renderHome(pages, links) {
   }
 
   main.append(
-    renderStatusStrip([
-      ["分页面", String(pages.length)],
-      ["外部入口", String(links.length)],
-      ["内容模块", String(pages.reduce((sum, page) => sum + page.sections.length, 0))],
-      ["后台入口", "/admin"]
-    ])
+    renderVisitorStatusStrip()
   );
+  loadVisitorSummary();
 
   const grid = element("section", `module-grid home-entry-grid layout-${state.homeEntryLayout}`);
   for (const page of pages) {
@@ -2304,6 +2307,34 @@ function renderStatusStrip(items) {
   return strip;
 }
 
+function renderVisitorStatusStrip() {
+  const summary = state.visitorSummary || visitorSummaryFallback;
+  return renderStatusStrip([
+    ["IP", summary.ip || "未知"],
+    ["地区", summary.region || "未知"],
+    ["运营商", summary.isp || "未知"],
+    ["近期访问量", String(summary.recentVisits ?? "未知")]
+  ]);
+}
+
+async function loadVisitorSummary() {
+  try {
+    const payload = await api.getJson("/api/visitor-summary");
+    state.visitorSummary = payload;
+    const strip = document.querySelector(".status-strip");
+    if (strip) {
+      strip.replaceWith(renderVisitorStatusStrip());
+    }
+  } catch {
+    state.visitorSummary = {
+      ip: "获取失败",
+      region: "获取失败",
+      isp: "获取失败",
+      recentVisits: "获取失败"
+    };
+  }
+}
+
 function renderPageEntry(page) {
   const card = element("article", "module-card entry-card");
   applyEntryCardStyle(card, page.entry.backgroundImage);
@@ -2447,11 +2478,16 @@ function renderVideoSection(section) {
   const frame = element("figure", "video-frame");
   if (section.src) {
     const video = document.createElement("video");
+    video.src = section.src;
     video.controls = true;
+    video.disablePictureInPicture = false;
+    video.controlsList = "nodownload";
     video.preload = "metadata";
     video.playsInline = true;
     video.setAttribute("playsinline", "");
     video.setAttribute("webkit-playsinline", "");
+    video.setAttribute("x5-playsinline", "");
+    video.setAttribute("x-webkit-airplay", "allow");
     const source = document.createElement("source");
     source.src = section.src;
     const mimeType = videoMimeType(section.src);
@@ -2469,11 +2505,14 @@ function renderVideoSection(section) {
     const play = button("播放", "button primary video-play-button", "button");
     const startVideo = async () => {
       try {
-        video.load();
+        if (video.readyState === 0) {
+          video.load();
+        }
         await video.play();
         play.classList.add("is-hidden");
       } catch {
-        play.textContent = "点击视频播放";
+        play.textContent = "新窗口播放";
+        play.onclick = () => window.open(section.src, "_blank", "noopener,noreferrer");
       }
     };
     play.addEventListener("click", startVideo);

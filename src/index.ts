@@ -201,6 +201,8 @@ type AccessLogRecord = {
   id: string;
   kind: "visit" | "blocked-comment";
   ip: string;
+  region: string;
+  isp: string;
   path: string;
   method: string;
   device: string;
@@ -420,6 +422,21 @@ const apiRoutes: Record<string, ApiRoute> = {
     json({
       config: toPublicSiteConfig(await readSiteConfig(env))
     }),
+
+  "/api/visitor-summary": async (request, env) => {
+    await recordAccessLog(request, env, { force: true });
+    const logs = await readAccessLogs(env);
+    const ip = getClientIp(request);
+    const recentSince = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recentVisits = logs.filter((log) => log.kind === "visit" && Date.parse(log.createdAt) >= recentSince).length;
+
+    return json({
+      ip,
+      region: getClientRegion(request),
+      isp: getClientIsp(request),
+      recentVisits
+    });
+  },
 
   "/api/page-access": async (request, env) => {
     if (request.method !== "POST") {
@@ -1248,13 +1265,17 @@ async function readAccessLogs(env: AppEnv): Promise<AccessLogRecord[]> {
     return [];
   }
 
-  const stored = await env.SITE_CONFIG.get(accessLogsKey, "json");
+  try {
+    const stored = await env.SITE_CONFIG.get(accessLogsKey, "json");
 
-  if (!Array.isArray(stored)) {
+    if (!Array.isArray(stored)) {
+      return [];
+    }
+
+    return stored.slice(0, maxAccessLogs).map(normalizeAccessLog).filter((log): log is AccessLogRecord => log !== null);
+  } catch {
     return [];
   }
-
-  return stored.slice(0, maxAccessLogs).map(normalizeAccessLog).filter((log): log is AccessLogRecord => log !== null);
 }
 
 function normalizeAccessLog(value: unknown): AccessLogRecord | null {
@@ -1271,6 +1292,8 @@ function normalizeAccessLog(value: unknown): AccessLogRecord | null {
     id,
     kind: asString(record.kind) === "blocked-comment" ? "blocked-comment" : "visit",
     ip,
+    region: limitText(asString(record.region), 120) || "未知地区",
+    isp: limitText(asString(record.isp), 120) || "未知运营商",
     path: limitText(asString(record.path), 160) || "/",
     method: limitText(asString(record.method), 12) || "GET",
     device: limitText(asString(record.device), 120) || "未知设备",
@@ -1319,8 +1342,8 @@ function upsertP2PPeer(peers: P2PPeer[], nextPeer: P2PPeer): P2PPeer[] {
   return [...others, nextPeer].slice(-20);
 }
 
-async function recordAccessLog(request: Request, env: AppEnv): Promise<void> {
-  if (!env.SITE_CONFIG || !shouldRecordAccess(request)) {
+async function recordAccessLog(request: Request, env: AppEnv, options: { force?: boolean } = {}): Promise<void> {
+  if (!env.SITE_CONFIG || (!options.force && !shouldRecordAccess(request))) {
     return;
   }
 
@@ -1330,6 +1353,8 @@ async function recordAccessLog(request: Request, env: AppEnv): Promise<void> {
     id: crypto.randomUUID(),
     kind: "visit",
     ip: getClientIp(request),
+    region: getClientRegion(request),
+    isp: getClientIsp(request),
     path: limitText(`${url.pathname}${url.search}`, 160) || "/",
     method: request.method,
     device: getClientDevice(request),
@@ -1356,6 +1381,8 @@ async function recordBlockedCommentLog(
     id: crypto.randomUUID(),
     kind: "blocked-comment",
     ip: details.ip,
+    region: getClientRegion(request),
+    isp: getClientIsp(request),
     path: `/${details.page}`,
     method: request.method,
     device: details.device,
@@ -1410,6 +1437,19 @@ function getClientIp(request: Request): string {
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown"
   );
+}
+
+function getClientRegion(request: Request): string {
+  const cf = request.cf as IncomingRequestCfProperties | undefined;
+  const city = limitText(String(cf?.city || ""), 60);
+  const region = limitText(String(cf?.region || ""), 80);
+  const country = limitText(String(cf?.country || ""), 20);
+  return [country, region, city].filter(Boolean).join(" / ") || "未知地区";
+}
+
+function getClientIsp(request: Request): string {
+  const cf = request.cf as IncomingRequestCfProperties | undefined;
+  return limitText(String(cf?.asOrganization || ""), 120) || "未知运营商";
 }
 
 function getClientDevice(request: Request): string {
