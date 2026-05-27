@@ -36,6 +36,7 @@ const fallbackConfig = {
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
       backgroundImage: "",
+      locked: false,
       passwordEnabled: false,
       pagePassword: "",
       visible: true,
@@ -287,7 +288,7 @@ function renderAdminEditor() {
 
     group.append(item);
 
-    if (!limited && state.selectedItemType === "page" && page.id === state.selectedPageId) {
+    if (state.selectedItemType === "page" && page.id === state.selectedPageId) {
       group.append(renderPageSidebarSettings(page));
     }
 
@@ -393,28 +394,40 @@ function renderAdminEditor() {
 
 function renderPageSidebarSettings(page) {
   const settings = element("div", "admin-page-settings");
+  const limited = isLimitedAdmin();
+  const lockedForLimited = limited && page.locked;
   settings.append(
     sidebarField("侧边栏标题", page.entry.sidebarTitle || "", (value) => {
       page.entry.sidebarTitle = value;
-    }, "留空时跟随分页面标题。")
+    }, "留空时跟随分页面标题。", lockedForLimited)
   );
   settings.append(
     sidebarField("后缀", page.slug, (value) => {
       page.slug = uniquePageSlug(page, value);
-    })
+    }, "", lockedForLimited)
   );
   settings.append(
     sidebarAreaField("侧边栏说明", page.entry.sidebarDescription || "", (value) => {
       page.entry.sidebarDescription = value;
-    })
+    }, lockedForLimited)
   );
   settings.append(
     checkbox("主页显示", page.visible, (checked) => {
       page.visible = checked;
       renderAdminEditor();
-    })
+    }, lockedForLimited)
   );
-  settings.append(element("p", "form-hint", "图标、背景和评论区域在右侧模块编辑上方设置。"));
+
+  if (!limited) {
+    settings.append(
+      checkbox("锁定分页面（限制低权限）", page.locked, (checked) => {
+        page.locked = checked;
+        renderAdminEditor();
+      })
+    );
+  }
+
+  settings.append(element("p", "form-hint", page.locked ? "这个分页面已锁定，低权限管理员无法编辑。" : "图标、背景和评论区域在右侧模块编辑上方设置。"));
   return settings;
 }
 
@@ -609,6 +622,7 @@ function renderCommentBlockWordsSettings() {
 
 function renderPreviewEditor(page) {
   const limited = isLimitedAdmin();
+  const pageLockedForLimited = limited && page.locked;
   const panel = element("section", "admin-panel preview-editor");
   const head = element("div", "section-head action-head");
   const copy = element("div");
@@ -628,21 +642,25 @@ function renderPreviewEditor(page) {
 
   const canvas = element("div", "page-preview");
   applyPageBackground(canvas, page.backgroundImage);
-  if (!limited) {
+  if (!pageLockedForLimited) {
     canvas.append(renderEditablePageHeader(page));
   }
-  canvas.append(renderInsertBar(page, 0));
+  if (!pageLockedForLimited) {
+    canvas.append(renderInsertBar(page, 0));
+  }
 
   page.sections.forEach((section, index) => {
     canvas.append(renderEditableSection(page, section, index));
-    canvas.append(renderInsertBar(page, index + 1));
+    if (!pageLockedForLimited) {
+      canvas.append(renderInsertBar(page, index + 1));
+    }
   });
 
   if (page.sections.length === 0) {
-    canvas.append(element("p", "empty-state", "这个分页面还没有内容。可以从上面的插入条添加模块。"));
+    canvas.append(element("p", "empty-state", pageLockedForLimited ? "这个分页面已锁定，低权限管理员无法编辑。" : "这个分页面还没有内容。可以从上面的插入条添加模块。"));
   }
 
-  if (limited) {
+  if (pageLockedForLimited) {
     panel.append(head, canvas);
   } else {
     panel.append(head, renderEntrySettings(page), renderBottomCommentsSettings(page), canvas);
@@ -818,6 +836,7 @@ function renderEditablePageHeader(page) {
 }
 
 function renderEntrySettings(page) {
+  const limited = isLimitedAdmin();
   const panel = element("section", "entry-settings");
   const head = element("div", "section-head");
   head.append(element("h2", "", "分页面入口显示"));
@@ -874,23 +893,26 @@ function renderEntrySettings(page) {
   }));
   backgroundRow.append(renderEntryPreview(page));
 
-  const passwordPanel = element("section", "entry-settings page-password-settings");
-  passwordPanel.append(element("h3", "", "分页面密码"));
-  const passwordRow = element("div", "admin-row");
-  passwordRow.append(
-    checkbox("进入这个分页面需要密码", page.passwordEnabled, (checked) => {
-      page.passwordEnabled = checked;
-      renderAdminEditor();
-    })
-  );
-  passwordRow.append(
-    field("分页面专属密码", page.pagePassword, (value) => {
-      page.pagePassword = value;
-    }, "开启后，访客输入正确密码前不会看到这个分页面的标题、模块、评论和背景。")
-  );
-  passwordPanel.append(passwordRow);
+  panel.append(head, row, iconRow, sidebarIconRow, backgroundRow);
 
-  panel.append(head, row, iconRow, sidebarIconRow, backgroundRow, passwordPanel);
+  if (!limited) {
+    const passwordPanel = element("section", "entry-settings page-password-settings");
+    passwordPanel.append(element("h3", "", "分页面密码"));
+    const passwordRow = element("div", "admin-row");
+    passwordRow.append(
+      checkbox("进入这个分页面需要密码", page.passwordEnabled, (checked) => {
+        page.passwordEnabled = checked;
+        renderAdminEditor();
+      })
+    );
+    passwordRow.append(
+      field("分页面专属密码", page.pagePassword, (value) => {
+        page.pagePassword = value;
+      }, "开启后，访客输入正确密码前不会看到这个分页面的标题、模块、评论和背景。")
+    );
+    passwordPanel.append(passwordRow);
+    panel.append(passwordPanel);
+  }
   return panel;
 }
 
@@ -952,7 +974,9 @@ function renderBottomCommentsSettings(page) {
       page.comments.description = value;
     })
   );
-  panel.append(renderCommentsManager(page));
+  if (!isLimitedAdmin()) {
+    panel.append(renderCommentsManager(page));
+  }
   return panel;
 }
 
@@ -983,11 +1007,12 @@ function renderEditableSection(page, section, index) {
   const shell = element("section", `editable-section editable-${section.type}`);
   const expanded = state.expandedSections.has(section.id);
   const locked = Boolean(section.layout?.locked);
+  const limitedLocked = isLimitedAdmin() && (page.locked || locked);
   shell.classList.toggle("is-locked", locked);
   shell.classList.toggle("is-collapsed", !expanded);
   shell.append(renderSectionControls(page, section, index, expanded));
 
-  if (expanded && !isLimitedAdmin()) {
+  if (expanded && !limitedLocked) {
     shell.append(renderLayoutSettings(section, "模块布局", page, index));
 
     if (section.type === "system") {
@@ -1013,6 +1038,7 @@ function renderEditableSection(page, section, index) {
 function renderSectionControls(page, section, index, expanded) {
   const controls = element("div", "section-controls");
   const locked = Boolean(section.layout?.locked);
+  const limitedLocked = isLimitedAdmin() && (page.locked || locked);
   const toggle = button(expanded ? "▾" : "▸", "section-toggle", "button");
   toggle.setAttribute("aria-label", expanded ? "折叠模块" : "展开模块");
   toggle.addEventListener("click", () => {
@@ -1023,17 +1049,17 @@ function renderSectionControls(page, section, index, expanded) {
     }
     renderAdminEditor();
   });
-  controls.append(toggle, element("strong", "", locked ? `${sectionLabel(section)}（已锁定）` : sectionLabel(section)));
+  controls.append(toggle, element("strong", "", locked ? `${sectionLabel(section)}（限制低权限）` : sectionLabel(section)));
 
   const tools = element("div", "section-tools");
   const up = button("上移", "button", "button");
-  up.disabled = locked || index === 0;
+  up.disabled = limitedLocked || index === 0;
   up.addEventListener("click", () => moveSection(page, index, -1));
   const down = button("下移", "button", "button");
-  down.disabled = locked || index === page.sections.length - 1;
+  down.disabled = limitedLocked || index === page.sections.length - 1;
   down.addEventListener("click", () => moveSection(page, index, 1));
   const remove = button("删除", "button danger", "button");
-  remove.disabled = locked || isLimitedAdmin();
+  remove.disabled = limitedLocked;
   remove.addEventListener("click", () => {
     rememberConfigChange();
     page.sections.splice(index, 1);
@@ -1045,6 +1071,7 @@ function renderSectionControls(page, section, index, expanded) {
 }
 
 function renderLayoutSettings(target, title, page = null, index = -1) {
+  const limited = isLimitedAdmin();
   const layoutType = target.type || "comments";
   target.layout = hydrateLayout(target.layout, layoutType);
   const panel = element("section", "layout-settings");
@@ -1076,12 +1103,14 @@ function renderLayoutSettings(target, title, page = null, index = -1) {
     controlRow.append(element("p", "form-hint", "底部独立区域不占用模块网格位置。"));
   }
 
-  controlRow.append(
-    checkbox("锁定位置和删除", target.layout.locked, (checked) => {
-      target.layout.locked = checked;
-      renderAdminEditor();
-    })
-  );
+  if (!limited) {
+    controlRow.append(
+      checkbox("锁定模块（限制低权限）", target.layout.locked, (checked) => {
+        target.layout.locked = checked;
+        renderAdminEditor();
+      })
+    );
+  }
   panel.append(controlRow);
   return panel;
 }
@@ -2880,6 +2909,7 @@ function hydratePage(page) {
     modules: sections.filter((section) => section.type === "system").map((section) => section.moduleId),
     blocks: sections.filter((section) => section.type === "text"),
     backgroundImage: page.backgroundImage || "",
+    locked: Boolean(page.locked),
     passwordEnabled: Boolean(page.passwordEnabled),
     pagePassword: page.pagePassword || "",
     entry: hydrateEntry(page.entry),
@@ -3094,6 +3124,7 @@ function createPage() {
     title: `新分页面 ${index}`,
     description: "在这里填写页面说明。",
     backgroundImage: "",
+    locked: false,
     passwordEnabled: false,
     pagePassword: "",
     visible: true,
@@ -3223,6 +3254,12 @@ function createLinkSection() {
 }
 
 function insertSection(page, index, section) {
+  if (isLimitedAdmin() && page.locked) {
+    state.saveStatus = "这个分页面已锁定，低权限管理员不能添加模块。";
+    renderAdminEditor();
+    return;
+  }
+
   rememberConfigChange();
   page.sections.splice(index, 0, section);
   state.expandedSections.add(section.id);
@@ -3236,7 +3273,7 @@ function moveSection(page, index, direction) {
     return;
   }
 
-  if (page.sections[index]?.layout?.locked || page.sections[nextIndex]?.layout?.locked) {
+  if (isLimitedAdmin() && (page.locked || page.sections[index]?.layout?.locked || page.sections[nextIndex]?.layout?.locked)) {
     state.saveStatus = "锁定的模块不能移动或被跨过。";
     renderAdminEditor();
     return;
@@ -3255,7 +3292,7 @@ function moveSectionTo(page, index, nextIndex) {
     return;
   }
 
-  if (page.sections[index]?.layout?.locked) {
+  if (isLimitedAdmin() && (page.locked || page.sections[index]?.layout?.locked)) {
     state.saveStatus = "锁定的模块不能移动。";
     renderAdminEditor();
     return;
@@ -3265,7 +3302,7 @@ function moveSectionTo(page, index, nextIndex) {
   const end = Math.max(index, targetIndex);
   const crossesLocked = page.sections.slice(start, end + 1).some((section, sectionIndex) => {
     const actualIndex = start + sectionIndex;
-    return actualIndex !== index && section.layout?.locked;
+    return isLimitedAdmin() && actualIndex !== index && section.layout?.locked;
   });
 
   if (crossesLocked) {
@@ -3354,24 +3391,27 @@ function field(label, value, onInput, hint = "") {
   return wrapper;
 }
 
-function sidebarField(label, value, onInput) {
+function sidebarField(label, value, onInput, hint = "", disabled = false) {
   const wrapper = element("label", "sidebar-field");
   wrapper.append(element("span", "", label));
   const input = document.createElement("input");
   input.value = value || "";
+  input.disabled = disabled;
   trackUndoOnEdit(input);
   input.addEventListener("input", () => {
     onInput(input.value);
   });
   wrapper.append(input);
+  if (hint) wrapper.append(element("small", "", hint));
   return wrapper;
 }
 
-function sidebarAreaField(label, value, onInput) {
+function sidebarAreaField(label, value, onInput, disabled = false) {
   const wrapper = element("label", "sidebar-field");
   wrapper.append(element("span", "", label));
   const textarea = document.createElement("textarea");
   textarea.value = value || "";
+  textarea.disabled = disabled;
   trackUndoOnEdit(textarea);
   textarea.addEventListener("input", () => {
     onInput(textarea.value);
@@ -3439,11 +3479,12 @@ function numberField(label, value, min, max, step, onChange) {
   return wrapper;
 }
 
-function checkbox(label, checked, onChange) {
+function checkbox(label, checked, onChange, disabled = false) {
   const wrapper = element("label", "check-row");
   const input = document.createElement("input");
   input.type = "checkbox";
   input.checked = checked;
+  input.disabled = disabled;
   input.addEventListener("change", () => {
     rememberConfigChange();
     onChange(input.checked);

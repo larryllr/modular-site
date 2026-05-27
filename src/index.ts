@@ -160,6 +160,7 @@ type SitePage = {
   title: string;
   description: string;
   backgroundImage: string;
+  locked: boolean;
   passwordEnabled: boolean;
   pagePassword: string;
   visible: boolean;
@@ -246,6 +247,7 @@ const defaultSiteConfig: SiteConfig = {
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
       backgroundImage: "",
+      locked: false,
       passwordEnabled: false,
       pagePassword: "",
       visible: true,
@@ -912,18 +914,38 @@ function mergeLimitedConfig(current: SiteConfig, requested: SiteConfig): SiteCon
       return page;
     }
 
+    if (page.locked) {
+      return page;
+    }
+
     const existingSections = new Map(page.sections.map((section) => [section.id, section]));
-    const nextSections = requestedPage.sections.map((section) => existingSections.get(section.id) || section);
+    const nextSections = requestedPage.sections.map((section) => {
+      const existing = existingSections.get(section.id);
+      if (existing?.layout.locked) {
+        return existing;
+      }
+
+      return {
+        ...section,
+        layout: {
+          ...section.layout,
+          locked: existing?.layout.locked ?? false
+        }
+      } as PageSection;
+    });
     const requestedIds = new Set(nextSections.map((section) => section.id));
 
     for (const section of page.sections) {
-      if (!requestedIds.has(section.id)) {
+      if (section.layout.locked && !requestedIds.has(section.id)) {
         nextSections.push(section);
       }
     }
 
     return {
-      ...page,
+      ...requestedPage,
+      locked: page.locked,
+      passwordEnabled: page.passwordEnabled,
+      pagePassword: page.pagePassword,
       sections: nextSections,
       modules: nextSections
         .filter((section): section is SystemSection => section.type === "system")
@@ -969,6 +991,7 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
       title: limitText(asString(record.title) || `分页面 ${index + 1}`, 80),
       description: limitText(asString(record.description), 220),
       backgroundImage: normalizeImageSrc(asString(record.backgroundImage)),
+      locked: typeof record.locked === "boolean" ? record.locked : false,
       passwordEnabled: typeof record.passwordEnabled === "boolean" ? record.passwordEnabled : false,
       pagePassword: limitText(asString(record.pagePassword), 120),
       visible: typeof record.visible === "boolean" ? record.visible : true,
