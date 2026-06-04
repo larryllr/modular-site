@@ -275,10 +275,40 @@ function renderAdminEditor() {
   const pageNav = element("nav", "module-nav");
   for (const page of state.config.pages) {
     const group = element("section", "admin-page-nav-item");
+    group.dataset.pageId = page.id;
     const item = document.createElement("button");
     item.type = "button";
+    item.draggable = !limited;
+    item.title = limited ? "" : "按住拖动可调整分页面顺序";
     item.classList.toggle("is-active", state.selectedItemType === "page" && page.id === state.selectedPageId);
     item.append(pageSidebarMark(page), textBlock(sidebarPageTitle(page), sidebarPageDescription(page)));
+    if (!limited) {
+      item.addEventListener("dragstart", (event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", page.id);
+        group.classList.add("is-dragging");
+      });
+      item.addEventListener("dragend", () => {
+        group.classList.remove("is-dragging");
+        for (const node of pageNav.querySelectorAll(".admin-page-nav-item")) {
+          node.classList.remove("is-drop-target");
+        }
+      });
+      group.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        group.classList.add("is-drop-target");
+      });
+      group.addEventListener("dragleave", () => {
+        group.classList.remove("is-drop-target");
+      });
+      group.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const sourceId = event.dataTransfer.getData("text/plain");
+        group.classList.remove("is-drop-target");
+        reorderPageById(sourceId, page.id);
+      });
+    }
     item.addEventListener("click", () => {
       state.selectedItemType = "page";
       state.selectedPageId = page.id;
@@ -3666,6 +3696,27 @@ function deletePage(page) {
     state.expandedSettings = "";
     renderAdminEditor();
   }
+}
+
+function reorderPageById(sourceId, targetId) {
+  if (!sourceId || !targetId || sourceId === targetId || isLimitedAdmin()) {
+    return;
+  }
+
+  const sourceIndex = state.config.pages.findIndex((page) => page.id === sourceId);
+  const targetIndex = state.config.pages.findIndex((page) => page.id === targetId);
+
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return;
+  }
+
+  rememberConfigChange();
+  const [page] = state.config.pages.splice(sourceIndex, 1);
+  state.config.pages.splice(targetIndex, 0, page);
+  state.selectedItemType = "page";
+  state.selectedPageId = page.id;
+  state.expandedSettings = "";
+  renderAdminEditor();
 }
 
 function deleteExternalLink(link) {

@@ -115,6 +115,23 @@ textarea {
   gap: 8px;
 }
 
+.admin-page-nav-item.is-dragging {
+  opacity: 0.52;
+}
+
+.admin-page-nav-item.is-drop-target > button {
+  border-color: var(--teal);
+  background: #e8f5f1;
+}
+
+.admin-page-nav-item button[draggable="true"] {
+  cursor: grab;
+}
+
+.admin-page-nav-item button[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .admin-page-settings {
   display: grid;
   gap: 9px;
