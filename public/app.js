@@ -285,7 +285,7 @@ function renderAdminEditor() {
     if (!limited) {
       item.addEventListener("dragstart", (event) => {
         event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", page.id);
+        event.dataTransfer.setData("text/plain", `page:${page.id}`);
         group.classList.add("is-dragging");
       });
       item.addEventListener("dragend", () => {
@@ -304,7 +304,7 @@ function renderAdminEditor() {
       });
       group.addEventListener("drop", (event) => {
         event.preventDefault();
-        const sourceId = event.dataTransfer.getData("text/plain");
+        const sourceId = readDragPayload(event, "page");
         group.classList.remove("is-drop-target");
         reorderPageById(sourceId, page.id);
       });
@@ -336,7 +336,7 @@ function renderAdminEditor() {
     item.append(linkMark(link), textBlock(link.title, externalLinkSubtitle(link)));
     item.addEventListener("dragstart", (event) => {
       event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/link-id", link.id);
+      event.dataTransfer.setData("text/plain", `link:${link.id}`);
       group.classList.add("is-dragging");
     });
     item.addEventListener("dragend", () => {
@@ -346,7 +346,7 @@ function renderAdminEditor() {
       }
     });
     group.addEventListener("dragover", (event) => {
-      if (!event.dataTransfer.types.includes("text/link-id")) {
+      if (!isDragPayload(event, "link")) {
         return;
       }
       event.preventDefault();
@@ -357,7 +357,7 @@ function renderAdminEditor() {
       group.classList.remove("is-drop-target");
     });
     group.addEventListener("drop", (event) => {
-      const sourceId = event.dataTransfer.getData("text/link-id");
+      const sourceId = readDragPayload(event, "link");
       if (!sourceId) {
         return;
       }
@@ -3967,6 +3967,17 @@ function reorderPageById(sourceId, targetId) {
   state.selectedPageId = page.id;
   state.expandedSettings = "";
   renderAdminEditor();
+}
+
+function isDragPayload(event, type) {
+  const types = Array.from(event.dataTransfer?.types || []);
+  return types.includes("text/plain") || types.includes("Text");
+}
+
+function readDragPayload(event, type) {
+  const value = event.dataTransfer?.getData("text/plain") || event.dataTransfer?.getData("Text") || "";
+  const prefix = `${type}:`;
+  return value.startsWith(prefix) ? value.slice(prefix.length) : "";
 }
 
 function reorderLinkById(sourceId, targetId) {
