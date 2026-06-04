@@ -327,10 +327,44 @@ function renderAdminEditor() {
 
   for (const link of limited ? [] : state.config.links) {
     const group = element("section", "admin-page-nav-item");
+    group.dataset.linkId = link.id;
     const item = document.createElement("button");
     item.type = "button";
+    item.draggable = true;
+    item.title = "按住拖动可调整网站入口顺序";
     item.classList.toggle("is-active", state.selectedItemType === "link" && link.id === state.selectedLinkId);
     item.append(linkMark(link), textBlock(link.title, externalLinkSubtitle(link)));
+    item.addEventListener("dragstart", (event) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/link-id", link.id);
+      group.classList.add("is-dragging");
+    });
+    item.addEventListener("dragend", () => {
+      group.classList.remove("is-dragging");
+      for (const node of pageNav.querySelectorAll(".admin-page-nav-item")) {
+        node.classList.remove("is-drop-target");
+      }
+    });
+    group.addEventListener("dragover", (event) => {
+      if (!event.dataTransfer.types.includes("text/link-id")) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      group.classList.add("is-drop-target");
+    });
+    group.addEventListener("dragleave", () => {
+      group.classList.remove("is-drop-target");
+    });
+    group.addEventListener("drop", (event) => {
+      const sourceId = event.dataTransfer.getData("text/link-id");
+      if (!sourceId) {
+        return;
+      }
+      event.preventDefault();
+      group.classList.remove("is-drop-target");
+      reorderLinkById(sourceId, link.id);
+    });
     item.addEventListener("click", () => {
       state.selectedItemType = "link";
       state.selectedLinkId = link.id;
@@ -1466,16 +1500,52 @@ function renderEditableBlogSection(section) {
   }
 
   for (const article of section.articles) {
-    articles.append(renderEditableBlogArticle(section, article));
+    articles.append(renderEditableBlogArticle(section, article, articles));
   }
 
   card.append(articles, renderBlogSection(section, true));
   return card;
 }
 
-function renderEditableBlogArticle(section, article) {
+function renderEditableBlogArticle(section, article, listNode = null) {
   const locked = isLimitedAdmin() && article.authorRole === "admin";
   const item = element("article", locked ? "blog-article-editor is-readonly" : "blog-article-editor");
+  item.dataset.articleId = article.id;
+  item.draggable = !locked;
+  item.title = locked ? "" : "按住拖动可调整文章顺序";
+  if (!locked) {
+    item.addEventListener("dragstart", (event) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/blog-article-id", article.id);
+      item.classList.add("is-dragging");
+    });
+    item.addEventListener("dragend", () => {
+      item.classList.remove("is-dragging");
+      for (const node of listNode?.querySelectorAll(".blog-article-editor") || []) {
+        node.classList.remove("is-drop-target");
+      }
+    });
+    item.addEventListener("dragover", (event) => {
+      if (!event.dataTransfer.types.includes("text/blog-article-id")) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      item.classList.add("is-drop-target");
+    });
+    item.addEventListener("dragleave", () => {
+      item.classList.remove("is-drop-target");
+    });
+    item.addEventListener("drop", (event) => {
+      const sourceId = event.dataTransfer.getData("text/blog-article-id");
+      if (!sourceId) {
+        return;
+      }
+      event.preventDefault();
+      item.classList.remove("is-drop-target");
+      reorderBlogArticle(section, sourceId, article.id);
+    });
+  }
   item.append(element("h3", "", article.title || "未命名文章"));
   item.append(element("p", "form-hint", locked ? "admin 发布，仅 admin 可以编辑。" : `作者：${article.authorName || article.authorRole} · ${formatDateTime(article.updatedAt || article.createdAt)}`));
 
@@ -2661,7 +2731,7 @@ function renderP2PEntrySection(section) {
 
 function renderBlogSection(section, adminPreview = false) {
   const card = element("article", adminPreview ? "module-card blog-section blog-admin-preview" : "module-card blog-section");
-  const articles = [...(section.articles || [])].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const articles = [...(section.articles || [])];
   const categories = section.categories?.length ? section.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
   const featured = articles.filter((article) => article.featured).slice(0, 2);
   const heroArticles = featured.length ? featured : articles.slice(0, 2);
@@ -2727,7 +2797,7 @@ function renderBlogPage(page) {
   const blog = hydrateBlogSection(page.blog);
   const main = element("main", "workspace blog-page-workspace");
   applyPageBackground(main, page.backgroundImage);
-  const articles = [...blog.articles].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const articles = [...blog.articles];
   const featured = articles.filter((article) => article.featured).slice(0, 2);
   const heroArticles = featured.length ? featured : articles.slice(0, 2);
   const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
@@ -2806,7 +2876,7 @@ function renderBlogPagePreview(page) {
   wrapper.append(element("p", "", "保存后用户打开这个分页面会看到下面这种整页博客布局。"));
   const preview = element("div", "blog-page-preview");
   const blog = hydrateBlogSection(page.blog);
-  const articles = [...blog.articles].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const articles = [...blog.articles];
   const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
   const nav = element("header", "blog-page-nav");
   nav.append(element("strong", "", `${page.title || "BLOG"} | BLOG`));
@@ -3896,6 +3966,54 @@ function reorderPageById(sourceId, targetId) {
   state.selectedItemType = "page";
   state.selectedPageId = page.id;
   state.expandedSettings = "";
+  renderAdminEditor();
+}
+
+function reorderLinkById(sourceId, targetId) {
+  if (!sourceId || !targetId || sourceId === targetId || isLimitedAdmin()) {
+    return;
+  }
+
+  const sourceIndex = state.config.links.findIndex((link) => link.id === sourceId);
+  const targetIndex = state.config.links.findIndex((link) => link.id === targetId);
+
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return;
+  }
+
+  rememberConfigChange();
+  const [link] = state.config.links.splice(sourceIndex, 1);
+  state.config.links.splice(targetIndex, 0, link);
+  state.selectedItemType = "link";
+  state.selectedLinkId = link.id;
+  state.expandedSettings = "";
+  renderAdminEditor();
+}
+
+function reorderBlogArticle(section, sourceId, targetId) {
+  if (!sourceId || !targetId || sourceId === targetId) {
+    return;
+  }
+
+  const sourceIndex = section.articles.findIndex((article) => article.id === sourceId);
+  const targetIndex = section.articles.findIndex((article) => article.id === targetId);
+
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return;
+  }
+
+  const source = section.articles[sourceIndex];
+  const target = section.articles[targetIndex];
+
+  if (isLimitedAdmin() && (source.authorRole === "admin" || target.authorRole === "admin")) {
+    state.saveStatus = "admin 发布的文章只有 admin 可以调整顺序。";
+    renderAdminEditor();
+    return;
+  }
+
+  rememberConfigChange();
+  const [article] = section.articles.splice(sourceIndex, 1);
+  section.articles.splice(targetIndex, 0, article);
   renderAdminEditor();
 }
 

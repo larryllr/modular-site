@@ -1417,6 +1417,23 @@ h1 {
   background: rgba(248, 248, 244, 0.72);
 }
 
+.blog-article-editor[draggable="true"] {
+  cursor: grab;
+}
+
+.blog-article-editor[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.blog-article-editor.is-dragging {
+  opacity: 0.52;
+}
+
+.blog-article-editor.is-drop-target {
+  border-color: var(--teal);
+  background: #e8f5f1;
+}
+
 .blog-page-workspace,
 .blog-page-preview {
   display: grid;
