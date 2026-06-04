@@ -137,7 +137,16 @@ textarea {
   touch-action: none;
 }
 
+.admin-page-nav-item[data-nav-key] > button {
+  cursor: grab;
+  touch-action: none;
+}
+
 .admin-page-nav-item[data-link-id] > button:active {
+  cursor: grabbing;
+}
+
+.admin-page-nav-item[data-nav-key] > button:active {
   cursor: grabbing;
 }
 

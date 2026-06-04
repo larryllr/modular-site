@@ -210,6 +210,7 @@ type SiteConfig = {
   homeImage: string;
   commentBlockWords: string[];
   announcement: HomeAnnouncement;
+  navOrder: string[];
   links: SiteLink[];
   pages: SitePage[];
 };
@@ -270,6 +271,7 @@ const defaultSiteConfig: SiteConfig = {
     text: "",
     durationSeconds: 8
   },
+  navOrder: ["page:workspace"],
   links: [],
   pages: [
     {
@@ -1100,6 +1102,9 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
     pages.push(defaultSiteConfig.pages[0]);
   }
 
+  const links = rawLinks.slice(0, 40).map(normalizeSiteLink);
+  const navOrder = normalizeNavOrder(source.navOrder, pages, links);
+
   return {
     version: 1,
     updatedAt: new Date().toISOString(),
@@ -1108,9 +1113,40 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
     homeImage: normalizeImageSrc(asString(source.homeImage)),
     commentBlockWords: normalizeCommentBlockWords(source.commentBlockWords),
     announcement: normalizeAnnouncement(source.announcement),
-    links: rawLinks.slice(0, 40).map(normalizeSiteLink),
+    navOrder,
+    links,
     pages
   };
+}
+
+function normalizeNavOrder(value: unknown, pages: SitePage[], links: SiteLink[]): string[] {
+  const valid = new Set([
+    ...pages.map((page) => `page:${page.id}`),
+    ...links.map((link) => `link:${link.id}`)
+  ]);
+  const raw = Array.isArray(value) ? value : [];
+  const order = raw
+    .map((item) => asString(item))
+    .filter((item) => valid.has(item));
+  const used = new Set(order);
+
+  for (const page of pages) {
+    const key = `page:${page.id}`;
+    if (!used.has(key)) {
+      order.push(key);
+      used.add(key);
+    }
+  }
+
+  for (const link of links) {
+    const key = `link:${link.id}`;
+    if (!used.has(key)) {
+      order.push(key);
+      used.add(key);
+    }
+  }
+
+  return order;
 }
 
 function normalizeCommentBlockWords(value: unknown): string[] {

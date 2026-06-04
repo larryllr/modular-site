@@ -28,6 +28,7 @@ const fallbackConfig = {
     text: "",
     durationSeconds: 8
   },
+  navOrder: ["page:workspace"],
   links: [],
   pages: [
     {
@@ -273,43 +274,61 @@ function renderAdminEditor() {
   homeSettingsNav.append(homeSettingsButton);
 
   const pageNav = element("nav", "module-nav");
-  for (const page of state.config.pages) {
+  for (const navItem of adminNavItems()) {
+    if (navItem.type === "link" && limited) {
+      continue;
+    }
+
+    if (navItem.type === "link") {
+      const link = navItem.link;
+      const group = element("section", "admin-page-nav-item");
+      group.dataset.navKey = navItem.key;
+      group.dataset.linkId = link.id;
+      const item = document.createElement("button");
+      item.type = "button";
+      item.draggable = false;
+      item.title = "按住拖动可调整入口顺序";
+      item.classList.toggle("is-active", state.selectedItemType === "link" && link.id === state.selectedLinkId);
+      item.append(linkMark(link), textBlock(link.title, externalLinkSubtitle(link)));
+      attachPointerSort(item, group, "nav", navItem.key, pageNav);
+      item.addEventListener("click", () => {
+        if (item.dataset.dragConsumed === "true") {
+          item.dataset.dragConsumed = "";
+          return;
+        }
+        state.selectedItemType = "link";
+        state.selectedLinkId = link.id;
+        state.expandedSettings = "";
+        renderAdminEditor();
+      });
+      group.append(item);
+
+      if (state.selectedItemType === "link" && link.id === state.selectedLinkId) {
+        group.append(renderExternalLinkSidebarSettings(link));
+      }
+
+      pageNav.append(group);
+      continue;
+    }
+
+    const page = navItem.page;
     const group = element("section", "admin-page-nav-item");
+    group.dataset.navKey = navItem.key;
     group.dataset.pageId = page.id;
     const item = document.createElement("button");
     item.type = "button";
-    item.draggable = !limited;
+    item.draggable = false;
     item.title = limited ? "" : "按住拖动可调整分页面顺序";
     item.classList.toggle("is-active", state.selectedItemType === "page" && page.id === state.selectedPageId);
     item.append(pageSidebarMark(page), textBlock(sidebarPageTitle(page), sidebarPageDescription(page)));
     if (!limited) {
-      item.addEventListener("dragstart", (event) => {
-        event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", `page:${page.id}`);
-        group.classList.add("is-dragging");
-      });
-      item.addEventListener("dragend", () => {
-        group.classList.remove("is-dragging");
-        for (const node of pageNav.querySelectorAll(".admin-page-nav-item")) {
-          node.classList.remove("is-drop-target");
-        }
-      });
-      group.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        group.classList.add("is-drop-target");
-      });
-      group.addEventListener("dragleave", () => {
-        group.classList.remove("is-drop-target");
-      });
-      group.addEventListener("drop", (event) => {
-        event.preventDefault();
-        const sourceId = readDragPayload(event, "page");
-        group.classList.remove("is-drop-target");
-        reorderPageById(sourceId, page.id);
-      });
+      attachPointerSort(item, group, "nav", navItem.key, pageNav);
     }
     item.addEventListener("click", () => {
+      if (item.dataset.dragConsumed === "true") {
+        item.dataset.dragConsumed = "";
+        return;
+      }
       state.selectedItemType = "page";
       state.selectedPageId = page.id;
       state.expandedSettings = "";
@@ -325,41 +344,13 @@ function renderAdminEditor() {
     pageNav.append(group);
   }
 
-  for (const link of limited ? [] : state.config.links) {
-    const group = element("section", "admin-page-nav-item");
-    group.dataset.linkId = link.id;
-    const item = document.createElement("button");
-    item.type = "button";
-    item.draggable = false;
-    item.title = "按住拖动可调整网站入口顺序";
-    item.classList.toggle("is-active", state.selectedItemType === "link" && link.id === state.selectedLinkId);
-    item.append(linkMark(link), textBlock(link.title, externalLinkSubtitle(link)));
-    attachPointerSort(item, group, "link", link.id, pageNav);
-    item.addEventListener("click", () => {
-      if (item.dataset.dragConsumed === "true") {
-        item.dataset.dragConsumed = "";
-        return;
-      }
-      state.selectedItemType = "link";
-      state.selectedLinkId = link.id;
-      state.expandedSettings = "";
-      renderAdminEditor();
-    });
-    group.append(item);
-
-    if (state.selectedItemType === "link" && link.id === state.selectedLinkId) {
-      group.append(renderExternalLinkSidebarSettings(link));
-    }
-
-    pageNav.append(group);
-  }
-
   const addPageButton = button("新增分页面", "button primary", "button");
   addPageButton.disabled = limited;
   addPageButton.addEventListener("click", () => {
     rememberConfigChange();
     const page = createPage();
     state.config.pages.push(page);
+    appendNavOrder(`page:${page.id}`);
     state.selectedItemType = "page";
     state.selectedPageId = page.id;
     state.expandedSettings = "";
@@ -372,6 +363,7 @@ function renderAdminEditor() {
     rememberConfigChange();
     const page = createBlogPage();
     state.config.pages.push(page);
+    appendNavOrder(`page:${page.id}`);
     state.selectedItemType = "page";
     state.selectedPageId = page.id;
     state.expandedSettings = "";
@@ -384,6 +376,7 @@ function renderAdminEditor() {
     rememberConfigChange();
     const link = createExternalLink();
     state.config.links.push(link);
+    appendNavOrder(`link:${link.id}`);
     state.selectedItemType = "link";
     state.selectedLinkId = link.id;
     state.expandedSettings = "";
@@ -1855,32 +1848,49 @@ function renderPublicSidebar(slug, pages, links) {
   const nav = element("nav", "module-nav");
   nav.append(navLink("/", "HM", "主页入口", slug ? "所有分页面" : "当前页面", !slug));
 
-  for (const page of pages) {
-    nav.append(navLink(`/${page.slug}`, page.entry.sidebarIconText || page.entry.iconText || "PG", page.title, `/${page.slug}`, slug === page.slug, {
-      iconImage: page.entry.sidebarIconImage || page.entry.iconImage
-    }));
-  }
-
-  for (const link of links) {
-    nav.append(
-      navLink(
-        normalizeExternalUrl(link.targetUrl),
-        link.iconText || "WEB",
-        link.title,
-        externalLinkSubtitle(link),
-        false,
-        {
-          external: true,
-          iconImage: link.iconImage,
-          fallbackIcon: faviconUrl(link.targetUrl)
-        }
-      )
-    );
+  for (const item of publicNavItems(pages, links)) {
+    if (item.type === "page") {
+      const page = item.page;
+      nav.append(navLink(`/${page.slug}`, page.entry.sidebarIconText || page.entry.iconText || "PG", page.title, `/${page.slug}`, slug === page.slug, {
+        iconImage: page.entry.sidebarIconImage || page.entry.iconImage
+      }));
+    } else {
+      const link = item.link;
+      nav.append(
+        navLink(
+          normalizeExternalUrl(link.targetUrl),
+          link.iconText || "WEB",
+          link.title,
+          externalLinkSubtitle(link),
+          false,
+          {
+            external: true,
+            iconImage: link.iconImage,
+            fallbackIcon: faviconUrl(link.targetUrl)
+          }
+        )
+      );
+    }
   }
 
   nav.append(navLink("/admin", "AD", "管理员", "管理页面和模块", false));
   sidebar.append(nav);
   return sidebar;
+}
+
+function publicNavItems(pages, links) {
+  const pageMap = new Map(pages.map((page) => [page.id, page]));
+  const linkMap = new Map(links.map((link) => [link.id, link]));
+  return hydrateNavOrder(state.config.navOrder, pages, links).map((key) => {
+    const [type, id] = key.split(":");
+    if (type === "link" && linkMap.has(id)) {
+      return { type: "link", link: linkMap.get(id) };
+    }
+    if (type === "page" && pageMap.has(id)) {
+      return { type: "page", page: pageMap.get(id) };
+    }
+    return null;
+  }).filter(Boolean);
 }
 
 function renderHome(pages, links) {
@@ -1916,11 +1926,8 @@ function renderHome(pages, links) {
   loadVisitorSummary();
 
   const grid = element("section", `module-grid home-entry-grid layout-${state.homeEntryLayout}`);
-  for (const page of pages) {
-    grid.append(renderPageEntry(page));
-  }
-  for (const link of links) {
-    grid.append(renderExternalLinkEntry(link));
+  for (const item of publicNavItems(pages, links)) {
+    grid.append(item.type === "page" ? renderPageEntry(item.page) : renderExternalLinkEntry(item.link));
   }
   main.append(grid);
   main.append(renderHomeViewControl());
@@ -3387,15 +3394,47 @@ function moduleContext(page) {
 
 function hydrateConfig(config) {
   const next = config || fallbackConfig;
+  const links = (next.links || fallbackConfig.links).map(hydrateExternalLink);
+  const pages = (next.pages || fallbackConfig.pages).map(hydratePage);
 
   return {
     ...fallbackConfig,
     ...next,
     commentBlockWords: normalizeBlockWordsInput(next.commentBlockWords || []),
     announcement: hydrateAnnouncement(next.announcement),
-    links: (next.links || fallbackConfig.links).map(hydrateExternalLink),
-    pages: (next.pages || fallbackConfig.pages).map(hydratePage)
+    links,
+    pages,
+    navOrder: hydrateNavOrder(next.navOrder, pages, links)
   };
+}
+
+function hydrateNavOrder(value, pages, links) {
+  const valid = new Set([
+    ...pages.map((page) => `page:${page.id}`),
+    ...links.map((link) => `link:${link.id}`)
+  ]);
+  const order = (Array.isArray(value) ? value : [])
+    .map((item) => String(item || ""))
+    .filter((item) => valid.has(item));
+  const used = new Set(order);
+
+  for (const page of pages) {
+    const key = `page:${page.id}`;
+    if (!used.has(key)) {
+      order.push(key);
+      used.add(key);
+    }
+  }
+
+  for (const link of links) {
+    const key = `link:${link.id}`;
+    if (!used.has(key)) {
+      order.push(key);
+      used.add(key);
+    }
+  }
+
+  return order;
 }
 
 function normalizeBlockWordsInput(value) {
@@ -3688,6 +3727,33 @@ function getSelectedPage() {
   return state.config.pages.find((page) => page.id === state.selectedPageId) || state.config.pages[0] || null;
 }
 
+function adminNavItems() {
+  const pages = new Map(state.config.pages.map((page) => [page.id, page]));
+  const links = new Map(state.config.links.map((link) => [link.id, link]));
+  return hydrateNavOrder(state.config.navOrder, state.config.pages, state.config.links).map((key) => {
+    const [type, id] = key.split(":");
+    if (type === "link" && links.has(id)) {
+      return { type: "link", key, link: links.get(id) };
+    }
+    if (type === "page" && pages.has(id)) {
+      return { type: "page", key, page: pages.get(id) };
+    }
+    return null;
+  }).filter(Boolean);
+}
+
+function appendNavOrder(key) {
+  state.config.navOrder = hydrateNavOrder(state.config.navOrder, state.config.pages, state.config.links);
+  if (!state.config.navOrder.includes(key)) {
+    state.config.navOrder.push(key);
+  }
+}
+
+function removeNavOrder(key) {
+  state.config.navOrder = hydrateNavOrder(state.config.navOrder, state.config.pages, state.config.links)
+    .filter((item) => item !== key);
+}
+
 function createPage() {
   const index = state.config.pages.length + 1;
 
@@ -3934,6 +4000,7 @@ function deletePage(page) {
   if (confirm(`确定删除“${page.title}”？`)) {
     rememberConfigChange();
     state.config.pages = state.config.pages.filter((item) => item.id !== page.id);
+    removeNavOrder(`page:${page.id}`);
     state.selectedPageId = state.config.pages[0]?.id || "";
     state.expandedSettings = "";
     renderAdminEditor();
@@ -3957,6 +4024,31 @@ function reorderPageById(sourceId, targetId) {
   state.config.pages.splice(targetIndex, 0, page);
   state.selectedItemType = "page";
   state.selectedPageId = page.id;
+  state.expandedSettings = "";
+  renderAdminEditor();
+}
+
+function reorderNavByKey(sourceKey, targetKey) {
+  if (!sourceKey || !targetKey || sourceKey === targetKey || isLimitedAdmin()) {
+    return;
+  }
+
+  const order = hydrateNavOrder(state.config.navOrder, state.config.pages, state.config.links);
+  const sourceIndex = order.indexOf(sourceKey);
+  const targetIndex = order.indexOf(targetKey);
+
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return;
+  }
+
+  rememberConfigChange();
+  const [item] = order.splice(sourceIndex, 1);
+  order.splice(targetIndex, 0, item);
+  state.config.navOrder = order;
+  const [type, id] = item.split(":");
+  state.selectedItemType = type === "link" ? "link" : "page";
+  state.selectedLinkId = type === "link" ? id : state.selectedLinkId;
+  state.selectedPageId = type === "page" ? id : state.selectedPageId;
   state.expandedSettings = "";
   renderAdminEditor();
 }
@@ -3985,7 +4077,9 @@ function attachPointerSort(handle, group, type, sourceId, container) {
 
     if (dragging && targetId && targetId !== sourceId) {
       handle.dataset.dragConsumed = "true";
-      if (type === "link") {
+      if (type === "nav") {
+        reorderNavByKey(sourceId, targetId);
+      } else if (type === "link") {
         reorderLinkById(sourceId, targetId);
       }
     }
@@ -4006,9 +4100,9 @@ function attachPointerSort(handle, group, type, sourceId, container) {
     dragging = true;
     group.classList.add("is-dragging");
     clearTargets();
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(`[data-${type}-id]`)
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(sortTargetSelector(type))
       || sortTargetByPosition(container, type, sourceId, event.clientY);
-    targetId = target?.dataset?.[`${type}Id`] || "";
+    targetId = sortTargetKey(target, type);
     if (target && targetId !== sourceId) {
       target.classList.add("is-drop-target");
     }
@@ -4033,8 +4127,8 @@ function attachPointerSort(handle, group, type, sourceId, container) {
 }
 
 function sortTargetByPosition(container, type, sourceId, y) {
-  const targets = [...container.querySelectorAll(`[data-${type}-id]`)]
-    .filter((node) => node.dataset?.[`${type}Id`] !== sourceId);
+  const targets = [...container.querySelectorAll(sortTargetSelector(type))]
+    .filter((node) => sortTargetKey(node, type) !== sourceId);
 
   if (!targets.length) {
     return null;
@@ -4049,7 +4143,19 @@ function sortTargetByPosition(container, type, sourceId, y) {
 
 function nearestSortTargetId(container, type, sourceId, y) {
   const target = sortTargetByPosition(container, type, sourceId, y);
-  return target?.dataset?.[`${type}Id`] || "";
+  return sortTargetKey(target, type);
+}
+
+function sortTargetSelector(type) {
+  return type === "nav" ? "[data-nav-key]" : `[data-${type}-id]`;
+}
+
+function sortTargetKey(target, type) {
+  if (!target) {
+    return "";
+  }
+
+  return type === "nav" ? target.dataset.navKey || "" : target.dataset?.[`${type}Id`] || "";
 }
 
 function isDragPayload(event, type) {
@@ -4115,6 +4221,7 @@ function deleteExternalLink(link) {
   if (confirm(`确定删除“${link.title}”？`)) {
     rememberConfigChange();
     state.config.links = state.config.links.filter((item) => item.id !== link.id);
+    removeNavOrder(`link:${link.id}`);
     state.selectedItemType = "page";
     state.selectedPageId = state.config.pages[0]?.id || "";
     state.selectedLinkId = state.config.links[0]?.id || "";
