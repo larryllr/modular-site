@@ -358,6 +358,18 @@ function renderAdminEditor() {
     renderAdminEditor();
   });
 
+  const addBlogPageButton = button("新增博客分页面", "button", "button");
+  addBlogPageButton.disabled = limited;
+  addBlogPageButton.addEventListener("click", () => {
+    rememberConfigChange();
+    const page = createBlogPage();
+    state.config.pages.push(page);
+    state.selectedItemType = "page";
+    state.selectedPageId = page.id;
+    state.expandedSettings = "";
+    renderAdminEditor();
+  });
+
   const addLinkButton = button("新增网站入口", "button", "button");
   addLinkButton.disabled = limited;
   addLinkButton.addEventListener("click", () => {
@@ -394,7 +406,7 @@ function renderAdminEditor() {
   });
 
   const sidebarActions = element("div", "sidebar-actions");
-  sidebarActions.append(addPageButton, addLinkButton, logsButton, homeButton, logoutButton);
+  sidebarActions.append(addPageButton, addBlogPageButton, addLinkButton, logsButton, homeButton, logoutButton);
   sidebar.append(brand, homeSettingsNav, pageNav, sidebarActions);
 
   const main = element("main", "admin-workspace");
@@ -669,6 +681,17 @@ function renderPreviewEditor(page) {
   removePage.addEventListener("click", () => deletePage(page));
   headActions.append(view, removePage);
   head.append(copy, headActions);
+
+  if (page.kind === "blog") {
+    const blog = hydrateBlogSection(page.blog);
+    page.blog = blog;
+    if (pageLockedForLimited) {
+      panel.append(head, element("p", "empty-state", "这个博客分页面已锁定，低权限管理员无法编辑。"));
+    } else {
+      panel.append(head, renderEntrySettings(page), renderEditableBlogSection(blog), renderBlogPagePreview(page));
+    }
+    return panel;
+  }
 
   const canvas = element("div", "page-preview");
   applyPageBackground(canvas, page.backgroundImage);
@@ -1869,6 +1892,11 @@ function renderHomeAnnouncement() {
 }
 
 function renderPage(page) {
+  if (page.kind === "blog") {
+    renderBlogPage(page);
+    return;
+  }
+
   document.title = page.title;
   const columnMode = getPageColumnMode(page.slug);
   const main = element("main", "workspace");
@@ -2694,6 +2722,122 @@ function renderBlogSection(section, adminPreview = false) {
   return card;
 }
 
+function renderBlogPage(page) {
+  document.title = page.title;
+  const blog = hydrateBlogSection(page.blog);
+  const main = element("main", "workspace blog-page-workspace");
+  applyPageBackground(main, page.backgroundImage);
+  const articles = [...blog.articles].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const featured = articles.filter((article) => article.featured).slice(0, 2);
+  const heroArticles = featured.length ? featured : articles.slice(0, 2);
+  const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
+
+  const nav = element("header", "blog-page-nav");
+  nav.append(element("strong", "", `${page.title || "BLOG"} | BLOG`));
+  const links = element("nav", "");
+  for (const label of ["文库", "社交", "我的"]) {
+    links.append(element("span", "", label));
+  }
+  nav.append(links);
+  main.append(nav);
+
+  if (blog.notice) {
+    const notice = element("section", "blog-page-notice");
+    notice.append(mark("NB"), element("strong", "", blog.notice), element("span", "", "›"));
+    main.append(notice);
+  }
+
+  const hero = element("section", "blog-page-hero");
+  const intro = element("article", "blog-page-intro");
+  intro.append(element("h1", "", blog.description || page.description || "收录开源，好用的互联网项目"));
+  intro.append(element("p", "", page.slug.toUpperCase()));
+  const quick = element("div", "blog-quick-links");
+  for (const label of categories.slice(0, 4)) {
+    quick.append(element("span", "", label));
+  }
+  intro.append(quick);
+  hero.append(intro);
+
+  if (heroArticles[0]) {
+    hero.append(renderBlogHeroArticle(heroArticles[0], true));
+  }
+  main.append(hero);
+
+  const tabs = element("nav", "blog-page-tabs");
+  tabs.append(element("span", "is-active", "推荐"));
+  for (const category of categories.slice(0, 7)) {
+    tabs.append(element("span", "", category));
+  }
+  tabs.append(element("span", "", "更多"));
+  main.append(tabs);
+
+  const layout = element("section", "blog-page-layout");
+  const profile = element("aside", "blog-profile-panel");
+  const avatar = blog.profileImage ? document.createElement("img") : null;
+  if (avatar) {
+    avatar.src = blog.profileImage;
+    avatar.alt = blog.profileName || "作者头像";
+  }
+  profile.append(
+    avatar || mark((blog.profileName || "站长").slice(0, 2).toUpperCase()),
+    element("h2", "", blog.profileName || "站长"),
+    element("p", "", blog.profileDescription || "这里是博客作者介绍。")
+  );
+  const tagCloud = element("div", "blog-tag-cloud");
+  for (const tag of collectBlogTags(articles).slice(0, 24)) {
+    tagCloud.append(element("span", "", tag));
+  }
+  profile.append(tagCloud);
+
+  const list = element("section", "blog-page-articles");
+  if (!articles.length) {
+    list.append(element("p", "empty-state", "还没有发布文章。管理员进入后台后可以发布第一篇。"));
+  } else {
+    articles.forEach((article) => list.append(renderBlogArticleCard(article)));
+  }
+  layout.append(profile, list);
+  main.append(layout);
+  app.append(main);
+}
+
+function renderBlogPagePreview(page) {
+  const wrapper = element("section", "admin-panel blog-page-preview-panel");
+  wrapper.append(element("h2", "", "博客页面预览"));
+  wrapper.append(element("p", "", "保存后用户打开这个分页面会看到下面这种整页博客布局。"));
+  const preview = element("div", "blog-page-preview");
+  const blog = hydrateBlogSection(page.blog);
+  const articles = [...blog.articles].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
+  const nav = element("header", "blog-page-nav");
+  nav.append(element("strong", "", `${page.title || "BLOG"} | BLOG`));
+  nav.append(element("nav", "", "文库  社交  我的"));
+  preview.append(nav);
+  if (blog.notice) {
+    const notice = element("section", "blog-page-notice");
+    notice.append(mark("NB"), element("strong", "", blog.notice), element("span", "", "›"));
+    preview.append(notice);
+  }
+  const hero = element("section", "blog-page-hero");
+  const intro = element("article", "blog-page-intro");
+  intro.append(element("h1", "", blog.description || page.description), element("p", "", page.slug.toUpperCase()));
+  const quick = element("div", "blog-quick-links");
+  categories.slice(0, 4).forEach((label) => quick.append(element("span", "", label)));
+  intro.append(quick);
+  hero.append(intro);
+  if (articles[0]) hero.append(renderBlogHeroArticle(articles[0], true));
+  preview.append(hero);
+  const tabs = element("nav", "blog-page-tabs");
+  tabs.append(element("span", "is-active", "推荐"));
+  categories.slice(0, 7).forEach((label) => tabs.append(element("span", "", label)));
+  preview.append(tabs);
+  const list = element("section", "blog-page-articles");
+  articles.slice(0, 4).forEach((article) => list.append(renderBlogArticleCard(article)));
+  if (!articles.length) list.append(element("p", "empty-state", "还没有发布文章。"));
+  preview.append(list);
+  wrapper.append(preview);
+  return wrapper;
+}
+
 function renderBlogHeroArticle(article, large) {
   const item = element("article", large ? "blog-hero-card is-large" : "blog-hero-card");
   if (article.coverImage) {
@@ -3220,6 +3364,7 @@ function hydratePage(page) {
 
   return {
     ...page,
+    kind: page.kind === "blog" ? "blog" : "normal",
     sections,
     modules: sections.filter((section) => section.type === "system").map((section) => section.moduleId),
     blocks: sections.filter((section) => section.type === "text"),
@@ -3228,7 +3373,8 @@ function hydratePage(page) {
     passwordEnabled: Boolean(page.passwordEnabled),
     pagePassword: page.pagePassword || "",
     entry: hydrateEntry(page.entry),
-    comments: hydrateComments(page.comments)
+    comments: hydrateComments(page.comments),
+    blog: hydrateBlogSection(page.blog)
   };
 }
 
@@ -3365,6 +3511,22 @@ function hydrateBlogArticle(article) {
   };
 }
 
+function hydrateBlogSection(blog) {
+  return {
+    id: blog?.id || crypto.randomUUID(),
+    type: "blog",
+    title: blog?.title || "博客",
+    description: blog?.description || "收录文章、笔记和日常。",
+    notice: blog?.notice || "",
+    profileName: blog?.profileName || "站长",
+    profileDescription: blog?.profileDescription || "这里是博客作者介绍。",
+    profileImage: blog?.profileImage || "",
+    categories: Array.isArray(blog?.categories) ? blog.categories : ["推荐", "教程", "日常"],
+    articles: Array.isArray(blog?.articles) ? blog.articles.map(hydrateBlogArticle) : [],
+    layout: hydrateLayout(blog?.layout, "blog")
+  };
+}
+
 function hydrateEntry(entry) {
   return {
     title: entry?.title || "",
@@ -3470,6 +3632,7 @@ function createPage() {
   return {
     id: crypto.randomUUID(),
     slug: uniqueClientSlug(`page-${index}`),
+    kind: "normal",
     title: `新分页面 ${index}`,
     description: "在这里填写页面说明。",
     backgroundImage: "",
@@ -3500,6 +3663,23 @@ function createPage() {
     blocks: [],
     sections: []
   };
+}
+
+function createBlogPage() {
+  const index = state.config.pages.length + 1;
+  const page = createPage();
+  page.slug = uniqueClientSlug(`blog-${index}`);
+  page.kind = "blog";
+  page.title = "博客";
+  page.description = "收录文章、笔记和日常。";
+  page.entry.iconText = "BG";
+  page.entry.sidebarIconText = "BG";
+  page.comments.enabled = false;
+  page.blog = createBlogSection();
+  page.blog.title = "BLOG";
+  page.blog.description = "收录开源、好用的互联网项目。";
+  page.blog.notice = "这里可以放最新公告或更新说明。";
+  return page;
 }
 
 function createExternalLink() {

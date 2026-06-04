@@ -186,6 +186,7 @@ type P2PRoom = {
 type SitePage = {
   id: string;
   slug: string;
+  kind: "normal" | "blog";
   title: string;
   description: string;
   backgroundImage: string;
@@ -198,6 +199,7 @@ type SitePage = {
   sections: PageSection[];
   entry: PageEntry;
   comments: PageComments;
+  blog: BlogSection;
 };
 
 type SiteConfig = {
@@ -273,6 +275,7 @@ const defaultSiteConfig: SiteConfig = {
     {
       id: "workspace",
       slug: "workspace",
+      kind: "normal",
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
       backgroundImage: "",
@@ -325,7 +328,20 @@ const defaultSiteConfig: SiteConfig = {
           body: "进入 /admin 后，可以新增分页面、修改页面标题、为页面勾选系统模块，也可以添加自定义文本模块。",
           layout: defaultLayout("text")
         }
-      ]
+      ],
+      blog: {
+        id: "workspace-blog",
+        type: "blog",
+        title: "博客",
+        description: "收录文章、笔记和日常。",
+        notice: "",
+        profileName: "站长",
+        profileDescription: "这里是博客作者介绍。",
+        profileImage: "",
+        categories: ["推荐", "教程", "日常"],
+        articles: [],
+        layout: defaultLayout("blog")
+      }
     }
   ]
 };
@@ -930,6 +946,12 @@ function toLockedPublicPage(page: SitePage): SitePage {
     comments: {
       ...page.comments,
       enabled: false
+    },
+    blog: {
+      ...page.blog,
+      description: "",
+      notice: "",
+      articles: []
     }
   };
 }
@@ -979,6 +1001,7 @@ function mergeLimitedConfig(current: SiteConfig, requested: SiteConfig): SiteCon
       locked: page.locked,
       passwordEnabled: page.passwordEnabled,
       pagePassword: page.pagePassword,
+      blog: mergeLimitedBlogSection(page.blog, requestedPage.blog),
       sections: nextSections,
       modules: nextSections
         .filter((section): section is SystemSection => section.type === "system")
@@ -1051,9 +1074,10 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
     const entry = normalizePageEntry(record.entry, record);
     const comments = normalizePageComments(record.comments);
 
-    return {
+    const normalizedPage: SitePage = {
       id: asString(record.id) || crypto.randomUUID(),
       slug,
+      kind: asString(record.kind) === "blog" ? "blog" : "normal",
       title: limitText(asString(record.title) || `分页面 ${index + 1}`, 80),
       description: limitText(asString(record.description), 220),
       backgroundImage: normalizeImageSrc(asString(record.backgroundImage)),
@@ -1065,8 +1089,11 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
       blocks,
       sections,
       entry,
-      comments
+      comments,
+      blog: normalizeBlogPage(record.blog, index)
     };
+
+    return normalizedPage;
   });
 
   if (pages.length === 0) {
@@ -1260,6 +1287,24 @@ function normalizeBlogArticles(value: unknown): BlogArticle[] {
       featured: typeof record.featured === "boolean" ? record.featured : false
     };
   });
+}
+
+function normalizeBlogPage(value: unknown, index: number): BlogSection {
+  const record = asRecord(value);
+
+  return {
+    id: asString(record.id) || crypto.randomUUID(),
+    type: "blog",
+    title: limitText(asString(record.title) || "博客", 80),
+    description: limitText(asString(record.description) || "收录文章、笔记和日常。", 180),
+    notice: limitText(asString(record.notice), 180),
+    profileName: limitText(asString(record.profileName) || "站长", 60),
+    profileDescription: limitText(asString(record.profileDescription) || "这里是博客作者介绍。", 160),
+    profileImage: normalizeImageSrc(asString(record.profileImage)),
+    categories: normalizeStringList(record.categories, 20, 30),
+    articles: normalizeBlogArticles(record.articles),
+    layout: normalizeLayout(record.layout, `blog-${index}`)
+  };
 }
 
 function normalizePageEntry(value: unknown, page: Record<string, unknown>): PageEntry {
