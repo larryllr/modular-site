@@ -3964,6 +3964,8 @@ function reorderPageById(sourceId, targetId) {
 function attachPointerSort(handle, group, type, sourceId, container) {
   let startX = 0;
   let startY = 0;
+  let lastX = 0;
+  let lastY = 0;
   let dragging = false;
   let targetId = "";
 
@@ -3979,6 +3981,7 @@ function attachPointerSort(handle, group, type, sourceId, container) {
     document.removeEventListener("pointercancel", finish);
     group.classList.remove("is-dragging");
     clearTargets();
+    targetId = targetId || nearestSortTargetId(container, type, sourceId, lastY);
 
     if (dragging && targetId && targetId !== sourceId) {
       handle.dataset.dragConsumed = "true";
@@ -3992,15 +3995,19 @@ function attachPointerSort(handle, group, type, sourceId, container) {
   };
 
   const move = (event) => {
+    lastX = event.clientX;
+    lastY = event.clientY;
     const distance = Math.hypot(event.clientX - startX, event.clientY - startY);
     if (!dragging && distance < 8) {
       return;
     }
 
+    event.preventDefault();
     dragging = true;
     group.classList.add("is-dragging");
     clearTargets();
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(`[data-${type}-id]`);
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(`[data-${type}-id]`)
+      || sortTargetByPosition(container, type, sourceId, event.clientY);
     targetId = target?.dataset?.[`${type}Id`] || "";
     if (target && targetId !== sourceId) {
       target.classList.add("is-drop-target");
@@ -4012,14 +4019,37 @@ function attachPointerSort(handle, group, type, sourceId, container) {
       return;
     }
 
+    event.preventDefault();
     startX = event.clientX;
     startY = event.clientY;
+    lastX = event.clientX;
+    lastY = event.clientY;
     dragging = false;
     targetId = "";
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", finish);
     document.addEventListener("pointercancel", finish);
   });
+}
+
+function sortTargetByPosition(container, type, sourceId, y) {
+  const targets = [...container.querySelectorAll(`[data-${type}-id]`)]
+    .filter((node) => node.dataset?.[`${type}Id`] !== sourceId);
+
+  if (!targets.length) {
+    return null;
+  }
+
+  return targets.reduce((nearest, node) => {
+    const rect = node.getBoundingClientRect();
+    const distance = Math.abs(y - (rect.top + rect.height / 2));
+    return !nearest || distance < nearest.distance ? { node, distance } : nearest;
+  }, null)?.node || null;
+}
+
+function nearestSortTargetId(container, type, sourceId, y) {
+  const target = sortTargetByPosition(container, type, sourceId, y);
+  return target?.dataset?.[`${type}Id`] || "";
 }
 
 function isDragPayload(event, type) {
