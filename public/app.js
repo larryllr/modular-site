@@ -998,8 +998,10 @@ function renderInsertBar(page, index) {
   comments.addEventListener("click", () => insertSection(page, index, createCommentsSection()));
   const link = button("网站模块", "button", "button");
   link.addEventListener("click", () => insertSection(page, index, createLinkSection()));
+  const blog = button("博客模块", "button", "button");
+  blog.addEventListener("click", () => insertSection(page, index, createBlogSection()));
 
-  bar.append(system, text, image, video, p2p, link, comments);
+  bar.append(system, text, image, video, p2p, link, blog, comments);
   return bar;
 }
 
@@ -1025,6 +1027,8 @@ function renderEditableSection(page, section, index) {
       shell.append(renderEditableP2PSection(section));
     } else if (section.type === "link") {
       shell.append(renderEditableLinkSection(section));
+    } else if (section.type === "blog") {
+      shell.append(renderEditableBlogSection(section));
     } else if (section.type === "comments") {
       shell.append(renderEditableCommentsSection(page, section));
     } else {
@@ -1333,6 +1337,164 @@ function renderEditableLinkSection(section) {
   backgroundRow.append(renderLinkSectionPreview(section));
   card.append(backgroundRow);
   return card;
+}
+
+function renderEditableBlogSection(section) {
+  const card = element("article", "module-card inline-editor-card blog-editor-card");
+  const row = element("div", "admin-row");
+  row.append(
+    field("博客标题", section.title, (value) => {
+      section.title = value;
+    })
+  );
+  row.append(
+    field("分类（逗号分隔）", (section.categories || []).join(", "), (value) => {
+      section.categories = splitTags(value).slice(0, 20);
+      renderAdminEditor();
+    })
+  );
+  card.append(row);
+  card.append(
+    field("博客说明", section.description, (value) => {
+      section.description = value;
+    })
+  );
+  card.append(
+    field("顶部公告", section.notice, (value) => {
+      section.notice = value;
+    }, "显示在博客模块顶部，可以留空。")
+  );
+
+  const profile = element("div", "admin-row");
+  profile.append(
+    field("作者名称", section.profileName, (value) => {
+      section.profileName = value;
+    })
+  );
+  profile.append(
+    imageValueField("作者头像", section.profileImage, (value) => {
+      section.profileImage = value;
+    })
+  );
+  card.append(profile);
+  card.append(
+    field("作者介绍", section.profileDescription, (value) => {
+      section.profileDescription = value;
+    })
+  );
+
+  const actions = element("div", "section-tools blog-editor-actions");
+  const add = button("发布文章", "button primary", "button");
+  add.addEventListener("click", () => {
+    rememberConfigChange();
+    const now = new Date().toISOString();
+    section.articles.unshift({
+      id: crypto.randomUUID(),
+      title: "新文章",
+      summary: "这里填写文章摘要。",
+      body: "这里填写正文。",
+      coverImage: "",
+      category: section.categories?.[0] || "随笔",
+      tags: [],
+      authorRole: isLimitedAdmin() ? "limited" : "admin",
+      authorName: isLimitedAdmin() ? "limited" : "admin",
+      createdAt: now,
+      updatedAt: now,
+      featured: false
+    });
+    renderAdminEditor();
+  });
+  actions.append(add);
+  card.append(actions);
+
+  const articles = element("div", "blog-article-editor-list");
+  if (!section.articles.length) {
+    articles.append(element("p", "empty-state", "还没有文章。"));
+  }
+
+  for (const article of section.articles) {
+    articles.append(renderEditableBlogArticle(section, article));
+  }
+
+  card.append(articles, renderBlogSection(section, true));
+  return card;
+}
+
+function renderEditableBlogArticle(section, article) {
+  const locked = isLimitedAdmin() && article.authorRole === "admin";
+  const item = element("article", locked ? "blog-article-editor is-readonly" : "blog-article-editor");
+  item.append(element("h3", "", article.title || "未命名文章"));
+  item.append(element("p", "form-hint", locked ? "admin 发布，仅 admin 可以编辑。" : `作者：${article.authorName || article.authorRole} · ${formatDateTime(article.updatedAt || article.createdAt)}`));
+
+  const row = element("div", "admin-row");
+  row.append(
+    field("文章标题", article.title, (value) => {
+      if (locked) return;
+      article.title = value;
+      article.updatedAt = new Date().toISOString();
+    })
+  );
+  row.append(
+    field("分类", article.category, (value) => {
+      if (locked) return;
+      article.category = value;
+      article.updatedAt = new Date().toISOString();
+    })
+  );
+  item.append(row);
+
+  item.append(
+    field("摘要", article.summary, (value) => {
+      if (locked) return;
+      article.summary = value;
+      article.updatedAt = new Date().toISOString();
+    })
+  );
+  item.append(
+    imageValueField("封面图片", article.coverImage, (value) => {
+      if (locked) return;
+      article.coverImage = value;
+      article.updatedAt = new Date().toISOString();
+    })
+  );
+  item.append(
+    field("标签（逗号分隔）", (article.tags || []).join(", "), (value) => {
+      if (locked) return;
+      article.tags = splitTags(value).slice(0, 12);
+      article.updatedAt = new Date().toISOString();
+      renderAdminEditor();
+    })
+  );
+  item.append(
+    areaField("正文", article.body, (value) => {
+      if (locked) return;
+      article.body = value;
+      article.updatedAt = new Date().toISOString();
+    })
+  );
+
+  const tools = element("div", "section-tools");
+  const featured = checkbox("首页推荐", Boolean(article.featured), (checked) => {
+    if (locked) return;
+    article.featured = checked;
+    article.updatedAt = new Date().toISOString();
+    renderAdminEditor();
+  });
+  const remove = button("删除文章", "button danger", "button");
+  remove.disabled = locked;
+  remove.addEventListener("click", () => {
+    rememberConfigChange();
+    section.articles = section.articles.filter((item) => item.id !== article.id);
+    renderAdminEditor();
+  });
+  tools.append(featured, remove);
+  item.append(tools);
+
+  for (const control of item.querySelectorAll("input, textarea, select")) {
+    control.disabled = locked;
+  }
+
+  return item;
 }
 
 function renderLinkSectionPreview(section) {
@@ -1878,6 +2040,10 @@ function renderPublicSection(section, context) {
 
   if (section.type === "link") {
     return renderLinkSection(section);
+  }
+
+  if (section.type === "blog") {
+    return renderBlogSection(section, false);
   }
 
   if (section.type === "comments") {
@@ -2433,6 +2599,125 @@ function renderP2PEntrySection(section) {
   link.textContent = "进入房间";
   card.append(header, element("p", "form-hint", `房间：${section.room || section.id}`), link);
   return card;
+}
+
+function renderBlogSection(section, adminPreview = false) {
+  const card = element("article", adminPreview ? "module-card blog-section blog-admin-preview" : "module-card blog-section");
+  const articles = [...(section.articles || [])].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const categories = section.categories?.length ? section.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
+  const featured = articles.filter((article) => article.featured).slice(0, 2);
+  const heroArticles = featured.length ? featured : articles.slice(0, 2);
+
+  const top = element("header", "blog-topbar");
+  top.append(
+    element("strong", "", section.title || "博客"),
+    element("span", "", section.description || "发布文章和记录。")
+  );
+  card.append(top);
+
+  if (section.notice) {
+    const notice = element("div", "blog-notice");
+    notice.append(mark("NB"), element("strong", "", section.notice));
+    card.append(notice);
+  }
+
+  if (!articles.length) {
+    card.append(element("p", "empty-state", "还没有发布文章。"));
+    return card;
+  }
+
+  const hero = element("section", "blog-hero-grid");
+  heroArticles.forEach((article, index) => {
+    hero.append(renderBlogHeroArticle(article, index === 0));
+  });
+  card.append(hero);
+
+  const tabs = element("nav", "blog-tabs");
+  tabs.append(element("span", "is-active", "推荐"));
+  for (const category of categories.slice(0, 8)) {
+    tabs.append(element("span", "", category));
+  }
+  card.append(tabs);
+
+  const body = element("section", "blog-layout");
+  const sidebar = element("aside", "blog-sidebar-card");
+  const avatar = section.profileImage ? document.createElement("img") : null;
+  if (avatar) {
+    avatar.src = section.profileImage;
+    avatar.alt = section.profileName || "作者头像";
+  }
+  sidebar.append(
+    avatar || mark((section.profileName || "站长").slice(0, 2).toUpperCase()),
+    element("h3", "", section.profileName || "站长"),
+    element("p", "", section.profileDescription || "这里是博客作者介绍。")
+  );
+  const tagCloud = element("div", "blog-tag-cloud");
+  for (const tag of collectBlogTags(articles).slice(0, 18)) {
+    tagCloud.append(element("span", "", tag));
+  }
+  sidebar.append(tagCloud);
+
+  const list = element("div", "blog-card-list");
+  articles.forEach((article) => list.append(renderBlogArticleCard(article)));
+  body.append(sidebar, list);
+  card.append(body);
+  return card;
+}
+
+function renderBlogHeroArticle(article, large) {
+  const item = element("article", large ? "blog-hero-card is-large" : "blog-hero-card");
+  if (article.coverImage) {
+    item.style.backgroundImage = `linear-gradient(90deg, rgba(9, 13, 17, 0.72), rgba(9, 13, 17, 0.18)), url("${cssUrl(article.coverImage)}")`;
+  }
+  item.append(
+    element("span", "blog-category", article.category || "文章"),
+    element("h3", "", article.title || "未命名文章"),
+    element("p", "", article.summary || article.body || "还没有摘要。")
+  );
+  return item;
+}
+
+function renderBlogArticleCard(article) {
+  const item = element("article", "blog-article-card");
+  if (article.coverImage) {
+    const image = document.createElement("img");
+    image.src = article.coverImage;
+    image.alt = article.title || "";
+    item.append(image);
+  }
+
+  const content = element("div", "blog-article-content");
+  content.append(
+    element("span", "blog-category", article.category || "文章"),
+    element("h3", "", article.title || "未命名文章"),
+    element("p", "", article.summary || "还没有摘要。"),
+    element("small", "", `${article.authorName || article.authorRole || "作者"} · ${formatDateTime(article.createdAt)}`)
+  );
+
+  const tags = element("div", "blog-tag-cloud compact");
+  for (const tag of article.tags || []) {
+    tags.append(element("span", "", tag));
+  }
+  content.append(tags);
+
+  if (article.body) {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "阅读全文";
+    const body = element("div", "blog-article-body");
+    for (const paragraph of article.body.split(/\n+/).filter(Boolean)) {
+      body.append(element("p", "", paragraph));
+    }
+    details.append(summary, body);
+    content.append(details);
+  }
+
+  item.append(content);
+  return item;
+}
+
+function collectBlogTags(articles) {
+  return [...new Set(articles.flatMap((article) => article.tags || []).filter(Boolean))];
 }
 
 function renderModuleCard(module, context) {
@@ -3005,6 +3290,22 @@ function hydrateSection(section) {
     };
   }
 
+  if (section.type === "blog") {
+    return {
+      id: section.id || crypto.randomUUID(),
+      type: "blog",
+      title: section.title || "博客",
+      description: section.description || "发布文章和记录。",
+      notice: section.notice || "",
+      profileName: section.profileName || "站长",
+      profileDescription: section.profileDescription || "这里是博客作者介绍。",
+      profileImage: section.profileImage || "",
+      categories: Array.isArray(section.categories) ? section.categories : [],
+      articles: Array.isArray(section.articles) ? section.articles.map(hydrateBlogArticle) : [],
+      layout: hydrateLayout(section.layout, "blog")
+    };
+  }
+
   return {
     id: section.id || crypto.randomUUID(),
     type: "text",
@@ -3013,6 +3314,24 @@ function hydrateSection(section) {
     description: section.description || "",
     body: section.body || "",
     layout: hydrateLayout(section.layout, "text")
+  };
+}
+
+function hydrateBlogArticle(article) {
+  const now = new Date().toISOString();
+  return {
+    id: article?.id || crypto.randomUUID(),
+    title: article?.title || "未命名文章",
+    summary: article?.summary || "",
+    body: article?.body || "",
+    coverImage: article?.coverImage || "",
+    category: article?.category || "随笔",
+    tags: Array.isArray(article?.tags) ? article.tags : splitTags(article?.tags || ""),
+    authorRole: article?.authorRole === "admin" ? "admin" : "limited",
+    authorName: article?.authorName || (article?.authorRole === "admin" ? "admin" : "limited"),
+    createdAt: article?.createdAt || now,
+    updatedAt: article?.updatedAt || article?.createdAt || now,
+    featured: Boolean(article?.featured)
   };
 }
 
@@ -3253,6 +3572,22 @@ function createLinkSection() {
   };
 }
 
+function createBlogSection() {
+  return {
+    id: crypto.randomUUID(),
+    type: "blog",
+    title: "博客",
+    description: "发布文章和记录。",
+    notice: "欢迎来到我的博客。",
+    profileName: "站长",
+    profileDescription: "这里是博客作者介绍。",
+    profileImage: "",
+    categories: ["推荐", "教程", "日常"],
+    articles: [],
+    layout: hydrateLayout(null, "blog")
+  };
+}
+
 function insertSection(page, index, section) {
   if (isLimitedAdmin() && page.locked) {
     state.saveStatus = "这个分页面已锁定，低权限管理员不能添加模块。";
@@ -3369,7 +3704,35 @@ function sectionLabel(section) {
     return section.title || "评论模块";
   }
 
+  if (section.type === "blog") {
+    return section.title || "博客模块";
+  }
+
   return section.title || "文本模块";
+}
+
+function splitTags(value) {
+  return String(value || "")
+    .split(/[,，\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 40);
+}
+
+function formatDateTime(value) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) {
+    return "刚刚";
+  }
+
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
 }
 
 function field(label, value, onInput, hint = "") {

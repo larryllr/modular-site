@@ -93,6 +93,35 @@ type LinkSection = {
   layout: SectionLayout;
 };
 
+type BlogArticle = {
+  id: string;
+  title: string;
+  summary: string;
+  body: string;
+  coverImage: string;
+  category: string;
+  tags: string[];
+  authorRole: "admin" | "limited";
+  authorName: string;
+  createdAt: string;
+  updatedAt: string;
+  featured: boolean;
+};
+
+type BlogSection = {
+  id: string;
+  type: "blog";
+  title: string;
+  description: string;
+  notice: string;
+  profileName: string;
+  profileDescription: string;
+  profileImage: string;
+  categories: string[];
+  articles: BlogArticle[];
+  layout: SectionLayout;
+};
+
 type PageEntry = {
   title: string;
   description: string;
@@ -132,7 +161,7 @@ type HomeAnnouncement = {
   durationSeconds: number;
 };
 
-type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | P2PSection | CommentsSection | LinkSection;
+type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | P2PSection | CommentsSection | LinkSection | BlogSection;
 
 type P2PPeer = {
   id: string;
@@ -925,6 +954,10 @@ function mergeLimitedConfig(current: SiteConfig, requested: SiteConfig): SiteCon
         return existing;
       }
 
+      if (existing?.type === "blog" && section.type === "blog") {
+        return mergeLimitedBlogSection(existing, section);
+      }
+
       return {
         ...section,
         layout: {
@@ -958,6 +991,39 @@ function mergeLimitedConfig(current: SiteConfig, requested: SiteConfig): SiteCon
     ...current,
     updatedAt: new Date().toISOString(),
     pages
+  };
+}
+
+function mergeLimitedBlogSection(existing: BlogSection, requested: BlogSection): BlogSection {
+  const existingArticles = new Map(existing.articles.map((article) => [article.id, article]));
+  const requestedIds = new Set(requested.articles.map((article) => article.id));
+  const articles: BlogArticle[] = requested.articles
+    .filter((article) => {
+      const saved = existingArticles.get(article.id);
+      return !saved || saved.authorRole !== "admin";
+    })
+    .map((article) => ({
+      ...article,
+      authorRole: "limited" as const,
+      authorName: article.authorName || "limited"
+    }));
+
+  for (const article of existing.articles) {
+    if (article.authorRole === "admin" && !requestedIds.has(article.id)) {
+      articles.unshift(article);
+    } else if (article.authorRole === "admin" && requestedIds.has(article.id)) {
+      const index = requested.articles.findIndex((item) => item.id === article.id);
+      articles.splice(Math.max(0, index), 0, article);
+    }
+  }
+
+  return {
+    ...requested,
+    layout: {
+      ...requested.layout,
+      locked: existing.layout.locked
+    },
+    articles
   };
 }
 
@@ -1151,7 +1217,49 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
     };
   }
 
+  if (type === "blog") {
+    return {
+      id: asString(record.id) || crypto.randomUUID(),
+      type: "blog",
+      title: limitText(asString(record.title) || "博客", 80),
+      description: limitText(asString(record.description) || "发布文章和记录。", 180),
+      notice: limitText(asString(record.notice), 180),
+      profileName: limitText(asString(record.profileName) || "站长", 60),
+      profileDescription: limitText(asString(record.profileDescription) || "这里是博客作者介绍。", 160),
+      profileImage: normalizeImageSrc(asString(record.profileImage)),
+      categories: normalizeStringList(record.categories, 20, 30),
+      articles: normalizeBlogArticles(record.articles),
+      layout: normalizeLayout(record.layout, "blog")
+    };
+  }
+
   return normalizeBlock(value, index);
+}
+
+function normalizeBlogArticles(value: unknown): BlogArticle[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.slice(0, 200).map((item) => {
+    const record = asRecord(item);
+    const now = new Date().toISOString();
+
+    return {
+      id: asString(record.id) || crypto.randomUUID(),
+      title: limitText(asString(record.title) || "未命名文章", 120),
+      summary: limitText(asString(record.summary), 220),
+      body: limitText(asString(record.body), 8000),
+      coverImage: normalizeImageSrc(asString(record.coverImage)),
+      category: limitText(asString(record.category) || "随笔", 30),
+      tags: normalizeStringList(record.tags, 12, 24),
+      authorRole: asString(record.authorRole) === "admin" ? "admin" : "limited",
+      authorName: limitText(asString(record.authorName) || (asString(record.authorRole) === "admin" ? "admin" : "limited"), 40),
+      createdAt: asString(record.createdAt) || now,
+      updatedAt: asString(record.updatedAt) || now,
+      featured: typeof record.featured === "boolean" ? record.featured : false
+    };
+  });
 }
 
 function normalizePageEntry(value: unknown, page: Record<string, unknown>): PageEntry {
