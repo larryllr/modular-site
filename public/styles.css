@@ -132,6 +132,15 @@ textarea {
   cursor: grabbing;
 }
 
+.admin-page-nav-item[data-link-id] > button {
+  cursor: grab;
+  touch-action: none;
+}
+
+.admin-page-nav-item[data-link-id] > button:active {
+  cursor: grabbing;
+}
+
 .admin-page-settings {
   display: grid;
   gap: 9px;

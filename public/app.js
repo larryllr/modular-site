@@ -330,42 +330,16 @@ function renderAdminEditor() {
     group.dataset.linkId = link.id;
     const item = document.createElement("button");
     item.type = "button";
-    item.draggable = true;
+    item.draggable = false;
     item.title = "按住拖动可调整网站入口顺序";
     item.classList.toggle("is-active", state.selectedItemType === "link" && link.id === state.selectedLinkId);
     item.append(linkMark(link), textBlock(link.title, externalLinkSubtitle(link)));
-    item.addEventListener("dragstart", (event) => {
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", `link:${link.id}`);
-      group.classList.add("is-dragging");
-    });
-    item.addEventListener("dragend", () => {
-      group.classList.remove("is-dragging");
-      for (const node of pageNav.querySelectorAll(".admin-page-nav-item")) {
-        node.classList.remove("is-drop-target");
-      }
-    });
-    group.addEventListener("dragover", (event) => {
-      if (!isDragPayload(event, "link")) {
-        return;
-      }
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      group.classList.add("is-drop-target");
-    });
-    group.addEventListener("dragleave", () => {
-      group.classList.remove("is-drop-target");
-    });
-    group.addEventListener("drop", (event) => {
-      const sourceId = readDragPayload(event, "link");
-      if (!sourceId) {
-        return;
-      }
-      event.preventDefault();
-      group.classList.remove("is-drop-target");
-      reorderLinkById(sourceId, link.id);
-    });
+    attachPointerSort(item, group, "link", link.id, pageNav);
     item.addEventListener("click", () => {
+      if (item.dataset.dragConsumed === "true") {
+        item.dataset.dragConsumed = "";
+        return;
+      }
       state.selectedItemType = "link";
       state.selectedLinkId = link.id;
       state.expandedSettings = "";
@@ -1726,8 +1700,10 @@ function renderSaveBar(selectedItem) {
   });
 
   const save = button("保存配置", "button primary", "button");
+  save.dataset.saveButton = "true";
   save.addEventListener("click", saveAdminConfig);
   const undo = button("撤销", "button", "button");
+  undo.dataset.undoButton = "true";
   undo.disabled = state.undoStack.length === 0;
   undo.addEventListener("click", undoAdminChange);
   bar.append(element("span", "save-status", state.saveStatus), undo, preview, save);
@@ -1759,7 +1735,7 @@ function previewTargetFor(selectedItem) {
 
 async function saveAdminConfig() {
   state.saveStatus = "保存中...";
-  renderAdminEditor();
+  setSaveBarStatus(state.saveStatus, true);
 
   try {
     const payload = await api.postJson("/api/admin/config", { config: state.config }, true);
@@ -1770,10 +1746,26 @@ async function saveAdminConfig() {
     state.undoFingerprint = "";
     ensureAdminSelection();
     state.saveStatus = `已保存 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
-    renderAdminEditor();
+    setSaveBarStatus(state.saveStatus, false);
   } catch (error) {
     state.saveStatus = error.message;
-    renderAdminEditor();
+    setSaveBarStatus(state.saveStatus, false);
+  }
+}
+
+function setSaveBarStatus(message, saving = false) {
+  const status = document.querySelector(".save-status");
+  const save = document.querySelector("[data-save-button='true']");
+  const undo = document.querySelector("[data-undo-button='true']");
+  if (status) {
+    status.textContent = message;
+  }
+  if (save) {
+    save.disabled = saving;
+    save.textContent = saving ? "保存中..." : "保存配置";
+  }
+  if (undo && !saving) {
+    undo.disabled = state.undoStack.length === 0;
   }
 }
 
@@ -3967,6 +3959,67 @@ function reorderPageById(sourceId, targetId) {
   state.selectedPageId = page.id;
   state.expandedSettings = "";
   renderAdminEditor();
+}
+
+function attachPointerSort(handle, group, type, sourceId, container) {
+  let startX = 0;
+  let startY = 0;
+  let dragging = false;
+  let targetId = "";
+
+  const clearTargets = () => {
+    for (const node of container.querySelectorAll(".admin-page-nav-item")) {
+      node.classList.remove("is-drop-target");
+    }
+  };
+
+  const finish = () => {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", finish);
+    document.removeEventListener("pointercancel", finish);
+    group.classList.remove("is-dragging");
+    clearTargets();
+
+    if (dragging && targetId && targetId !== sourceId) {
+      handle.dataset.dragConsumed = "true";
+      if (type === "link") {
+        reorderLinkById(sourceId, targetId);
+      }
+    }
+
+    dragging = false;
+    targetId = "";
+  };
+
+  const move = (event) => {
+    const distance = Math.hypot(event.clientX - startX, event.clientY - startY);
+    if (!dragging && distance < 8) {
+      return;
+    }
+
+    dragging = true;
+    group.classList.add("is-dragging");
+    clearTargets();
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest(`[data-${type}-id]`);
+    targetId = target?.dataset?.[`${type}Id`] || "";
+    if (target && targetId !== sourceId) {
+      target.classList.add("is-drop-target");
+    }
+  };
+
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || isLimitedAdmin()) {
+      return;
+    }
+
+    startX = event.clientX;
+    startY = event.clientY;
+    dragging = false;
+    targetId = "";
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", finish);
+    document.addEventListener("pointercancel", finish);
+  });
 }
 
 function isDragPayload(event, type) {
