@@ -2798,14 +2798,12 @@ function renderBlogPage(page) {
   const featured = articles.filter((article) => article.featured).slice(0, 2);
   const heroArticles = featured.length ? featured : articles.slice(0, 2);
   const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
+  const filterKey = `cloudflare-modular-site.blog-filter.${page.slug}`;
+  const activeFilter = localStorage.getItem(filterKey) || "推荐";
+  const filteredArticles = filterBlogArticles(articles, activeFilter);
 
   const nav = element("header", "blog-page-nav");
   nav.append(element("strong", "", `${page.title || "BLOG"} | BLOG`));
-  const links = element("nav", "");
-  for (const label of ["文库", "社交", "我的"]) {
-    links.append(element("span", "", label));
-  }
-  nav.append(links);
   main.append(nav);
 
   if (blog.notice) {
@@ -2831,11 +2829,14 @@ function renderBlogPage(page) {
   main.append(hero);
 
   const tabs = element("nav", "blog-page-tabs");
-  tabs.append(element("span", "is-active", "推荐"));
-  for (const category of categories.slice(0, 7)) {
-    tabs.append(element("span", "", category));
+  for (const label of ["推荐", ...categories.slice(0, 7), "更多"]) {
+    const tab = button(label, activeFilter === label ? "blog-tab-button is-active" : "blog-tab-button", "button");
+    tab.addEventListener("click", () => {
+      localStorage.setItem(filterKey, label);
+      renderPublicSite();
+    });
+    tabs.append(tab);
   }
-  tabs.append(element("span", "", "更多"));
   main.append(tabs);
 
   if (isAdminSession()) {
@@ -2863,12 +2864,27 @@ function renderBlogPage(page) {
   const list = element("section", "blog-page-articles");
   if (!articles.length) {
     list.append(element("p", "empty-state", "还没有发布文章。管理员进入后台后可以发布第一篇。"));
+  } else if (!filteredArticles.length) {
+    list.append(element("p", "empty-state", "这个分类下还没有文章。"));
   } else {
-    articles.forEach((article) => list.append(renderBlogArticleCard(article)));
+    filteredArticles.forEach((article) => list.append(renderBlogArticleCard(article)));
   }
   layout.append(profile, list);
   main.append(layout);
   app.append(main);
+}
+
+function filterBlogArticles(articles, filter) {
+  if (filter === "推荐") {
+    const featured = articles.filter((article) => article.featured);
+    return featured.length ? featured : articles;
+  }
+
+  if (filter === "更多") {
+    return articles;
+  }
+
+  return articles.filter((article) => article.category === filter);
 }
 
 function renderBlogQuickPublisher(page, blog) {
