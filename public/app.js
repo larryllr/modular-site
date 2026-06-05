@@ -4744,14 +4744,19 @@ function imageValueField(label, value, onChange) {
 
     state.saveStatus = "正在处理图片...";
     rememberConfigChange();
-    renderAdminEditor();
+    setSaveBarStatus(state.saveStatus, true);
+    upload.disabled = true;
 
     try {
       const dataUrl = await imageFileToDataUrl(file);
+      input.value = dataUrl;
       onChange(dataUrl);
       state.saveStatus = "图片已加入预览，记得保存配置。";
     } catch (error) {
       state.saveStatus = error.message;
+    } finally {
+      upload.disabled = false;
+      upload.value = "";
     }
 
     renderAdminEditor();
