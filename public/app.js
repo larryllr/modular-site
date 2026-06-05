@@ -2795,17 +2795,17 @@ function renderBlogSection(section, adminPreview = false) {
 function renderBlogPage(page, articleId = "") {
   document.title = page.title;
   const blog = hydrateBlogSection(page.blog);
-  const sortedArticles = sortBlogArticles(blog.articles);
-  const currentArticle = articleId ? sortedArticles.find((article) => article.id.toLowerCase() === articleId.toLowerCase()) : null;
+  const orderedArticles = blog.articles || [];
+  const currentArticle = articleId ? orderedArticles.find((article) => article.id.toLowerCase() === articleId.toLowerCase()) : null;
 
   if (articleId) {
-    renderBlogArticlePage(page, blog, currentArticle, sortedArticles);
+    renderBlogArticlePage(page, blog, currentArticle, orderedArticles);
     return;
   }
 
   const main = element("main", "workspace blog-page-workspace");
   applyPageBackground(main, page.backgroundImage);
-  const articles = sortedArticles;
+  const articles = orderedArticles;
   const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
   const filterKey = `cloudflare-modular-site.blog-filter.${page.slug}`;
   const activeFilter = localStorage.getItem(filterKey) || "推荐";
@@ -2865,7 +2865,31 @@ function sortBlogArticles(articles) {
 }
 
 function renderBlogListItem(page, blog, article) {
-  const item = element("article", "blog-list-item");
+  const editable = canCurrentAdminEditArticle(article);
+  const item = element("article", editable ? "blog-list-item is-admin-draggable" : "blog-list-item");
+  item.dataset.articleId = article.id;
+  if (editable) {
+    item.draggable = true;
+    item.title = "拖拽可调整文章顺序";
+    item.addEventListener("dragstart", (event) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/blog-public-article-id", article.id);
+      item.classList.add("is-dragging");
+    });
+    item.addEventListener("dragend", () => item.classList.remove("is-dragging"));
+    item.addEventListener("dragover", (event) => {
+      if (!event.dataTransfer.types.includes("text/blog-public-article-id")) return;
+      event.preventDefault();
+      item.classList.add("is-drop-target");
+    });
+    item.addEventListener("dragleave", () => item.classList.remove("is-drop-target"));
+    item.addEventListener("drop", async (event) => {
+      const sourceId = event.dataTransfer.getData("text/blog-public-article-id");
+      event.preventDefault();
+      item.classList.remove("is-drop-target");
+      await reorderBlogArticleFromPublicPage(page, sourceId, article.id);
+    });
+  }
   const link = document.createElement("a");
   link.className = "blog-list-cover";
   link.href = `/${page.slug}/${article.id}`;
@@ -2895,14 +2919,22 @@ function renderBlogListItem(page, blog, article) {
   }
   content.append(tags);
 
-  if (isAdminSession()) {
+  if (editable) {
+    const actions = element("div", "blog-list-admin-actions");
+    const edit = element("a", "button blog-edit-button", "编辑");
+    edit.href = `/${page.slug}/${article.id}?edit=1`;
     const remove = button("删除", "button danger blog-delete-button", "button");
     remove.addEventListener("click", () => deleteBlogArticle(page, article.id));
-    content.append(remove);
+    actions.append(edit, remove);
+    content.append(actions);
   }
 
   item.append(link, content);
   return item;
+}
+
+function canCurrentAdminEditArticle(article) {
+  return isAdminSession() && !(isLimitedAdmin() && article.authorRole === "admin");
 }
 
 function renderBlogAuthorFooter(blog) {
@@ -2959,9 +2991,18 @@ function renderBlogArticlePage(page, blog, article, articles) {
   if (article.summary) {
     content.append(element("p", "lead", article.summary));
   }
-  content.append(renderArticleContent(article));
+  if (canCurrentAdminEditArticle(article) && new URLSearchParams(window.location.search).get("edit") === "1") {
+    content.append(renderArticlePublicEditor(page, article));
+  } else {
+    content.append(renderArticleContent(article));
+  }
   if (isAdminSession()) {
     const actions = element("div", "blog-article-admin-actions");
+    if (canCurrentAdminEditArticle(article)) {
+      const edit = element("a", "button", new URLSearchParams(window.location.search).get("edit") === "1" ? "退出编辑" : "编辑文章");
+      edit.href = new URLSearchParams(window.location.search).get("edit") === "1" ? `/${page.slug}/${article.id}` : `/${page.slug}/${article.id}?edit=1`;
+      actions.append(edit);
+    }
     const remove = button("删除这篇文章", "button danger", "button");
     remove.addEventListener("click", () => deleteBlogArticle(page, article.id));
     actions.append(remove);
@@ -2981,6 +3022,57 @@ function renderBlogArticlePage(page, blog, article, articles) {
   comments.classList.add("blog-article-comments");
   main.append(layout, comments);
   app.append(main);
+}
+
+function renderArticlePublicEditor(page, article) {
+  const form = element("form", "blog-public-editor");
+  form.append(element("h2", "", "编辑文章"));
+  const title = publisherInput("文章标题", "input", "");
+  title.control.value = article.title || "";
+  const category = publisherInput("分类", "input", "");
+  category.control.value = article.category || "";
+  const tags = publisherInput("标签", "input", "用逗号分隔");
+  tags.control.value = (article.tags || []).join(", ");
+  const cover = publisherImageInput("封面图片", "粘贴图片地址，可留空");
+  cover.control.value = article.coverImage || "";
+  const summary = publisherInput("简介", "textarea", "");
+  summary.control.value = article.summary || "";
+  const body = publisherRichTextInput("正文", "像文档一样编辑正文。");
+  body.control.innerHTML = articleBodyHtml(article);
+  const feedback = element("p", "form-hint");
+  const save = button("保存文章", "button primary", "submit");
+
+  const grid = element("div", "blog-publisher-grid");
+  grid.append(title.field, category.field, tags.field, cover.field, summary.field, body.field);
+  const actions = element("div", "blog-publisher-actions");
+  actions.append(save, feedback);
+  form.append(grid, actions);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    save.textContent = "保存中...";
+    feedback.textContent = "正在保存文章...";
+
+    try {
+      await updateBlogArticleFromPublicPage(page, article.id, (target) => {
+        target.title = title.control.value.trim() || "未命名文章";
+        target.category = category.control.value.trim() || "随笔";
+        target.tags = splitTags(tags.control.value).slice(0, 12);
+        target.coverImage = cover.control.value.trim();
+        target.summary = summary.control.value.trim();
+        target.bodyHtml = normalizeEditorHtml(body.control.innerHTML);
+        target.body = htmlToPlainText(target.bodyHtml);
+        target.updatedAt = new Date().toISOString();
+      });
+      window.history.replaceState(null, "", `/${page.slug}/${article.id}`);
+      renderPublicSite();
+    } catch (error) {
+      feedback.textContent = error.message;
+      save.disabled = false;
+      save.textContent = "保存文章";
+    }
+  });
+  return form;
 }
 
 function renderArticleAuthorLine(blog, article) {
@@ -3020,6 +3112,49 @@ async function deleteBlogArticle(page, articleId) {
   } catch (error) {
     alert(error.message);
   }
+}
+
+async function reorderBlogArticleFromPublicPage(page, sourceId, targetId) {
+  if (!sourceId || !targetId || sourceId === targetId) {
+    return;
+  }
+
+  await updateBlogFromPublicPage(page, (blog) => {
+    reorderArticleArray(blog.articles, sourceId, targetId);
+  });
+  renderPublicSite();
+}
+
+async function updateBlogArticleFromPublicPage(page, articleId, updater) {
+  await updateBlogFromPublicPage(page, (blog) => {
+    const target = blog.articles.find((article) => article.id === articleId);
+    if (!target) {
+      throw new Error("没有找到这篇文章。");
+    }
+    updater(target);
+  });
+}
+
+async function updateBlogFromPublicPage(page, updater) {
+  const config = hydrateConfig(state.config);
+  const targetPage = config.pages.find((item) => item.id === page.id);
+  if (!targetPage) {
+    throw new Error("没有找到当前博客分页面。");
+  }
+  targetPage.blog = hydrateBlogSection(targetPage.blog);
+  updater(targetPage.blog);
+  const payload = await api.postJson("/api/admin/config", { config }, true);
+  state.config = hydrateConfig(payload.config);
+}
+
+function reorderArticleArray(articles, sourceId, targetId) {
+  const sourceIndex = articles.findIndex((article) => article.id === sourceId);
+  const targetIndex = articles.findIndex((article) => article.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return;
+  }
+  const [article] = articles.splice(sourceIndex, 1);
+  articles.splice(targetIndex, 0, article);
 }
 
 function filterBlogArticles(articles, filter) {
@@ -3227,22 +3362,24 @@ function createRichTextEditor({ html = "", placeholder = "", disabled = false, o
   const imageInput = document.createElement("input");
   imageInput.type = "file";
   imageInput.accept = "image/*";
+  imageInput.multiple = true;
   imageInput.hidden = true;
   imageInput.addEventListener("change", async () => {
-    const file = imageInput.files?.[0];
-    if (!file) return;
-    await insertFileIntoEditor(editor, file);
+    const files = [...(imageInput.files || [])];
+    if (!files.length) return;
+    await insertFilesIntoEditor(editor, files, restoreSelection);
     imageInput.value = "";
     notify();
   });
 
   const fileInput = document.createElement("input");
   fileInput.type = "file";
+  fileInput.multiple = true;
   fileInput.hidden = true;
   fileInput.addEventListener("change", async () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    await insertFileIntoEditor(editor, file);
+    const files = [...(fileInput.files || [])];
+    if (!files.length) return;
+    await insertFilesIntoEditor(editor, files, restoreSelection);
     fileInput.value = "";
     notify();
   });
@@ -3266,22 +3403,53 @@ function createRichTextEditor({ html = "", placeholder = "", disabled = false, o
     const next = normalizeEditorHtml(editor.innerHTML);
     onChange(next);
   };
+  let savedRange = null;
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection?.rangeCount && editor.contains(selection.anchorNode)) {
+      savedRange = selection.getRangeAt(0).cloneRange();
+    }
+  };
+  const restoreSelection = () => {
+    if (!savedRange) {
+      editor.focus();
+      return;
+    }
+    editor.focus();
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(savedRange);
+  };
 
   if (!disabled) {
     trackUndoOnEdit(editor);
-    editor.addEventListener("input", notify);
+    editor.addEventListener("input", () => {
+      saveSelection();
+      notify();
+    });
+    editor.addEventListener("keyup", saveSelection);
+    editor.addEventListener("mouseup", saveSelection);
+    editor.addEventListener("focus", saveSelection);
     editor.addEventListener("paste", async (event) => {
-      const files = [...(event.clipboardData?.files || [])];
+      const files = clipboardFiles(event.clipboardData);
       if (!files.length) {
         return;
       }
 
       event.preventDefault();
-      for (const file of files) {
-        await insertFileIntoEditor(editor, file);
-      }
+      await insertFilesIntoEditor(editor, files, restoreSelection);
       notify();
     });
+    editor.addEventListener("drop", async (event) => {
+      const files = [...(event.dataTransfer?.files || [])];
+      if (!files.length) {
+        return;
+      }
+      event.preventDefault();
+      await insertFilesIntoEditor(editor, files, restoreSelection);
+      notify();
+    });
+    editor.addEventListener("dragover", (event) => event.preventDefault());
     editor.addEventListener("keydown", (event) => {
       if (!event.ctrlKey && !event.metaKey) return;
       const key = event.key.toLowerCase();
@@ -3296,8 +3464,28 @@ function createRichTextEditor({ html = "", placeholder = "", disabled = false, o
   return { wrapper, editor };
 }
 
+function clipboardFiles(clipboardData) {
+  const files = [...(clipboardData?.files || [])];
+  for (const item of clipboardData?.items || []) {
+    if (item.kind !== "file") {
+      continue;
+    }
+    const file = item.getAsFile();
+    if (file && !files.includes(file)) {
+      files.push(file);
+    }
+  }
+  return files;
+}
+
+async function insertFilesIntoEditor(editor, files, restoreSelection) {
+  restoreSelection();
+  for (const file of files) {
+    await insertFileIntoEditor(editor, file);
+  }
+}
+
 async function insertFileIntoEditor(editor, file) {
-  editor.focus();
   const dataUrl = file.type.startsWith("image/") ? await imageFileToDataUrl(file) : await genericFileToDataUrl(file);
   if (file.type.startsWith("image/")) {
     document.execCommand("insertHTML", false, `<figure><img src="${escapeAttribute(dataUrl)}" alt="${escapeAttribute(file.name)}"><figcaption>${escapeHtml(file.name)}</figcaption></figure><p><br></p>`);
@@ -3371,7 +3559,7 @@ function renderBlogPagePreview(page) {
   wrapper.append(element("p", "", "保存后用户打开这个分页面会看到下面这种整页博客布局，下面圈出来的头部区域可以直接编辑。"));
   const preview = element("div", "blog-page-preview");
   const blog = hydrateBlogSection(page.blog);
-  const articles = sortBlogArticles(blog.articles);
+  const articles = blog.articles || [];
   const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
   preview.append(renderBlogPreviewInlineEditor(page, blog));
   const tabs = element("nav", "blog-page-tabs");
@@ -4746,8 +4934,7 @@ function reorderBlogArticle(section, sourceId, targetId) {
   }
 
   rememberConfigChange();
-  const [article] = section.articles.splice(sourceIndex, 1);
-  section.articles.splice(targetIndex, 0, article);
+  reorderArticleArray(section.articles, sourceId, targetId);
   renderAdminEditor();
 }
 
