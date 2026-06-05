@@ -1404,7 +1404,6 @@ function renderEditableBlogSection(section) {
   row.append(
     field("分类（逗号分隔）", (section.categories || []).join(", "), (value) => {
       section.categories = splitTags(value).slice(0, 20);
-      renderAdminEditor();
     })
   );
   card.append(row);
@@ -1552,7 +1551,6 @@ function renderEditableBlogArticle(section, article, listNode = null) {
       if (locked) return;
       article.tags = splitTags(value).slice(0, 12);
       article.updatedAt = new Date().toISOString();
-      renderAdminEditor();
     })
   );
   item.append(
@@ -2840,6 +2838,10 @@ function renderBlogPage(page) {
   tabs.append(element("span", "", "更多"));
   main.append(tabs);
 
+  if (isAdminSession()) {
+    main.append(renderBlogQuickPublisher(page, blog));
+  }
+
   const layout = element("section", "blog-page-layout");
   const profile = element("aside", "blog-profile-panel");
   const avatar = blog.profileImage ? document.createElement("img") : null;
@@ -2867,6 +2869,117 @@ function renderBlogPage(page) {
   layout.append(profile, list);
   main.append(layout);
   app.append(main);
+}
+
+function renderBlogQuickPublisher(page, blog) {
+  const panel = element("section", "blog-publisher-panel");
+  const head = element("div", "blog-publisher-head");
+  const copy = element("div");
+  copy.append(
+    element("p", "eyebrow", "Admin Publish"),
+    element("h2", "", "快速发布文章"),
+    element("p", "", "已登录管理员可直接在当前博客分页面发布，保存后立即同步到 Cloudflare。")
+  );
+  const editLink = element("a", "button", "进入完整编辑");
+  editLink.href = "/admin";
+  head.append(
+    copy,
+    editLink
+  );
+
+  const form = element("form", "blog-publisher-form");
+  const title = publisherInput("文章标题", "input", "例如：今天的新记录");
+  const category = publisherInput("分类", "input", blog.categories?.[0] || "随笔");
+  const tags = publisherInput("标签", "input", "用逗号分隔");
+  const cover = publisherInput("封面图片", "input", "粘贴图片地址，可留空");
+  const summary = publisherInput("简介", "textarea", "一两句话说明这篇文章讲什么。");
+  const body = publisherInput("正文", "textarea", "写下正文内容。");
+  body.control.rows = 8;
+  const featured = checkbox("设为推荐文章", false, () => {});
+  const submit = button("发布并保存", "button primary", "submit");
+  const feedback = element("p", "form-hint");
+
+  const grid = element("div", "blog-publisher-grid");
+  grid.append(title.field, category.field, tags.field, cover.field, summary.field, body.field);
+  const actions = element("div", "blog-publisher-actions");
+  actions.append(featured, submit, feedback);
+  form.append(grid, actions);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const articleTitle = title.control.value.trim();
+
+    if (!articleTitle) {
+      feedback.textContent = "先填文章标题。";
+      title.control.focus();
+      return;
+    }
+
+    submit.disabled = true;
+    submit.textContent = "保存中...";
+    feedback.textContent = "正在发布文章...";
+
+    const now = new Date().toISOString();
+    const article = {
+      id: crypto.randomUUID(),
+      title: articleTitle,
+      summary: summary.control.value.trim(),
+      body: body.control.value.trim(),
+      coverImage: cover.control.value.trim(),
+      category: category.control.value.trim() || "随笔",
+      tags: splitTags(tags.control.value).slice(0, 12),
+      authorRole: isLimitedAdmin() ? "limited" : "admin",
+      authorName: isLimitedAdmin() ? "limited" : "admin",
+      createdAt: now,
+      updatedAt: now,
+      featured: Boolean(featured.querySelector("input")?.checked)
+    };
+
+    const config = hydrateConfig(state.config);
+    const targetPage = config.pages.find((item) => item.id === page.id);
+    if (!targetPage) {
+      feedback.textContent = "没有找到当前博客分页面。";
+      submit.disabled = false;
+      submit.textContent = "发布并保存";
+      return;
+    }
+
+    targetPage.blog = hydrateBlogSection(targetPage.blog);
+    targetPage.blog.articles.unshift(article);
+    if (!targetPage.blog.categories.includes(article.category)) {
+      targetPage.blog.categories.unshift(article.category);
+    }
+
+    try {
+      const payload = await api.postJson("/api/admin/config", { config }, true);
+      state.config = hydrateConfig(payload.config);
+      state.adminRole = payload.role || state.adminRole;
+      localStorage.setItem(adminRoleKey, state.adminRole);
+      feedback.textContent = "已发布。";
+      renderPublicSite();
+    } catch (error) {
+      feedback.textContent = error.message;
+      submit.disabled = false;
+      submit.textContent = "发布并保存";
+    }
+  });
+
+  panel.append(head, form);
+  return panel;
+}
+
+function publisherInput(label, type, placeholder) {
+  const fieldNode = element("label", "field blog-publisher-field");
+  fieldNode.append(element("span", "", label));
+  const control = type === "textarea" ? document.createElement("textarea") : document.createElement("input");
+  control.className = type === "textarea" ? "textarea" : "input";
+  control.placeholder = placeholder || "";
+  fieldNode.append(control);
+  return { field: fieldNode, control };
+}
+
+function isAdminSession() {
+  return Boolean(state.token);
 }
 
 function renderBlogPagePreview(page) {
