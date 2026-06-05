@@ -2969,7 +2969,17 @@ function renderBlogArticlePage(page, blog, article, articles) {
   }
 
   layout.append(aside, content);
-  main.append(layout);
+  const comments = renderCommentsSection(
+    { slug: `${page.slug}/${article.id}` },
+    {
+      title: "文章评论",
+      description: "留下你的想法。",
+      listHeight: 360
+    },
+    isAdminSession()
+  );
+  comments.classList.add("blog-article-comments");
+  main.append(layout, comments);
   app.append(main);
 }
 
@@ -3003,6 +3013,9 @@ async function deleteBlogArticle(page, articleId) {
   try {
     const payload = await api.postJson("/api/admin/config", { config }, true);
     state.config = hydrateConfig(payload.config);
+    if (getRouteSlug() === `${page.slug}/${articleId}`) {
+      window.history.replaceState(null, "", `/${page.slug}`);
+    }
     renderPublicSite();
   } catch (error) {
     alert(error.message);
@@ -3136,39 +3149,76 @@ function isAdminSession() {
 function renderBlogPagePreview(page) {
   const wrapper = element("section", "admin-panel blog-page-preview-panel");
   wrapper.append(element("h2", "", "博客页面预览"));
-  wrapper.append(element("p", "", "保存后用户打开这个分页面会看到下面这种整页博客布局。"));
+  wrapper.append(element("p", "", "保存后用户打开这个分页面会看到下面这种整页博客布局，下面圈出来的头部区域可以直接编辑。"));
   const preview = element("div", "blog-page-preview");
   const blog = hydrateBlogSection(page.blog);
-  const articles = [...blog.articles];
+  const articles = sortBlogArticles(blog.articles);
   const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
-  const nav = element("header", "blog-page-nav");
-  nav.append(element("strong", "", `${page.title || "BLOG"} | BLOG`));
-  nav.append(element("nav", "", "文库  社交  我的"));
-  preview.append(nav);
-  if (blog.notice) {
-    const notice = element("section", "blog-page-notice");
-    notice.append(mark("NB"), element("strong", "", blog.notice), element("span", "", "›"));
-    preview.append(notice);
-  }
-  const hero = element("section", "blog-page-hero");
-  const intro = element("article", "blog-page-intro");
-  intro.append(element("h1", "", blog.description || page.description), element("p", "", page.slug.toUpperCase()));
-  const quick = element("div", "blog-quick-links");
-  categories.slice(0, 4).forEach((label) => quick.append(element("span", "", label)));
-  intro.append(quick);
-  hero.append(intro);
-  if (articles[0]) hero.append(renderBlogHeroArticle(articles[0], true));
-  preview.append(hero);
+  preview.append(renderBlogPreviewInlineEditor(page, blog));
   const tabs = element("nav", "blog-page-tabs");
   tabs.append(element("span", "is-active", "推荐"));
   categories.slice(0, 7).forEach((label) => tabs.append(element("span", "", label)));
   preview.append(tabs);
   const list = element("section", "blog-page-articles");
-  articles.slice(0, 4).forEach((article) => list.append(renderBlogArticleCard(article)));
+  articles.slice(0, 4).forEach((article) => list.append(renderBlogListItem(page, blog, article)));
   if (!articles.length) list.append(element("p", "empty-state", "还没有发布文章。"));
   preview.append(list);
   wrapper.append(preview);
   return wrapper;
+}
+
+function renderBlogPreviewInlineEditor(page, blog) {
+  const panel = element("section", "blog-preview-editor");
+  const nav = element("header", "blog-page-nav blog-preview-nav");
+  const titleInput = blogPreviewControl("博客名称", page.title || "", (value) => {
+    page.title = value;
+  });
+  nav.append(titleInput.field, element("span", "", "BLOG"));
+
+  const notice = element("section", "blog-page-notice blog-preview-notice");
+  notice.append(mark("NB"));
+  const noticeInput = blogPreviewControl("公告", blog.notice || "", (value) => {
+    blog.notice = value;
+    page.blog = blog;
+  });
+  notice.append(noticeInput.field, element("span", "", "›"));
+
+  const hero = element("section", "blog-page-hero blog-preview-hero");
+  const intro = element("article", "blog-page-intro blog-preview-intro");
+  const descriptionInput = blogPreviewControl("博客介绍", blog.description || page.description || "", (value) => {
+    blog.description = value;
+    page.blog = blog;
+  }, "textarea");
+  const slugInput = blogPreviewControl("页面后缀", page.slug || "", (value) => {
+    page.slug = slugify(value);
+  });
+  const categoriesInput = blogPreviewControl("分类", (blog.categories || []).join(", "), (value) => {
+    blog.categories = splitTags(value);
+    page.blog = blog;
+  });
+  intro.append(descriptionInput.field, slugInput.field, categoriesInput.field);
+  hero.append(intro);
+
+  panel.append(nav, notice, hero);
+  return panel;
+}
+
+function blogPreviewControl(label, value, onChange, type = "input") {
+  const field = element("label", "blog-preview-field");
+  field.append(element("span", "", label));
+  const control = type === "textarea" ? document.createElement("textarea") : document.createElement("input");
+  control.value = value;
+  if (type === "textarea") {
+    control.rows = 2;
+  }
+  trackUndoOnEdit(control);
+  control.addEventListener("input", () => {
+    onChange(control.value);
+    state.saveStatus = "有未保存修改。";
+    setSaveBarStatus(state.saveStatus);
+  });
+  field.append(control);
+  return { field, control };
 }
 
 function renderBlogHeroArticle(article, large) {
