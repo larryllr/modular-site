@@ -3055,7 +3055,7 @@ function renderBlogQuickPublisher(page, blog) {
   const title = publisherInput("文章标题", "input", "例如：今天的新记录");
   const category = publisherInput("分类", "input", blog.categories?.[0] || "随笔");
   const tags = publisherInput("标签", "input", "用逗号分隔");
-  const cover = publisherInput("封面图片", "input", "粘贴图片地址，可留空");
+  const cover = publisherImageInput("封面图片", "粘贴图片地址，可留空");
   const summary = publisherInput("简介", "textarea", "一两句话说明这篇文章讲什么。");
   const body = publisherInput("正文", "textarea", "写下正文内容。");
   body.control.rows = 8;
@@ -3139,6 +3139,42 @@ function publisherInput(label, type, placeholder) {
   control.className = type === "textarea" ? "textarea" : "input";
   control.placeholder = placeholder || "";
   fieldNode.append(control);
+  return { field: fieldNode, control };
+}
+
+function publisherImageInput(label, placeholder) {
+  const fieldNode = element("div", "field blog-publisher-field blog-publisher-image-field");
+  fieldNode.append(element("span", "", label));
+  const control = document.createElement("input");
+  control.className = "input";
+  control.placeholder = placeholder || "";
+
+  const upload = document.createElement("input");
+  upload.type = "file";
+  upload.accept = "image/*";
+  const hint = element("small", "", "可粘贴图片地址，也可以选择本地图片。");
+  upload.addEventListener("change", async () => {
+    const file = upload.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    upload.disabled = true;
+    hint.textContent = "正在处理图片...";
+
+    try {
+      control.value = await imageFileToDataUrl(file);
+      hint.textContent = "封面已上传到输入框，点击发布并保存即可。";
+    } catch (error) {
+      hint.textContent = error.message;
+    } finally {
+      upload.disabled = false;
+      upload.value = "";
+    }
+  });
+
+  fieldNode.append(control, upload, hint);
   return { field: fieldNode, control };
 }
 
