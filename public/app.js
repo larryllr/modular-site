@@ -1446,6 +1446,7 @@ function renderEditableBlogSection(section) {
       title: "新文章",
       summary: "这里填写文章摘要。",
       body: "这里填写正文。",
+      bodyHtml: "<p>这里填写正文。</p>",
       coverImage: "",
       category: section.categories?.[0] || "随笔",
       tags: [],
@@ -1554,11 +1555,12 @@ function renderEditableBlogArticle(section, article, listNode = null) {
     })
   );
   item.append(
-    areaField("正文", article.body, (value) => {
+    richTextEditorField("正文", articleBodyHtml(article), (value) => {
       if (locked) return;
-      article.body = value;
+      article.bodyHtml = value;
+      article.body = htmlToPlainText(value);
       article.updatedAt = new Date().toISOString();
-    })
+    }, locked)
   );
 
   const tools = element("div", "section-tools");
@@ -2957,9 +2959,7 @@ function renderBlogArticlePage(page, blog, article, articles) {
   if (article.summary) {
     content.append(element("p", "lead", article.summary));
   }
-  for (const paragraph of (article.body || "").split(/\n+/).filter(Boolean)) {
-    content.append(element("p", "", paragraph));
-  }
+  content.append(renderArticleContent(article));
   if (isAdminSession()) {
     const actions = element("div", "blog-article-admin-actions");
     const remove = button("删除这篇文章", "button danger", "button");
@@ -3057,8 +3057,7 @@ function renderBlogQuickPublisher(page, blog) {
   const tags = publisherInput("标签", "input", "用逗号分隔");
   const cover = publisherImageInput("封面图片", "粘贴图片地址，可留空");
   const summary = publisherInput("简介", "textarea", "一两句话说明这篇文章讲什么。");
-  const body = publisherInput("正文", "textarea", "写下正文内容。");
-  body.control.rows = 8;
+  const body = publisherRichTextInput("正文", "写下正文内容，支持 Ctrl+B / Ctrl+I / Ctrl+U，粘贴图片和文件。");
   const featured = checkbox("设为推荐文章", false, () => {});
   const submit = button("发布并保存", "button primary", "submit");
   const feedback = element("p", "form-hint");
@@ -3088,7 +3087,8 @@ function renderBlogQuickPublisher(page, blog) {
       id: crypto.randomUUID(),
       title: articleTitle,
       summary: summary.control.value.trim(),
-      body: body.control.value.trim(),
+      body: htmlToPlainText(body.control.innerHTML),
+      bodyHtml: normalizeEditorHtml(body.control.innerHTML),
       coverImage: cover.control.value.trim(),
       category: category.control.value.trim() || "随笔",
       tags: splitTags(tags.control.value).slice(0, 12),
@@ -3176,6 +3176,189 @@ function publisherImageInput(label, placeholder) {
 
   fieldNode.append(control, upload, hint);
   return { field: fieldNode, control };
+}
+
+function publisherRichTextInput(label, placeholder) {
+  const fieldNode = element("div", "field blog-publisher-field blog-publisher-rich-field");
+  fieldNode.append(element("span", "", label));
+  const editor = createRichTextEditor({
+    html: "",
+    placeholder,
+    onChange: () => {}
+  });
+  fieldNode.append(editor.wrapper);
+  return { field: fieldNode, control: editor.editor };
+}
+
+function richTextEditorField(label, value, onChange, disabled = false) {
+  const wrapper = element("div", "field rich-editor-field");
+  wrapper.append(element("span", "", label));
+  const editor = createRichTextEditor({
+    html: value,
+    placeholder: "像文档一样编辑正文。支持快捷键、粘贴图片和文件。",
+    disabled,
+    onChange
+  });
+  wrapper.append(editor.wrapper);
+  return wrapper;
+}
+
+function createRichTextEditor({ html = "", placeholder = "", disabled = false, onChange = () => {} } = {}) {
+  const wrapper = element("div", disabled ? "rich-doc-editor is-disabled" : "rich-doc-editor");
+  const toolbar = element("div", "rich-doc-toolbar");
+  const editor = element("div", "rich-doc-page");
+  editor.contentEditable = disabled ? "false" : "true";
+  editor.dataset.placeholder = placeholder;
+  editor.innerHTML = normalizeEditorHtml(html);
+
+  const run = (command, value = null) => {
+    if (disabled) return;
+    editor.focus();
+    document.execCommand(command, false, value);
+    notify();
+  };
+
+  const tool = (label, command, value = null) => {
+    const control = button(label, "button rich-doc-tool", "button");
+    control.addEventListener("click", () => run(command, value));
+    return control;
+  };
+
+  const imageInput = document.createElement("input");
+  imageInput.type = "file";
+  imageInput.accept = "image/*";
+  imageInput.hidden = true;
+  imageInput.addEventListener("change", async () => {
+    const file = imageInput.files?.[0];
+    if (!file) return;
+    await insertFileIntoEditor(editor, file);
+    imageInput.value = "";
+    notify();
+  });
+
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.hidden = true;
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    await insertFileIntoEditor(editor, file);
+    fileInput.value = "";
+    notify();
+  });
+
+  const imageButton = button("图片", "button rich-doc-tool", "button");
+  imageButton.addEventListener("click", () => imageInput.click());
+  const fileButton = button("文件", "button rich-doc-tool", "button");
+  fileButton.addEventListener("click", () => fileInput.click());
+  toolbar.append(
+    tool("B", "bold"),
+    tool("I", "italic"),
+    tool("U", "underline"),
+    tool("标题", "formatBlock", "h2"),
+    tool("引用", "formatBlock", "blockquote"),
+    tool("列表", "insertUnorderedList"),
+    imageButton,
+    fileButton
+  );
+
+  const notify = () => {
+    const next = normalizeEditorHtml(editor.innerHTML);
+    onChange(next);
+  };
+
+  if (!disabled) {
+    trackUndoOnEdit(editor);
+    editor.addEventListener("input", notify);
+    editor.addEventListener("paste", async (event) => {
+      const files = [...(event.clipboardData?.files || [])];
+      if (!files.length) {
+        return;
+      }
+
+      event.preventDefault();
+      for (const file of files) {
+        await insertFileIntoEditor(editor, file);
+      }
+      notify();
+    });
+    editor.addEventListener("keydown", (event) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "b" || key === "i" || key === "u") {
+        event.preventDefault();
+        run(key === "b" ? "bold" : key === "i" ? "italic" : "underline");
+      }
+    });
+  }
+
+  wrapper.append(toolbar, editor, imageInput, fileInput);
+  return { wrapper, editor };
+}
+
+async function insertFileIntoEditor(editor, file) {
+  editor.focus();
+  const dataUrl = file.type.startsWith("image/") ? await imageFileToDataUrl(file) : await genericFileToDataUrl(file);
+  if (file.type.startsWith("image/")) {
+    document.execCommand("insertHTML", false, `<figure><img src="${escapeAttribute(dataUrl)}" alt="${escapeAttribute(file.name)}"><figcaption>${escapeHtml(file.name)}</figcaption></figure><p><br></p>`);
+    return;
+  }
+
+  document.execCommand("insertHTML", false, `<p><a href="${escapeAttribute(dataUrl)}" download="${escapeAttribute(file.name)}">附件：${escapeHtml(file.name)}</a></p>`);
+}
+
+function renderArticleContent(article) {
+  const body = element("div", "blog-article-rich-body");
+  body.innerHTML = articleBodyHtml(article);
+  return body;
+}
+
+function articleBodyHtml(article) {
+  return normalizeEditorHtml(article?.bodyHtml || plainTextToHtml(article?.body || ""));
+}
+
+function normalizeEditorHtml(html) {
+  const trimmed = String(html || "").trim();
+  if (!trimmed || trimmed === "<br>") {
+    return "";
+  }
+  return trimmed;
+}
+
+function plainTextToHtml(text) {
+  return String(text || "")
+    .split(/\n+/)
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join("");
+}
+
+function htmlToPlainText(html) {
+  const holder = document.createElement("div");
+  holder.innerHTML = html || "";
+  return holder.textContent.trim();
+}
+
+function escapeHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value).replace(/`/g, "&#096;");
+}
+
+function genericFileToDataUrl(file) {
+  const maxBytes = 8 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error("附件太大了，请选择 8MB 以内的文件。");
+  }
+  return fileToDataUrl(file, file.type.split("/")[0] ? "" : "");
 }
 
 function isAdminSession() {
@@ -3951,6 +4134,7 @@ function hydrateBlogArticle(article) {
     title: article?.title || "未命名文章",
     summary: article?.summary || "",
     body: article?.body || "",
+    bodyHtml: article?.bodyHtml || "",
     coverImage: article?.coverImage || "",
     category: article?.category || "随笔",
     tags: Array.isArray(article?.tags) ? article.tags : splitTags(article?.tags || ""),
