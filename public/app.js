@@ -2867,7 +2867,8 @@ function renderBlogPage(page, articleId = "") {
   const articles = orderedArticles;
   const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
   const filterKey = `cloudflare-modular-site.blog-filter.${page.slug}`;
-  const activeFilter = localStorage.getItem(filterKey) || "推荐";
+  const storedFilter = localStorage.getItem(filterKey);
+  const activeFilter = storedFilter === "更多" ? "全部" : storedFilter || "全部";
   const filteredArticles = filterBlogArticles(articles, activeFilter);
 
   const nav = element("header", "blog-page-nav");
@@ -2893,7 +2894,8 @@ function renderBlogPage(page, articleId = "") {
   main.append(hero);
 
   const tabs = element("nav", "blog-page-tabs");
-  for (const label of ["推荐", ...categories.slice(0, 7), "更多"]) {
+  const tabLabels = ["全部", "推荐", ...categories.filter((label) => label !== "推荐").slice(0, 7)];
+  for (const label of tabLabels) {
     const tab = button(label, activeFilter === label ? "blog-tab-button is-active" : "blog-tab-button", "button");
     tab.addEventListener("click", () => {
       localStorage.setItem(filterKey, label);
@@ -3217,13 +3219,13 @@ function reorderArticleArray(articles, sourceId, targetId) {
 }
 
 function filterBlogArticles(articles, filter) {
+  if (filter === "全部" || filter === "更多") {
+    return articles;
+  }
+
   if (filter === "推荐") {
     const featured = articles.filter((article) => article.featured);
     return featured.length ? featured : articles;
-  }
-
-  if (filter === "更多") {
-    return articles;
   }
 
   return articles.filter((article) => article.category === filter);
