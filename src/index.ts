@@ -93,11 +93,19 @@ type LinkSection = {
   layout: SectionLayout;
 };
 
+type ArticleSection = {
+  id: string;
+  type: "article";
+  articlePath: string;
+  layout: SectionLayout;
+};
+
 type BlogArticle = {
   id: string;
   title: string;
   summary: string;
   body: string;
+  bodyHtml: string;
   coverImage: string;
   category: string;
   tags: string[];
@@ -161,7 +169,7 @@ type HomeAnnouncement = {
   durationSeconds: number;
 };
 
-type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | P2PSection | CommentsSection | LinkSection | BlogSection;
+type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | P2PSection | CommentsSection | LinkSection | ArticleSection | BlogSection;
 
 type P2PPeer = {
   id: string;
@@ -1280,6 +1288,15 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
     };
   }
 
+  if (type === "article") {
+    return {
+      id: asString(record.id) || crypto.randomUUID(),
+      type: "article",
+      articlePath: normalizeInternalPath(asString(record.articlePath)),
+      layout: normalizeLayout(record.layout, "article")
+    };
+  }
+
   if (type === "blog") {
     return {
       id: asString(record.id) || crypto.randomUUID(),
@@ -1313,6 +1330,7 @@ function normalizeBlogArticles(value: unknown): BlogArticle[] {
       title: limitText(asString(record.title) || "未命名文章", 120),
       summary: limitText(asString(record.summary), 220),
       body: limitText(asString(record.body), 8000),
+      bodyHtml: limitText(asString(record.bodyHtml), 2_000_000),
       coverImage: normalizeImageSrc(asString(record.coverImage)),
       category: limitText(asString(record.category) || "随笔", 30),
       tags: normalizeStringList(record.tags, 12, 24),
@@ -1755,6 +1773,17 @@ function normalizeSlug(value: string, index: number): string {
   const reserved = slug === "admin" || slug === "api" || slug.startsWith("api/");
 
   return reserved ? `${slug}-page` : slug;
+}
+
+function normalizeInternalPath(value: string): string {
+  const path = value.trim().replace(/^https?:\/\/[^/]+/i, "").split(/[?#]/)[0];
+  const cleaned = path
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .map((segment) => segment.replace(/[^\p{Letter}\p{Number}_-]/gu, ""))
+    .filter(Boolean)
+    .join("/");
+  return cleaned ? `/${cleaned.toLowerCase()}` : "";
 }
 
 function uniqueSlug(slug: string, used: Set<string>, index: number): string {

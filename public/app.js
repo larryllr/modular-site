@@ -1052,10 +1052,12 @@ function renderInsertBar(page, index) {
   comments.addEventListener("click", () => insertSection(page, index, createCommentsSection()));
   const link = button("网站模块", "button", "button");
   link.addEventListener("click", () => insertSection(page, index, createLinkSection()));
+  const article = button("文章模块", "button", "button");
+  article.addEventListener("click", () => insertSection(page, index, createArticleSection()));
   const blog = button("博客模块", "button", "button");
   blog.addEventListener("click", () => insertSection(page, index, createBlogSection()));
 
-  bar.append(system, text, image, video, p2p, link, blog, comments);
+  bar.append(system, text, image, video, p2p, link, article, blog, comments);
   return bar;
 }
 
@@ -1081,6 +1083,8 @@ function renderEditableSection(page, section, index) {
       shell.append(renderEditableP2PSection(section));
     } else if (section.type === "link") {
       shell.append(renderEditableLinkSection(section));
+    } else if (section.type === "article") {
+      shell.append(renderEditableArticleSection(section));
     } else if (section.type === "blog") {
       shell.append(renderEditableBlogSection(section));
     } else if (section.type === "comments") {
@@ -1390,6 +1394,17 @@ function renderEditableLinkSection(section) {
   }));
   backgroundRow.append(renderLinkSectionPreview(section));
   card.append(backgroundRow);
+  return card;
+}
+
+function renderEditableArticleSection(section) {
+  const card = element("article", "module-card inline-editor-card");
+  card.append(
+    field("文章路径", section.articlePath, (value) => {
+      section.articlePath = normalizeArticlePath(value);
+    }, "例如 /blog/文章ID，保存后会自动同步标题、简介和封面。"),
+    renderArticleSection(section)
+  );
   return card;
 }
 
@@ -2170,6 +2185,10 @@ function renderPublicSection(section, context) {
     return renderLinkSection(section);
   }
 
+  if (section.type === "article") {
+    return renderArticleSection(section);
+  }
+
   if (section.type === "blog") {
     return renderBlogSection(section, false);
   }
@@ -2715,6 +2734,46 @@ function renderLinkSection(section) {
 
   card.append(header, anchor);
   return card;
+}
+
+function renderArticleSection(section) {
+  const card = element("article", "module-card entry-card article-entry-card");
+  const reference = resolveArticleReference(section.articlePath);
+  if (!reference) {
+    card.append(element("p", "empty-state", section.articlePath ? "没有找到这个文章路径。" : "请在管理员界面填写文章路径。"));
+    return card;
+  }
+
+  const { page, article } = reference;
+  applyEntryCardStyle(card, article.coverImage);
+  const header = element("header", "module-card-header no-toggle");
+  header.append(mark((article.category || "文").slice(0, 2).toUpperCase()), textBlock(article.title, article.summary || page.description));
+  const open = element("a", "button primary", "阅读文章");
+  open.href = `/${page.slug}/${article.id}`;
+  card.append(header, open);
+  return card;
+}
+
+function resolveArticleReference(path) {
+  const normalized = normalizeArticlePath(path);
+  const [pageSlug, articleId] = normalized.replace(/^\/+/, "").split("/");
+  if (!pageSlug || !articleId) {
+    return null;
+  }
+  const page = state.config.pages.find((item) => item.kind === "blog" && item.slug === pageSlug);
+  const article = page?.blog?.articles?.find((item) => item.id.toLowerCase() === articleId.toLowerCase());
+  return page && article ? { page, article } : null;
+}
+
+function normalizeArticlePath(value) {
+  try {
+    const url = new URL(String(value || ""), window.location.origin);
+    const path = url.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+    return path ? `/${path}` : "";
+  } catch {
+    const path = String(value || "").split(/[?#]/)[0].replace(/^\/+|\/+$/g, "").toLowerCase();
+    return path ? `/${path}` : "";
+  }
 }
 
 function renderP2PEntrySection(section) {
@@ -4288,6 +4347,15 @@ function hydrateSection(section) {
     };
   }
 
+  if (section.type === "article") {
+    return {
+      id: section.id || crypto.randomUUID(),
+      type: "article",
+      articlePath: normalizeArticlePath(section.articlePath || ""),
+      layout: hydrateLayout(section.layout, "article")
+    };
+  }
+
   if (section.type === "blog") {
     return {
       id: section.id || crypto.randomUUID(),
@@ -4632,6 +4700,15 @@ function createLinkSection() {
   };
 }
 
+function createArticleSection() {
+  return {
+    id: crypto.randomUUID(),
+    type: "article",
+    articlePath: "",
+    layout: hydrateLayout(null, "article")
+  };
+}
+
 function createBlogSection() {
   return {
     id: crypto.randomUUID(),
@@ -4969,6 +5046,10 @@ function sectionLabel(section) {
 
   if (section.type === "link") {
     return section.title || "网站模块";
+  }
+
+  if (section.type === "article") {
+    return resolveArticleReference(section.articlePath)?.article?.title || "文章模块";
   }
 
   if (section.type === "comments") {
