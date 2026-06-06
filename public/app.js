@@ -1046,8 +1046,6 @@ function renderInsertBar(page, index) {
   image.addEventListener("click", () => insertSection(page, index, createImageSection()));
   const video = button("视频模块", "button", "button");
   video.addEventListener("click", () => insertSection(page, index, createVideoSection()));
-  const p2p = button("传输模块", "button", "button");
-  p2p.addEventListener("click", () => insertSection(page, index, createP2PSection()));
   const comments = button("评论模块", "button", "button");
   comments.addEventListener("click", () => insertSection(page, index, createCommentsSection()));
   const link = button("网站模块", "button", "button");
@@ -1057,7 +1055,7 @@ function renderInsertBar(page, index) {
   const blog = button("博客模块", "button", "button");
   blog.addEventListener("click", () => insertSection(page, index, createBlogSection()));
 
-  bar.append(system, text, image, video, p2p, link, article, blog, comments);
+  bar.append(system, text, image, video, link, article, blog, comments);
   return bar;
 }
 
@@ -1491,17 +1489,29 @@ function renderEditableBlogSection(section) {
 
 function renderEditableBlogArticle(section, article, listNode = null) {
   const locked = isLimitedAdmin() && article.authorRole === "admin";
-  const item = element("article", locked ? "blog-article-editor is-readonly" : "blog-article-editor");
+  const item = element("details", locked ? "blog-article-editor is-readonly" : "blog-article-editor");
   item.dataset.articleId = article.id;
-  item.draggable = !locked;
-  item.title = locked ? "" : "按住拖动可调整文章顺序";
+  const summary = element("summary", "blog-article-editor-summary");
+  const dragHandle = element("span", "blog-article-drag-handle", "⋮⋮");
+  dragHandle.title = locked ? "" : "拖拽调整文章顺序";
+  dragHandle.draggable = !locked;
+  const heading = element("div", "blog-article-editor-heading");
+  heading.append(
+    element("h3", "", article.title || "未命名文章"),
+    element("p", "form-hint", locked ? "admin 发布，仅 admin 可以编辑。" : `作者：${article.authorName || article.authorRole} · ${formatDateTime(article.updatedAt || article.createdAt)}`)
+  );
+  const toggleLabel = element("span", "blog-article-expand-label", "展开编辑");
+  summary.append(dragHandle, heading, toggleLabel);
+  item.append(summary);
+
   if (!locked) {
-    item.addEventListener("dragstart", (event) => {
+    dragHandle.addEventListener("click", (event) => event.preventDefault());
+    dragHandle.addEventListener("dragstart", (event) => {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/blog-article-id", article.id);
       item.classList.add("is-dragging");
     });
-    item.addEventListener("dragend", () => {
+    dragHandle.addEventListener("dragend", () => {
       item.classList.remove("is-dragging");
       for (const node of listNode?.querySelectorAll(".blog-article-editor") || []) {
         node.classList.remove("is-drop-target");
@@ -1528,53 +1538,59 @@ function renderEditableBlogArticle(section, article, listNode = null) {
       reorderBlogArticle(section, sourceId, article.id);
     });
   }
-  item.append(element("h3", "", article.title || "未命名文章"));
-  item.append(element("p", "form-hint", locked ? "admin 发布，仅 admin 可以编辑。" : `作者：${article.authorName || article.authorRole} · ${formatDateTime(article.updatedAt || article.createdAt)}`));
+  let editorBuilt = false;
+  item.addEventListener("toggle", () => {
+    toggleLabel.textContent = item.open ? "收起" : "展开编辑";
+    if (!item.open || editorBuilt) return;
+    editorBuilt = true;
+    item.append(buildBlogArticleEditorBody(section, article, locked));
+  });
 
+  return item;
+}
+
+function buildBlogArticleEditorBody(section, article, locked) {
+  const body = element("div", "blog-article-editor-body");
+  const touch = () => {
+    article.updatedAt = new Date().toISOString();
+    state.saveStatus = "有未保存修改。";
+    setSaveBarStatus(state.saveStatus);
+  };
   const row = element("div", "admin-row");
   row.append(
     field("文章标题", article.title, (value) => {
       if (locked) return;
       article.title = value;
-      article.updatedAt = new Date().toISOString();
-    })
-  );
-  row.append(
+      touch();
+    }),
     field("分类", article.category, (value) => {
       if (locked) return;
       article.category = value;
-      article.updatedAt = new Date().toISOString();
+      touch();
     })
   );
-  item.append(row);
-
-  item.append(
+  body.append(
+    row,
     field("摘要", article.summary, (value) => {
       if (locked) return;
       article.summary = value;
-      article.updatedAt = new Date().toISOString();
-    })
-  );
-  item.append(
+      touch();
+    }),
     imageValueField("封面图片", article.coverImage, (value) => {
       if (locked) return;
       article.coverImage = value;
-      article.updatedAt = new Date().toISOString();
-    })
-  );
-  item.append(
+      touch();
+    }),
     field("标签（逗号分隔）", (article.tags || []).join(", "), (value) => {
       if (locked) return;
       article.tags = splitTags(value).slice(0, 12);
-      article.updatedAt = new Date().toISOString();
-    })
-  );
-  item.append(
+      touch();
+    }),
     richTextEditorField("正文", articleBodyHtml(article), (value) => {
       if (locked) return;
       article.bodyHtml = value;
       article.body = htmlToPlainText(value);
-      article.updatedAt = new Date().toISOString();
+      touch();
     }, locked)
   );
 
@@ -1582,24 +1598,26 @@ function renderEditableBlogArticle(section, article, listNode = null) {
   const featured = checkbox("首页推荐", Boolean(article.featured), (checked) => {
     if (locked) return;
     article.featured = checked;
-    article.updatedAt = new Date().toISOString();
-    renderAdminEditor();
+    touch();
   });
   const remove = button("删除文章", "button danger", "button");
   remove.disabled = locked;
   remove.addEventListener("click", () => {
+    if (!confirm(`确定删除文章“${article.title || "未命名文章"}”？此操作需要保存配置后才会生效。`)) {
+      return;
+    }
     rememberConfigChange();
     section.articles = section.articles.filter((item) => item.id !== article.id);
-    renderAdminEditor();
+    body.closest(".blog-article-editor")?.remove();
+    state.saveStatus = "文章已删除，保存配置后生效。";
+    setSaveBarStatus(state.saveStatus);
   });
   tools.append(featured, remove);
-  item.append(tools);
-
-  for (const control of item.querySelectorAll("input, textarea, select")) {
-    control.disabled = locked;
+  body.append(tools);
+  for (const control of body.querySelectorAll("input, textarea, select, button")) {
+    if (locked && !control.classList.contains("rich-doc-tool")) control.disabled = true;
   }
-
-  return item;
+  return body;
 }
 
 function renderLinkSectionPreview(section) {
@@ -1658,7 +1676,7 @@ function imageUploadField(section) {
       state.saveStatus = error.message;
     }
 
-    renderAdminEditor();
+    setSaveBarStatus(state.saveStatus);
   });
   wrapper.append(input, element("small", "", "会自动压缩到适合放进配置的尺寸。"));
   return wrapper;
@@ -4314,14 +4332,7 @@ function hydrateSection(section) {
   }
 
   if (section.type === "p2p") {
-    return {
-      id: section.id || crypto.randomUUID(),
-      type: "p2p",
-      title: section.title || "P2P 文件传输",
-      description: section.description || "进入房间后尝试点对点传文件。",
-      room: normalizeRoomId(section.room || section.id || "p2p-room"),
-      layout: hydrateLayout(section.layout, "p2p")
-    };
+    return null;
   }
 
   if (section.type === "comments") {

@@ -1253,14 +1253,7 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
   }
 
   if (type === "p2p") {
-    return {
-      id: asString(record.id) || crypto.randomUUID(),
-      type: "p2p",
-      title: limitText(asString(record.title) || "P2P 文件传输", 80),
-      description: limitText(asString(record.description) || "进入房间后尝试点对点传文件。", 160),
-      room: normalizeP2PRoom(asString(record.room)) || `room-${index + 1}`,
-      layout: normalizeLayout(record.layout, "p2p")
-    };
+    return null;
   }
 
   if (type === "comments") {

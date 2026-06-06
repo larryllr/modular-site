@@ -1452,20 +1452,68 @@ h1 {
 }
 
 .blog-article-editor {
-  display: grid;
-  gap: 10px;
+  display: block;
+  overflow: hidden;
 }
 
 .blog-article-editor.is-readonly {
   background: rgba(248, 248, 244, 0.72);
 }
 
-.blog-article-editor[draggable="true"] {
-  cursor: grab;
+.blog-article-editor-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
 }
 
-.blog-article-editor[draggable="true"]:active {
+.blog-article-editor-summary::-webkit-details-marker {
+  display: none;
+}
+
+.blog-article-editor-heading {
+  min-width: 0;
+}
+
+.blog-article-editor-heading h3,
+.blog-article-editor-heading p {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blog-article-drag-handle {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: grab;
+  font-weight: 900;
+  user-select: none;
+}
+
+.blog-article-drag-handle:active {
   cursor: grabbing;
+}
+
+.blog-article-expand-label {
+  color: var(--teal-dark);
+  font-weight: 800;
+}
+
+.blog-article-editor-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
 }
 
 .blog-article-editor.is-dragging {
