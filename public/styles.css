@@ -2491,9 +2491,7 @@ h1 {
   }
 
   .sidebar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
+    position: static;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
