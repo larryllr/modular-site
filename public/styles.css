@@ -1566,6 +1566,14 @@ h1 {
   color: #4f63ff;
 }
 
+.rich-doc-tool.is-active,
+.rich-doc-tool[aria-pressed="true"] {
+  border-color: #4f63ff;
+  background: #4f63ff;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(79, 99, 255, 0.14);
+}
+
 .rich-doc-page {
   min-height: 360px;
   margin: 16px;

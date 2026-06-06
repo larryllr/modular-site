@@ -3421,20 +3421,27 @@ function createRichTextEditor({ html = "", placeholder = "", disabled = false, o
   const wrapper = element("div", disabled ? "rich-doc-editor is-disabled" : "rich-doc-editor");
   const toolbar = element("div", "rich-doc-toolbar");
   const editor = element("div", "rich-doc-page");
+  const commandTools = [];
   editor.contentEditable = disabled ? "false" : "true";
   editor.dataset.placeholder = placeholder;
   editor.innerHTML = normalizeEditorHtml(html);
 
   const run = (command, value = null) => {
     if (disabled) return;
-    editor.focus();
+    restoreSelection();
     document.execCommand(command, false, value);
+    saveSelection();
+    updateToolStates();
     notify();
   };
 
   const tool = (label, command, value = null) => {
     const control = button(label, "button rich-doc-tool", "button");
+    control.dataset.command = command;
+    if (value) control.dataset.commandValue = value;
+    control.addEventListener("mousedown", (event) => event.preventDefault());
     control.addEventListener("click", () => run(command, value));
+    commandTools.push(control);
     return control;
   };
 
@@ -3483,10 +3490,30 @@ function createRichTextEditor({ html = "", placeholder = "", disabled = false, o
     onChange(next);
   };
   let savedRange = null;
+  const updateToolStates = () => {
+    for (const control of commandTools) {
+      const command = control.dataset.command;
+      const value = control.dataset.commandValue;
+      let active = false;
+      try {
+        if (command === "formatBlock") {
+          const current = String(document.queryCommandValue("formatBlock") || "").toLowerCase().replace(/[<>]/g, "");
+          active = current === value;
+        } else {
+          active = document.queryCommandState(command);
+        }
+      } catch {
+        active = false;
+      }
+      control.classList.toggle("is-active", active);
+      control.setAttribute("aria-pressed", String(active));
+    }
+  };
   const saveSelection = () => {
     const selection = window.getSelection();
     if (selection?.rangeCount && editor.contains(selection.anchorNode)) {
       savedRange = selection.getRangeAt(0).cloneRange();
+      updateToolStates();
     }
   };
   const restoreSelection = () => {
@@ -3509,6 +3536,12 @@ function createRichTextEditor({ html = "", placeholder = "", disabled = false, o
     editor.addEventListener("keyup", saveSelection);
     editor.addEventListener("mouseup", saveSelection);
     editor.addEventListener("focus", saveSelection);
+    document.addEventListener("selectionchange", () => {
+      const selection = window.getSelection();
+      if (selection?.rangeCount && editor.contains(selection.anchorNode)) {
+        saveSelection();
+      }
+    });
     editor.addEventListener("paste", async (event) => {
       const files = clipboardFiles(event.clipboardData);
       if (!files.length) {
