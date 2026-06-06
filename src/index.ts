@@ -265,6 +265,21 @@ const defaultAdminPassword = "admin";
 const defaultLimitedAdminPassword = "limited";
 const tokenMaxAgeMs = 12 * 60 * 60 * 1000;
 const maxAccessLogs = 1000;
+const cubeCityLinkId = "builtin-cubecity";
+const cubeCityPath = "/llrgamecubecity";
+
+function defaultCubeCityLink(): SiteLink {
+  return {
+    id: cubeCityLinkId,
+    title: "放松一下",
+    description: "进入立方城，放松一下",
+    targetUrl: cubeCityPath,
+    visible: true,
+    iconText: "GAME",
+    iconImage: "/llrgamecubecity-entry.webp",
+    backgroundImage: "/llrgamecubecity-entry.webp"
+  };
+}
 
 const defaultSiteConfig: SiteConfig = {
   version: 1,
@@ -279,8 +294,8 @@ const defaultSiteConfig: SiteConfig = {
     text: "",
     durationSeconds: 8
   },
-  navOrder: ["page:workspace"],
-  links: [],
+  navOrder: ["page:workspace", `link:${cubeCityLinkId}`],
+  links: [defaultCubeCityLink()],
   pages: [
     {
       id: "workspace",
@@ -1111,6 +1126,12 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
   }
 
   const links = rawLinks.slice(0, 40).map(normalizeSiteLink);
+  const hasCubeCityLink = links.some(
+    (link) => link.id === cubeCityLinkId || normalizeInternalPath(link.targetUrl) === cubeCityPath
+  );
+  if (!hasCubeCityLink && links.length < 40) {
+    links.push(defaultCubeCityLink());
+  }
   const navOrder = normalizeNavOrder(source.navOrder, pages, links);
 
   return {
@@ -1436,6 +1457,10 @@ function normalizeExternalUrl(value: string): string {
 
   if (!raw) {
     return "";
+  }
+
+  if (raw.startsWith("/")) {
+    return normalizeInternalPath(raw);
   }
 
   const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
@@ -1990,6 +2015,10 @@ export default {
 
     if (url.pathname.startsWith("/api/")) {
       return json({ error: "API route not found", path: url.pathname }, 404);
+    }
+
+    if (url.pathname === cubeCityPath) {
+      return Response.redirect(new URL(`${cubeCityPath}/`, url.origin).toString(), 308);
     }
 
     ctx.waitUntil(recordAccessLog(request, env as AppEnv));

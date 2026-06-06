@@ -1,0 +1,149 @@
+{
+  "topbar": {
+    "credits": "Credits",
+    "population": "Population",
+    "territory": "Territory",
+    "power": "Power",
+    "level": "Lv",
+    "day": "Day",
+    "music": {
+      "playMusic": "Play Music",
+      "pauseMusic": "Pause Music",
+      "nextTrack": "Next Track",
+      "volumeControl": "Volume Control",
+      "musicSettings": "Music Settings"
+    }
+  },
+  "buildingSidebar": {
+    "constructionUnits": "Construction Units",
+    "operationMode": "Operation Mode",
+    "select": "Select",
+    "build": "Build",
+    "relocate": "Relocate",
+    "demolish": "Demolish",
+    "switchToBuildMode": "Please switch to build mode"
+  },
+  "dashboardFooter": {
+    "cityMetrics": "City Metrics",
+    "buildings": "Buildings",
+    "dailyIncome": "Daily Income",
+    "efficiency": "Pollution",
+    "stability": "Stability",
+    "achievements": "Achievements",
+    "firstFactory": "First Factory",
+    "industrialTycoon": "Industrial Tycoon",
+    "viewAllAchievements": "View All Achievements",
+    "achievementLoading": "Achievement system loading...",
+    "systemStatus": "System Status",
+    "powerGrid": "Power Grid",
+    "transport": "Transport",
+    "security": "Security",
+    "environment": "Environment",
+    "limited": "Limited",
+    "secure": "Secure",
+    "moderate": "Moderate",
+    "online": "Online"
+  },
+  "modeIndicator": {
+    "mode": "Mode"
+  },
+  "selectedIndicator": {
+    "selected": "Selected"
+  },
+  "toastContainer": {
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Info"
+  },
+  "buildingDetails": {
+    "unitDetails": "Unit Details",
+    "selectABuilding": "Select a building",
+    "clickToView": "Click on any structure to view details",
+    "status": "Status",
+    "operational": "Operational",
+    "production": "Production",
+    "outputPerHour": "Output/Hour",
+    "workers": "Workers",
+    "maintenance": "Maintenance",
+    "condition": "Condition",
+    "nextService": "Next Service",
+    "upgradeUnit": "Upgrade Unit",
+    "maintenanceBtn": "Maintenance",
+    "demolish": "Demolish",
+    "tile": "Tile Position",
+    "coinOutput": "Coin Output",
+    "powerUsage": "Power Usage",
+    "powerOutput": "Power Output",
+    "maxPopulation": "Max Population",
+    "pollution": "Pollution",
+    "cost": "Build Cost",
+    "displayName": "Level Name",
+    "category": "Category",
+    "upgradeCost": "Upgrade Cost",
+    "nextLevel": "Next Level",
+    "upgradeInfo": "Upgrade Info",
+    "currentLevel": "Current Level",
+    "improvements": "Improvements",
+    "maxLevel": "Max Level Reached"
+  },
+  "confirmDialog": {
+    "title": "Confirm",
+    "message": "Are you sure you want to demolish this building?",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "common": {
+    "cancel": "Cancel"
+  },
+  "dialog": {
+    "selectTitle": "Upgrade Building",
+    "selectMessage": "Are you sure to upgrade <span class=\"text-green-500 font-bold\"> {building} </span>? It will cost <span class=\"text-yellow-500 font-bold\"> {cost} </span> credits.",
+    "selectConfirm": "Confirm Upgrade",
+    "relocateTitle": "Relocate Building",
+    "relocateMessage": "Are you sure to relocate <span class=\"text-industrial-accent font-bold\"> {building} </span>?",
+    "relocateConfirm": "Confirm Relocation",
+    "demolishTitle": "Demolish Building",
+    "demolishMessage": "Are you sure to demolish <span class=\"text-industrial-accent font-bold\"> {building} </span>? You will get <span class=\"text-yellow-500 font-bold\"> {refund} </span> credits back.",
+    "demolishConfirm": "Confirm Demolition",
+    "building": "building"
+  },
+  "error": {
+    "insufficientFunds": "Insufficient funds"
+  },
+  "restorePrompt": {
+    "title": "Continue Last Game?",
+    "description": "Previous game save detected. Would you like to continue?",
+    "continueButton": "Yes, Continue Last Game",
+    "newGameButton": "No, Start New Game",
+    "musicHint": "🎵 Click the music button in the top right corner",
+    "gpuHint": "⚡ Enable GPU acceleration in chrome://flags for better gaming experience"
+  },
+  "emptyState": {
+    "selectMode": {
+      "title": "Selection Mode",
+      "description": "Click any building in the scene to view detailed information and statistics",
+      "readyText": "Ready to inspect buildings"
+    },
+    "buildMode": {
+      "title": "Build Mode",
+      "description": "Select a building type from the sidebar, then click on any empty tile to construct it",
+      "strategicTip": "Strategic Tip",
+      "strategicTipText": "Power supply, environmental factors, and resident satisfaction directly impact population growth and coin production",
+      "cameraTip": "Press <kbd class=\"px-1.5 py-0.5 bg-blue-500 text-white rounded text-xs font-bold\">←</kbd> or <kbd class=\"px-1.5 py-0.5 bg-blue-500 text-white rounded text-xs font-bold\">→</kbd> to adjust the direction of the camera"
+    },
+    "relocateMode": {
+      "title": "Relocation Mode",
+      "rotateHint": "Rotate selected building",
+      "relocateHint": "Click tile <span class=\"px-1.5 py-0.5 bg-blue-500 text-white rounded text-xs font-bold\">A</span> then tile <span class=\"px-1.5 py-0.5 bg-green-500 text-white rounded text-xs font-bold\">B</span> to relocate building",
+      "requirementsText": "Tile <span class=\"font-bold\">A</span> must have a building<br>Tile <span class=\"font-bold\">B</span> must be empty",
+      "cancelHint": "Press <kbd class=\"px-1 py-0.5 bg-red-700 rounded text-xs\">ESC</kbd> to cancel"
+    },
+    "demolishMode": {
+      "title": "Demolition Mode",
+      "description": "Click on any building in the scene to demolish it permanently",
+      "recoveryTitle": "Material Recovery",
+      "recoveryText": "70% of construction materials will be refunded to your inventory"
+    }
+  }
+}

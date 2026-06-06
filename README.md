@@ -14,7 +14,22 @@
 
 ```bash
 npm install
+npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --registry=https://registry.npmmirror.com
 npm run dev
+```
+
+## 内置游戏
+
+网站内置了 MIT 许可的 [CubeCity](https://github.com/hexianWeb/CubeCity)，访问
+`/llrgamecubecity` 可全屏进入游戏。主页和侧边栏默认显示“放松一下”入口，完整管理员
+可以在后台隐藏入口，或修改入口标题、说明、背景和图标。
+游戏默认使用简体中文和中文城市名，右上角仍可切换英文。
+
+游戏源码固定在 `vendor/cubecity/`，上游版本和本地调整记录在
+`vendor/cubecity/UPSTREAM.md`。单独构建游戏：
+
+```bash
+npm run build:cubecity
 ```
 
 ## 部署
@@ -22,6 +37,8 @@ npm run dev
 ```bash
 npm run deploy
 ```
+
+部署命令会先重建 CubeCity，再发布 Worker 和静态资源。
 
 第一次部署会打开 Cloudflare 登录授权。按浏览器提示登录后，Wrangler 会把 Worker 和静态文件发布到 Cloudflare。
 

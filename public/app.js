@@ -8,6 +8,18 @@ const pageColumnsKeyPrefix = "cloudflare-modular-site.page-columns.";
 const adminCommentIpKeyPrefix = "cloudflare-modular-site.admin-comment-ip.";
 const pageAccessKeyPrefix = "cloudflare-modular-site.page-access.";
 const maxUndoSteps = 50;
+const cubeCityLinkId = "builtin-cubecity";
+const cubeCityPath = "/llrgamecubecity";
+const cubeCityLink = {
+  id: cubeCityLinkId,
+  title: "放松一下",
+  description: "进入立方城，放松一下",
+  targetUrl: cubeCityPath,
+  visible: true,
+  iconText: "GAME",
+  iconImage: "/llrgamecubecity-entry.webp",
+  backgroundImage: "/llrgamecubecity-entry.webp"
+};
 const visitorSummaryFallback = {
   ip: "获取中",
   region: "获取中",
@@ -28,8 +40,8 @@ const fallbackConfig = {
     text: "",
     durationSeconds: 8
   },
-  navOrder: ["page:workspace"],
-  links: [],
+  navOrder: ["page:workspace", `link:${cubeCityLinkId}`],
+  links: [cubeCityLink],
   pages: [
     {
       id: "workspace",
@@ -4228,6 +4240,12 @@ function moduleContext(page) {
 function hydrateConfig(config) {
   const next = config || fallbackConfig;
   const links = (next.links || fallbackConfig.links).map(hydrateExternalLink);
+  const hasCubeCityLink = links.some(
+    (link) => link.id === cubeCityLinkId || normalizeInternalPath(link.targetUrl) === cubeCityPath
+  );
+  if (!hasCubeCityLink) {
+    links.push({ ...cubeCityLink });
+  }
   const pages = (next.pages || fallbackConfig.pages).map(hydratePage);
 
   return {
@@ -5586,6 +5604,10 @@ function normalizeExternalUrl(value) {
     return "";
   }
 
+  if (raw.startsWith("/")) {
+    return normalizeInternalPath(raw);
+  }
+
   const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
 
   try {
@@ -5594,6 +5616,17 @@ function normalizeExternalUrl(value) {
   } catch {
     return "";
   }
+}
+
+function normalizeInternalPath(value) {
+  const path = String(value || "").trim().split(/[?#]/)[0];
+  const cleaned = path
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .map((segment) => segment.replace(/[^\p{Letter}\p{Number}_-]/gu, ""))
+    .filter(Boolean)
+    .join("/");
+  return cleaned ? `/${cleaned.toLowerCase()}` : "";
 }
 
 function normalizeRoomId(value) {

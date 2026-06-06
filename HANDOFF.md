@@ -15,8 +15,8 @@
 - 正式域名：`https://neyc.de5.net`
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
-- 最新提交：`8f717c8 Fix rich editor toolbar state`
-- 最新 Cloudflare Version ID：`ecbabf4d-6db1-4bb4-a41d-ac7e3e8f34dd`
+- 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
+- 最新 Cloudflare Version ID：`4049e06d-05eb-4ec3-9640-aecd725502ac`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -66,8 +66,27 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 博客分页面、文章分类、标签、封面、富文本正文、作者信息、评论和文章排序。
 - 手机端侧边栏不固定。
 - 首页与分页面支持不同列数布局。
+- `/llrgamecubecity` 提供全屏 CubeCity 小游戏。
+- 主页和侧边栏默认显示“放松一下”入口，完整管理员可隐藏或自定义入口背景和图标。
+- CubeCity 默认使用简体中文，右上角仍保留中英文切换。
 
 “传输模块”已经从网页模块新增入口和配置清洗中移除。不要重新加入，除非用户明确要求。本地 Electron 客户端代码暂时保留。
+
+## CubeCity 集成
+
+- 上游项目：`https://github.com/hexianWeb/CubeCity`
+- 固定版本：`0191f5170872382954c15b7316f2e34d020d6d49`
+- 本地源码：`vendor/cubecity/`
+- 构建产物：`public/llrgamecubecity/`
+- 默认入口图片：`public/llrgamecubecity-entry.webp`
+- 上游 MIT 许可证保留在 `vendor/cubecity/LICENSE`
+- 本地调整包括子路径构建、音频路径适配、默认中文和缺失中文词条补齐。
+- `npm run deploy` 会先执行 `npm run build:cubecity`
+- 新环境首次构建前需要安装游戏依赖：
+
+```powershell
+npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --registry=https://registry.npmmirror.com
+```
 
 ## 最近完成的博客修复
 
