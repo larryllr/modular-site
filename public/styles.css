@@ -2443,19 +2443,20 @@ h1 {
   }
 
   .admin-sidebar {
+    position: static;
     height: auto;
-    max-height: 72vh;
+    max-height: none;
+    overflow: visible;
     padding-bottom: 0;
   }
 
   .admin-sidebar > .module-nav:nth-of-type(2) {
-    max-height: 38vh;
+    max-height: none;
+    overflow: visible;
   }
 
   .admin-sidebar .sidebar-actions {
-    position: sticky;
-    bottom: 0;
-    z-index: 3;
+    position: static;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     margin: 0 -22px;
     padding: 10px 22px;
