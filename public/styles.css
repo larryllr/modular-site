@@ -1504,6 +1504,8 @@ h1 {
   outline: none;
   padding: 34px 42px;
   line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .rich-doc-page:empty::before {
@@ -2007,6 +2009,12 @@ h1 {
   color: #30343b;
   font-size: 18px;
   line-height: 1.9;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.blog-article-rich-body > div {
+  min-height: 1.9em;
 }
 
 .blog-article-rich-body h2 {
