@@ -93,6 +93,20 @@ type LinkSection = {
   layout: SectionLayout;
 };
 
+type NavigationItem = {
+  id: string;
+  name: string;
+  url: string;
+};
+
+type NavigationSection = {
+  id: string;
+  type: "navigation";
+  title: string;
+  items: NavigationItem[];
+  layout: SectionLayout;
+};
+
 type ArticleSection = {
   id: string;
   type: "article";
@@ -169,7 +183,7 @@ type HomeAnnouncement = {
   durationSeconds: number;
 };
 
-type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | P2PSection | CommentsSection | LinkSection | ArticleSection | BlogSection;
+type PageSection = SystemSection | ContentBlock | ImageSection | VideoSection | P2PSection | CommentsSection | LinkSection | NavigationSection | ArticleSection | BlogSection;
 
 type P2PPeer = {
   id: string;
@@ -1302,6 +1316,28 @@ function normalizeSection(value: unknown, index: number): PageSection | null {
     };
   }
 
+  if (type === "navigation") {
+    const items = (Array.isArray(record.items) ? record.items : [])
+      .slice(0, 100)
+      .map((item) => {
+        const itemRecord = asRecord(item);
+        return {
+          id: asString(itemRecord.id) || crypto.randomUUID(),
+          name: limitText(asString(itemRecord.name), 80),
+          url: normalizeExternalUrl(asString(itemRecord.url))
+        };
+      })
+      .filter((item) => item.name || item.url);
+
+    return {
+      id: asString(record.id) || crypto.randomUUID(),
+      type: "navigation",
+      title: limitText(asString(record.title) || "导航", 80),
+      items,
+      layout: normalizeLayout(record.layout, "navigation")
+    };
+  }
+
   if (type === "article") {
     return {
       id: asString(record.id) || crypto.randomUUID(),
@@ -1425,7 +1461,7 @@ function normalizeBlock(value: unknown, index: number): ContentBlock {
 function defaultLayout(type: string): SectionLayout {
   return {
     width: 0,
-    minHeight: type === "comments" ? 320 : 280,
+    minHeight: type === "comments" ? 320 : type === "navigation" ? 420 : 280,
     locked: false
   };
 }

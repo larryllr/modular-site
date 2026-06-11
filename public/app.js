@@ -1062,12 +1062,14 @@ function renderInsertBar(page, index) {
   comments.addEventListener("click", () => insertSection(page, index, createCommentsSection()));
   const link = button("网站模块", "button", "button");
   link.addEventListener("click", () => insertSection(page, index, createLinkSection()));
+  const navigation = button("导航模块", "button", "button");
+  navigation.addEventListener("click", () => insertSection(page, index, createNavigationSection()));
   const article = button("文章模块", "button", "button");
   article.addEventListener("click", () => insertSection(page, index, createArticleSection()));
   const blog = button("博客模块", "button", "button");
   blog.addEventListener("click", () => insertSection(page, index, createBlogSection()));
 
-  bar.append(system, text, image, video, link, article, blog, comments);
+  bar.append(system, text, image, video, link, navigation, article, blog, comments);
   return bar;
 }
 
@@ -1093,6 +1095,8 @@ function renderEditableSection(page, section, index) {
       shell.append(renderEditableP2PSection(section));
     } else if (section.type === "link") {
       shell.append(renderEditableLinkSection(section));
+    } else if (section.type === "navigation") {
+      shell.append(renderEditableNavigationSection(section));
     } else if (section.type === "article") {
       shell.append(renderEditableArticleSection(section));
     } else if (section.type === "blog") {
@@ -1405,6 +1409,71 @@ function renderEditableLinkSection(section) {
   backgroundRow.append(renderLinkSectionPreview(section));
   card.append(backgroundRow);
   return card;
+}
+
+function renderEditableNavigationSection(section) {
+  const card = element("article", "module-card inline-editor-card navigation-editor-card");
+  card.append(
+    field("导航标题", section.title, (value) => {
+      section.title = value;
+      markConfigDirty();
+    })
+  );
+
+  const list = element("div", "navigation-editor-list");
+  section.items.forEach((item, index) => {
+    const row = element("div", "navigation-editor-row");
+    row.append(
+      field("名称", item.name, (value) => {
+        item.name = value;
+        markConfigDirty();
+      }),
+      field("网址", item.url, (value) => {
+        item.url = value;
+        markConfigDirty();
+      }, "支持完整网址或域名。")
+    );
+
+    const tools = element("div", "navigation-editor-tools");
+    const up = button("上移", "button", "button");
+    up.disabled = index === 0;
+    up.addEventListener("click", () => moveNavigationItem(section, index, -1));
+    const down = button("下移", "button", "button");
+    down.disabled = index === section.items.length - 1;
+    down.addEventListener("click", () => moveNavigationItem(section, index, 1));
+    const remove = button("删除", "button danger", "button");
+    remove.addEventListener("click", () => {
+      rememberConfigChange();
+      section.items.splice(index, 1);
+      renderAdminEditor();
+    });
+    tools.append(up, down, remove);
+    row.append(tools);
+    list.append(row);
+  });
+  card.append(list);
+
+  const add = button("添加网址", "button primary", "button");
+  add.disabled = section.items.length >= 100;
+  add.addEventListener("click", () => {
+    rememberConfigChange();
+    section.items.push({ id: crypto.randomUUID(), name: "新网站", url: "" });
+    renderAdminEditor();
+  });
+  card.append(add);
+  return card;
+}
+
+function moveNavigationItem(section, index, offset) {
+  const nextIndex = index + offset;
+  if (nextIndex < 0 || nextIndex >= section.items.length) {
+    return;
+  }
+
+  rememberConfigChange();
+  const [item] = section.items.splice(index, 1);
+  section.items.splice(nextIndex, 0, item);
+  renderAdminEditor();
 }
 
 function renderEditableArticleSection(section) {
@@ -1805,6 +1874,11 @@ function setSaveBarStatus(message, saving = false) {
   if (undo && !saving) {
     undo.disabled = state.undoStack.length === 0;
   }
+}
+
+function markConfigDirty(message = "有未保存修改。") {
+  state.saveStatus = message;
+  setSaveBarStatus(state.saveStatus);
 }
 
 function rememberConfigChange() {
@@ -2224,6 +2298,10 @@ function renderPublicSection(section, context) {
 
   if (section.type === "link") {
     return renderLinkSection(section);
+  }
+
+  if (section.type === "navigation") {
+    return renderNavigationSection(section);
   }
 
   if (section.type === "article") {
@@ -2775,6 +2853,57 @@ function renderLinkSection(section) {
 
   card.append(header, anchor);
   return card;
+}
+
+function renderNavigationSection(section) {
+  const card = element("article", "module-card navigation-section");
+  const header = element("header", "module-card-header no-toggle");
+  header.append(mark("导"), textBlock(section.title || "导航", `${section.items.length} 个网站`));
+  const list = element("ol", "navigation-list");
+
+  for (const item of section.items) {
+    const targetUrl = normalizeExternalUrl(item.url);
+    if (!targetUrl) {
+      continue;
+    }
+
+    const entry = element("li", "navigation-item");
+    const anchor = element("a", "navigation-link");
+    anchor.href = targetUrl;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    const icon = element("span", "navigation-link-icon");
+    const fallback = element("span", "navigation-link-initial", navigationInitial(item.name, targetUrl));
+    const iconUrl = faviconUrl(targetUrl);
+
+    if (iconUrl) {
+      const image = document.createElement("img");
+      image.src = iconUrl;
+      image.alt = "";
+      image.loading = "lazy";
+      image.addEventListener("error", () => image.replaceWith(fallback), { once: true });
+      icon.append(image);
+    } else {
+      icon.append(fallback);
+    }
+
+    anchor.append(icon, element("span", "navigation-link-name", item.name || externalLinkSubtitle({ targetUrl })));
+    entry.append(anchor);
+    list.append(entry);
+  }
+
+  if (!list.children.length) {
+    card.append(header, element("p", "empty-state", "管理员还没有添加可用网址。"));
+    return card;
+  }
+
+  card.append(header, list);
+  return card;
+}
+
+function navigationInitial(name, url) {
+  const source = String(name || externalLinkSubtitle({ targetUrl: url }) || "网").trim();
+  return source.slice(0, 1).toUpperCase();
 }
 
 function renderArticleSection(section) {
@@ -4342,7 +4471,7 @@ function hydratePage(page) {
 }
 
 function hydrateLayout(layout, type = "text") {
-  const defaultMinHeight = type === "comments" ? 320 : 280;
+  const defaultMinHeight = type === "comments" ? 320 : type === "navigation" ? 420 : 280;
 
   return {
     width: clampNumber(Number(layout?.width ?? 0), 0, 100),
@@ -4419,6 +4548,23 @@ function hydrateSection(section) {
       iconImage: section.iconImage || "",
       backgroundImage: section.backgroundImage || "",
       layout: hydrateLayout(section.layout, "link")
+    };
+  }
+
+  if (section.type === "navigation") {
+    return {
+      id: section.id || crypto.randomUUID(),
+      type: "navigation",
+      title: String(section.title || "导航").slice(0, 80),
+      items: (Array.isArray(section.items) ? section.items : [])
+        .slice(0, 100)
+        .map((item) => ({
+          id: item?.id || crypto.randomUUID(),
+          name: String(item?.name || "").slice(0, 80),
+          url: normalizeExternalUrl(item?.url || "")
+        }))
+        .filter((item) => item.name || item.url),
+      layout: hydrateLayout(section.layout, "navigation")
     };
   }
 
@@ -4775,6 +4921,22 @@ function createLinkSection() {
   };
 }
 
+function createNavigationSection() {
+  return {
+    id: crypto.randomUUID(),
+    type: "navigation",
+    title: "常用导航",
+    items: [
+      {
+        id: crypto.randomUUID(),
+        name: "示例网站",
+        url: "https://example.com/"
+      }
+    ],
+    layout: hydrateLayout(null, "navigation")
+  };
+}
+
 function createArticleSection() {
   return {
     id: crypto.randomUUID(),
@@ -5121,6 +5283,10 @@ function sectionLabel(section) {
 
   if (section.type === "link") {
     return section.title || "网站模块";
+  }
+
+  if (section.type === "navigation") {
+    return section.title || "导航模块";
   }
 
   if (section.type === "article") {
