@@ -1,5 +1,6 @@
 node_modules/
 vendor/cubecity/node_modules/
+.superpowers/
 .wrangler/
 .dev.vars*
 .env*

@@ -16,7 +16,7 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`304f76c7-6a54-46be-aa97-3cc930a4ea37`
+- 最新 Cloudflare Version ID：`30b40c63-46a9-4a65-9038-b82e2c52ace9`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -52,6 +52,10 @@ git status --short
 ```
 
 Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` HTTP 代理。
+
+若 Wrangler 已完成部署但进程卡在遥测请求，后续部署可临时清除
+`HTTP_PROXY`/`HTTPS_PROXY` 并设置 `WRANGLER_SEND_METRICS=false`；GitHub 推送时再恢复
+`10808` 代理。
 
 ## 当前主要功能
 
