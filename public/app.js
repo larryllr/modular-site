@@ -2857,8 +2857,8 @@ function renderLinkSection(section) {
 
 function renderNavigationSection(section) {
   const card = element("article", "module-card navigation-section");
-  const header = element("header", "module-card-header no-toggle");
-  header.append(mark("导"), textBlock(section.title || "导航", `${section.items.length} 个网站`));
+  const header = element("header", "navigation-section-header");
+  header.append(element("h2", "", section.title || "导航"));
   const list = element("ol", "navigation-list");
 
   for (const item of section.items) {

@@ -1142,6 +1142,12 @@ h1 {
   min-width: 0;
 }
 
+.navigation-section-header {
+  min-width: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
 .navigation-list {
   display: grid;
   gap: 4px;
@@ -1213,7 +1219,7 @@ h1 {
   padding: clamp(24px, 5vw, 72px);
 }
 
-.single-module-page .navigation-section .module-card-header {
+.single-module-page .navigation-section-header {
   max-width: 1480px;
   width: 100%;
   margin: 0 auto;
