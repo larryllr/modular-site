@@ -16,7 +16,7 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`ad0c9fe8-4418-445d-826b-3f2ab1cc9a41`
+- 最新 Cloudflare Version ID：`811812d5-b771-4e18-b123-942201874cce`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
