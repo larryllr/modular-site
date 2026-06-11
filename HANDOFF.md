@@ -16,7 +16,7 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`4049e06d-05eb-4ec3-9640-aecd725502ac`
+- 最新 Cloudflare Version ID：`304f76c7-6a54-46be-aa97-3cc930a4ea37`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -69,6 +69,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - `/llrgamecubecity` 提供全屏 CubeCity 小游戏。
 - 主页和侧边栏默认显示“放松一下”入口，完整管理员可隐藏或自定义入口背景和图标。
 - CubeCity 默认使用简体中文，右上角仍保留中英文切换。
+- 普通分页面只有一个实际可见模块时进入沉浸模式：隐藏侧边栏、页面标题和状态栏，模块铺满视口且不显示卡片边框。
 
 “传输模块”已经从网页模块新增入口和配置清洗中移除。不要重新加入，除非用户明确要求。本地 Electron 客户端代码暂时保留。
 

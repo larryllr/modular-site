@@ -492,6 +492,34 @@ h1 {
   grid-template-columns: repeat(var(--grid-columns, 1), minmax(0, 1fr));
 }
 
+.app-shell.single-module-page {
+  display: block;
+}
+
+.single-module-page > .public-sidebar {
+  display: none;
+}
+
+.single-module-page > .workspace {
+  min-height: 100vh;
+  padding: 0;
+}
+
+.single-module-page .page-module-grid,
+.single-module-page .bottom-comments-region {
+  min-height: 100vh;
+  gap: 0;
+  margin: 0;
+}
+
+.single-module-page .page-module-grid > :only-child,
+.single-module-page .bottom-comments-region > :only-child {
+  min-height: 100vh !important;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .module-card {
   display: grid;
   align-content: start;

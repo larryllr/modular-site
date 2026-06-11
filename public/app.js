@@ -2016,42 +2016,53 @@ function renderPage(page, articleId = "") {
   const columnMode = getPageColumnMode(page.slug);
   const main = element("main", "workspace");
   applyPageBackground(main, page.backgroundImage);
-  const header = element("header", "workspace-header compact");
-  const copy = element("div");
-  copy.append(element("p", "eyebrow", `/${page.slug}`), element("h1", "", page.title));
-  copy.append(element("p", "lead", page.description));
-  header.append(copy);
-  main.append(header);
-  main.append(renderPageStatusStrip(page, columnMode));
-
   const grid = element("section", `module-grid page-module-grid ${columnMode === "default" ? "layout-default" : "layout-fixed"}`);
   if (columnMode !== "default") {
     grid.style.setProperty("--grid-columns", String(columnMode));
   }
   const context = moduleContext(page);
+  const renderedSections = [];
 
   for (const section of page.sections) {
     const node = renderPublicSection(section, context);
 
     if (node) {
       applySectionLayout(node, section, columnMode);
-      grid.append(node);
+      renderedSections.push(node);
     }
   }
 
   if (page.comments.enabled && page.comments.mode === "module") {
     const commentsNode = renderCommentsSection(page, page.comments, false);
     applySectionLayout(commentsNode, page.comments, columnMode);
-    grid.append(commentsNode);
+    renderedSections.push(commentsNode);
   }
 
-  if (grid.childElementCount === 0) {
+  const hasBottomComments = page.comments.enabled && page.comments.mode !== "module";
+  const immersive = renderedSections.length + (hasBottomComments ? 1 : 0) === 1;
+  if (immersive) {
+    setAppClass("app-shell single-module-page");
+  } else {
+    const header = element("header", "workspace-header compact");
+    const copy = element("div");
+    copy.append(element("p", "eyebrow", `/${page.slug}`), element("h1", "", page.title));
+    copy.append(element("p", "lead", page.description));
+    header.append(copy);
+    main.append(header);
+    main.append(renderPageStatusStrip(page, columnMode));
+  }
+
+  grid.append(...renderedSections);
+
+  if (renderedSections.length === 0 && !hasBottomComments) {
     grid.append(element("p", "empty-state", "这个分页面还没有模块。可以进入 /admin 添加。"));
   }
 
-  main.append(grid);
+  if (renderedSections.length > 0 || !hasBottomComments) {
+    main.append(grid);
+  }
 
-  if (page.comments.enabled && page.comments.mode !== "module") {
+  if (hasBottomComments) {
     const commentsRegion = element("section", "bottom-comments-region");
     commentsRegion.append(renderCommentsSection(page, page.comments, false));
     main.append(commentsRegion);
