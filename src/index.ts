@@ -1,3 +1,5 @@
+import { applyConfigPatch, ConfigPatchError } from "./config-patch.js";
+
 type ModuleStatus = "active" | "planned";
 
 type AppEnv = Env & {
@@ -815,7 +817,7 @@ const apiRoutes: Record<string, ApiRoute> = {
 
     const body = asRecord(await readJson(request));
     const currentConfig = await readSiteConfig(env);
-    const requestedConfig = normalizeSiteConfig(body.config);
+    const requestedConfig = withUpdatedAt(normalizeSiteConfig(body.config));
     const config = auth.sub === "limited" ? mergeLimitedConfig(currentConfig, requestedConfig) : requestedConfig;
 
     if (!env.SITE_CONFIG) {
@@ -828,6 +830,57 @@ const apiRoutes: Record<string, ApiRoute> = {
       ok: true,
       role: auth.sub,
       config
+    });
+  },
+
+  "/api/admin/config-patch": async (request, env) => {
+    const auth = await requireAdmin(request, env);
+
+    if (auth instanceof Response) {
+      return auth;
+    }
+
+    if (request.method !== "POST") {
+      return json({ error: "Method Not Allowed" }, 405);
+    }
+
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (contentLength > 100_000_000) {
+      return json({ error: "配置补丁过大，请减少单次修改内容。" }, 413);
+    }
+
+    const body = asRecord(await readJson(request));
+    const baseUpdatedAt = asString(body.baseUpdatedAt);
+    const currentConfig = await readSiteConfig(env);
+    if (!baseUpdatedAt || baseUpdatedAt !== currentConfig.updatedAt) {
+      return json({
+        error: "网站配置已在其他页面更新，请重新加载后再修改。",
+        code: "CONFIG_VERSION_CONFLICT",
+        updatedAt: currentConfig.updatedAt
+      }, 409);
+    }
+
+    let requestedConfig: SiteConfig;
+    try {
+      requestedConfig = withUpdatedAt(normalizeSiteConfig(applyConfigPatch(currentConfig, body.operations)));
+    } catch (error) {
+      if (error instanceof ConfigPatchError) {
+        return json({ error: error.message }, 400);
+      }
+      throw error;
+    }
+    const config = auth.sub === "limited" ? mergeLimitedConfig(currentConfig, requestedConfig) : requestedConfig;
+
+    if (!env.SITE_CONFIG) {
+      return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+    }
+
+    await env.SITE_CONFIG.put(configKey, JSON.stringify(config));
+
+    return json({
+      ok: true,
+      role: auth.sub,
+      updatedAt: config.updatedAt
     });
   },
 
@@ -1150,7 +1203,7 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
 
   return {
     version: 1,
-    updatedAt: new Date().toISOString(),
+    updatedAt: asString(source.updatedAt) || new Date().toISOString(),
     homeTitle: limitText(asString(source.homeTitle) || defaultSiteConfig.homeTitle, 80),
     homeDescription: limitText(asString(source.homeDescription) || defaultSiteConfig.homeDescription, 220),
     homeImage: normalizeImageSrc(asString(source.homeImage)),
@@ -1159,6 +1212,13 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
     navOrder,
     links,
     pages
+  };
+}
+
+function withUpdatedAt(config: SiteConfig): SiteConfig {
+  return {
+    ...config,
+    updatedAt: new Date().toISOString()
   };
 }
 

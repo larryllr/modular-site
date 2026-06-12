@@ -8,6 +8,7 @@
     "build:cubecity": "npm --prefix vendor/cubecity run build -- --outDir ../../public/llrgamecubecity --emptyOutDir",
     "deploy": "npm run build:cubecity && node ./node_modules/wrangler/bin/wrangler.js deploy",
     "check": "node ./node_modules/typescript/bin/tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
     "types": "node ./node_modules/wrangler/bin/wrangler.js types --include-runtime false",
     "wrangler": "node ./node_modules/wrangler/bin/wrangler.js"
   },

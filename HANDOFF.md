@@ -16,7 +16,7 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`811812d5-b771-4e18-b123-942201874cce`
+- 最新 Cloudflare Version ID：`3c78468b-3aca-4733-97e6-cbbafa211d5d`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -75,6 +75,8 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - CubeCity 默认使用简体中文，右上角仍保留中英文切换。
 - 普通分页面只有一个实际可见模块时进入沉浸模式：隐藏侧边栏、页面标题和状态栏，模块铺满视口且不显示卡片边框。
 - 导航模块支持管理员维护名称和网址、排序及删除；前台自动获取目标网站 favicon，单模块时铺满页面多列展示，多模块时使用独立可滚动卡片，手机端为单列。
+- 导航模块顶部显示无文字的整宽鲜艳渐变磁贴，并根据模块 ID 稳定分配不同配色。
+- 管理员配置保存优先使用带 `updatedAt` 冲突校验的增量补丁；普通字段修改不再上传和下载约 3.15 MiB 的完整配置。补丁应用层请求上限为 `100 MB`，Worker 最终仍整值写入 KV。
 
 “传输模块”已经从网页模块新增入口和配置清洗中移除。不要重新加入，除非用户明确要求。本地 Electron 客户端代码暂时保留。
 
@@ -116,6 +118,7 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 - 博客文章编辑器使用 `contenteditable` 和 `document.execCommand`。工具按钮必须在执行命令前恢复保存的 Selection Range。
 - limited 管理员不能编辑由 admin 发布的文章，也不能编辑被 admin 锁定的页面或模块。
 - 配置加载和服务端清洗都要兼容旧数据，避免已部署内容消失。
+- `/api/admin/config-patch` 只返回保存元数据；`404/405` 才回退旧整包接口，`409` 必须提示重新加载，不能绕过版本冲突保护。
 - 页面整体保持简洁白色，不使用黄底。
 
 ## 可能继续优化的方向

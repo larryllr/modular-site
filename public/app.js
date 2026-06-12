@@ -1,4 +1,5 @@
 import { moduleLoaders } from "./modules/manifest.js";
+import { createConfigPatch } from "./config-patch.js";
 
 const app = document.querySelector("#app");
 const adminTokenKey = "cloudflare-modular-site.admin-token";
@@ -112,8 +113,18 @@ const state = {
   commentCache: new Map(),
   commentRequests: new Map(),
   visitorSummary: null,
-  saveStatus: ""
+  saveStatus: "",
+  savedConfig: null
 };
+
+class ApiError extends Error {
+  constructor(message, status, code = "") {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
 
 const api = {
   getJson: async (path, useAuth = false) => {
@@ -130,7 +141,7 @@ const api = {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || `Request failed: ${response.status}`);
+      throw new ApiError(payload.error || `Request failed: ${response.status}`, response.status, payload.code || "");
     }
 
     return response.json();
@@ -148,7 +159,7 @@ async function init() {
     return;
   }
 
-  state.config = hydrateConfig(await loadPublicConfig());
+  setLoadedConfig(await loadPublicConfig());
   if (getRouteSlug() === "p2p") {
     renderP2PTransferPage();
     return;
@@ -193,7 +204,7 @@ async function renderAdmin() {
 
   try {
     const payload = await api.getJson("/api/admin/config", true);
-    state.config = hydrateConfig(payload.config);
+    setLoadedConfig(payload.config);
     state.adminRole = payload.role || state.adminRole || "admin";
     localStorage.setItem(adminRoleKey, state.adminRole);
     state.undoStack = [];
@@ -239,7 +250,7 @@ function renderLogin(message = "") {
       const payload = await api.postJson("/api/admin/login", { password: password.value });
       state.token = payload.token;
       state.adminRole = payload.role || "admin";
-      state.config = hydrateConfig(payload.config);
+      setLoadedConfig(payload.config);
       state.undoStack = [];
       state.undoFingerprint = "";
       ensureAdminSelection();
@@ -1845,19 +1856,66 @@ async function saveAdminConfig() {
   setSaveBarStatus(state.saveStatus, true);
 
   try {
-    const payload = await api.postJson("/api/admin/config", { config: state.config }, true);
-    state.config = hydrateConfig(payload.config);
-    state.adminRole = payload.role || state.adminRole;
-    localStorage.setItem(adminRoleKey, state.adminRole);
+    const payload = await persistConfig(state.config);
     state.undoStack = [];
     state.undoFingerprint = "";
     ensureAdminSelection();
-    state.saveStatus = `已保存 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
+    state.saveStatus = payload.noChanges
+      ? "没有需要保存的修改。"
+      : `已保存 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
     setSaveBarStatus(state.saveStatus, false);
   } catch (error) {
-    state.saveStatus = error.message;
+    state.saveStatus = error.code === "CONFIG_VERSION_CONFLICT"
+      ? "配置已在其他页面更新，请重新加载后台后再保存。"
+      : error.message;
     setSaveBarStatus(state.saveStatus, false);
   }
+}
+
+async function persistConfig(nextConfig) {
+  const config = hydrateConfig(nextConfig);
+  const base = state.savedConfig || hydrateConfig(state.config);
+  const operations = createConfigPatch(base, config);
+
+  if (operations.length === 0) {
+    state.config = config;
+    return { ok: true, role: state.adminRole, updatedAt: config.updatedAt, noChanges: true };
+  }
+
+  try {
+    const payload = await api.postJson("/api/admin/config-patch", {
+      baseUpdatedAt: base.updatedAt,
+      operations
+    }, true);
+    config.updatedAt = payload.updatedAt || config.updatedAt;
+    state.config = config;
+    state.savedConfig = cloneConfig(config);
+    updateAdminRole(payload.role);
+    return payload;
+  } catch (error) {
+    if (!(error instanceof ApiError) || ![404, 405].includes(error.status)) {
+      throw error;
+    }
+  }
+
+  const payload = await api.postJson("/api/admin/config", { config }, true);
+  setLoadedConfig(payload.config);
+  updateAdminRole(payload.role);
+  return payload;
+}
+
+function setLoadedConfig(config) {
+  state.config = hydrateConfig(config);
+  state.savedConfig = cloneConfig(state.config);
+}
+
+function cloneConfig(config) {
+  return structuredClone(config);
+}
+
+function updateAdminRole(role) {
+  state.adminRole = role || state.adminRole;
+  localStorage.setItem(adminRoleKey, state.adminRole);
 }
 
 function setSaveBarStatus(message, saving = false) {
@@ -2857,6 +2915,8 @@ function renderLinkSection(section) {
 
 function renderNavigationSection(section) {
   const card = element("article", "module-card navigation-section");
+  const colorTile = element("div", `navigation-color-tile navigation-color-${navigationColorIndex(section.id)}`);
+  colorTile.setAttribute("aria-hidden", "true");
   const header = element("header", "navigation-section-header");
   header.append(element("h2", "", section.title || "导航"));
   const list = element("ol", "navigation-list");
@@ -2893,12 +2953,20 @@ function renderNavigationSection(section) {
   }
 
   if (!list.children.length) {
-    card.append(header, element("p", "empty-state", "管理员还没有添加可用网址。"));
+    card.append(colorTile, header, element("p", "empty-state", "管理员还没有添加可用网址。"));
     return card;
   }
 
-  card.append(header, list);
+  card.append(colorTile, header, list);
   return card;
+}
+
+function navigationColorIndex(id) {
+  let hash = 0;
+  for (const character of String(id || "navigation")) {
+    hash = ((hash << 5) - hash + character.codePointAt(0)) | 0;
+  }
+  return Math.abs(hash) % 4;
 }
 
 function navigationInitial(name, url) {
@@ -3334,8 +3402,7 @@ async function deleteBlogArticle(page, articleId) {
   targetPage.blog.articles = targetPage.blog.articles.filter((article) => article.id !== articleId);
 
   try {
-    const payload = await api.postJson("/api/admin/config", { config }, true);
-    state.config = hydrateConfig(payload.config);
+    await persistConfig(config);
     if (getRouteSlug() === `${page.slug}/${articleId}`) {
       window.history.replaceState(null, "", `/${page.slug}`);
     }
@@ -3374,8 +3441,7 @@ async function updateBlogFromPublicPage(page, updater) {
   }
   targetPage.blog = hydrateBlogSection(targetPage.blog);
   updater(targetPage.blog);
-  const payload = await api.postJson("/api/admin/config", { config }, true);
-  state.config = hydrateConfig(payload.config);
+  await persistConfig(config);
 }
 
 function reorderArticleArray(articles, sourceId, targetId) {
@@ -3481,10 +3547,7 @@ function renderBlogQuickPublisher(page, blog) {
     }
 
     try {
-      const payload = await api.postJson("/api/admin/config", { config }, true);
-      state.config = hydrateConfig(payload.config);
-      state.adminRole = payload.role || state.adminRole;
-      localStorage.setItem(adminRoleKey, state.adminRole);
+      await persistConfig(config);
       feedback.textContent = "已发布。";
       renderPublicSite();
     } catch (error) {
