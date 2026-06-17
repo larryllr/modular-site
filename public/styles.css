@@ -2482,6 +2482,17 @@ h1 {
   background: #ffffff;
 }
 
+.editable-entry-preview.has-entry-background .editable-card-title,
+.editable-entry-preview.has-entry-background .editable-card-description {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+}
+
+.editable-entry-preview.has-entry-background .editable-card-title::placeholder,
+.editable-entry-preview.has-entry-background .editable-card-description::placeholder {
+  color: var(--muted);
+}
+
 .editable-entry-fake-button {
   pointer-events: none;
 }
