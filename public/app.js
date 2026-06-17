@@ -3911,6 +3911,10 @@ function isAdminSession() {
   return Boolean(state.token);
 }
 
+function canManageComments(adminMode) {
+  return adminMode || isAdminSession();
+}
+
 function renderBlogPagePreview(page) {
   const wrapper = element("section", "admin-panel blog-page-preview-panel");
   wrapper.append(element("h2", "", "博客页面预览"));
@@ -4176,6 +4180,7 @@ function renderVideoSection(section) {
 
 function renderCommentsSection(page, source, adminMode) {
   const card = element("article", adminMode ? "module-card comments-section admin-comments-section" : "module-card comments-section");
+  const canManage = canManageComments(adminMode);
   card.style.setProperty("--comments-list-height", `${source.listHeight || 320}px`);
   const header = element("header", "module-card-header no-toggle");
   header.append(mark("CM"), textBlock(source.title || "评论", source.description || "留下你的想法。"));
@@ -4257,7 +4262,7 @@ function renderCommentsSection(page, source, adminMode) {
   }
 
   card.append(list);
-  loadComments(page.slug, list, adminMode);
+  loadComments(page.slug, list, canManage);
   return card;
 }
 
@@ -4287,6 +4292,7 @@ function renderCommentsManager(page) {
 async function loadComments(pageSlug, list, adminMode, options = {}) {
   list.dataset.commentsPage = pageSlug;
   list.dataset.adminMode = adminMode ? "1" : "0";
+  list.dataset.canManageComments = adminMode ? "1" : "0";
 
   if (!options.force && state.commentCache.has(pageSlug)) {
     renderCommentsList(pageSlug, list, adminMode, state.commentCache.get(pageSlug));
@@ -4342,7 +4348,7 @@ function refreshCommentLists(pageSlug) {
 
   for (const list of document.querySelectorAll(".comments-list")) {
     if (list.dataset.commentsPage === pageSlug) {
-      renderCommentsList(pageSlug, list, list.dataset.adminMode === "1", comments);
+      renderCommentsList(pageSlug, list, list.dataset.canManageComments === "1", comments);
     }
   }
 }
@@ -4378,6 +4384,10 @@ function renderCommentItem(pageSlug, comment, adminMode, list) {
     });
 
     remove.addEventListener("click", async () => {
+      if (!confirm("确定删除这条评论？")) {
+        return;
+      }
+
       const payload = await api.postJson("/api/admin/comments", { page: pageSlug, action: "delete", id: comment.id }, true);
       updateCommentCache(pageSlug, payload.comments || []);
       refreshCommentLists(pageSlug);
