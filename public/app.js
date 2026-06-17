@@ -913,81 +913,106 @@ function renderEditablePageHeader(page) {
 }
 
 function renderEntrySettings(page) {
+  return renderModernEntryEditor(page);
+}
+
+function renderModernEntryEditor(page) {
   const limited = isLimitedAdmin();
-  const panel = element("section", "entry-settings");
+  const panel = element("section", "entry-settings modern-entry-settings");
   const head = element("div", "section-head");
-  head.append(element("h2", "", "分页面入口显示"));
-  head.append(element("p", "", "左侧栏图标默认跟随主页入口卡片；单独设置后，左侧栏会使用自己的图标。"));
+  head.append(element("h2", "", "入口卡片"));
+  head.append(element("p", "", "直接在卡片里改标题和说明；图片与侧边栏设置收在右侧。"));
 
-  const row = element("div", "admin-row");
-  row.append(
-    field("入口标题", page.entry.title, (value) => {
-      page.entry.title = value;
-    }, "留空时使用页面标题。")
-  );
-  row.append(
-    field("入口说明", page.entry.description, (value) => {
-      page.entry.description = value;
-    }, "留空时使用页面说明。")
-  );
-  row.append(
-    field("侧边栏标题", page.entry.sidebarTitle, (value) => {
-      page.entry.sidebarTitle = value;
-    }, "留空时使用页面标题。")
-  );
-  row.append(
-    field("侧边栏说明", page.entry.sidebarDescription, (value) => {
-      page.entry.sidebarDescription = value;
-    }, "留空时显示网址后缀。")
-  );
+  const layout = element("div", "modern-entry-layout");
+  const preview = element("article", "module-card entry-card editable-entry-preview");
+  applyEntryCardStyle(preview, page.entry.backgroundImage);
+  const previewHeader = element("header", "module-card-header no-toggle");
+  previewHeader.append(entryMark(page.entry));
+  const previewText = element("div", "editable-entry-copy");
+  const titleInput = document.createElement("input");
+  titleInput.className = "editable-card-title";
+  titleInput.value = page.entry.title || "";
+  titleInput.placeholder = page.title || "入口标题";
+  titleInput.setAttribute("aria-label", "入口标题");
+  trackUndoOnEdit(titleInput);
+  titleInput.addEventListener("input", () => {
+    page.entry.title = titleInput.value;
+    markConfigDirty();
+  });
+  const descriptionInput = document.createElement("textarea");
+  descriptionInput.className = "editable-card-description";
+  descriptionInput.value = page.entry.description || "";
+  descriptionInput.placeholder = page.description || "入口说明";
+  descriptionInput.rows = 2;
+  descriptionInput.setAttribute("aria-label", "入口说明");
+  trackUndoOnEdit(descriptionInput);
+  descriptionInput.addEventListener("input", () => {
+    page.entry.description = descriptionInput.value;
+    markConfigDirty();
+  });
+  previewText.append(titleInput, descriptionInput);
+  previewHeader.append(previewText);
+  preview.append(previewHeader, element("span", "button primary editable-entry-fake-button", "进入"));
 
-  const iconRow = element("div", "admin-row");
-  iconRow.append(
-    field("主页图标文字", page.entry.iconText, (value) => {
+  const settings = element("div", "modern-entry-side");
+  settings.append(
+    compactTextField("主页图标文字", page.entry.iconText, (value) => {
       page.entry.iconText = value.slice(0, 4).toUpperCase();
-    })
+    }, "最多 4 个字，未上传图片时显示。")
   );
-  iconRow.append(imageValueField("主页图标图片", page.entry.iconImage, (value) => {
+  settings.append(compactImageValueField("主页图标图片", page.entry.iconImage, (value) => {
     page.entry.iconImage = value;
   }));
-
-  const sidebarIconRow = element("div", "admin-row");
-  sidebarIconRow.append(
-    field("侧边栏图标文字", page.entry.sidebarIconText, (value) => {
-      page.entry.sidebarIconText = value.slice(0, 4).toUpperCase();
-    }, "留空时跟随主页图标文字。")
-  );
-  sidebarIconRow.append(imageValueField("侧边栏图标图片", page.entry.sidebarIconImage, (value) => {
-    page.entry.sidebarIconImage = value;
-  }));
-
-  const backgroundRow = element("div", "admin-row");
-  backgroundRow.append(imageValueField("入口卡片背景", page.entry.backgroundImage, (value) => {
+  settings.append(compactImageValueField("入口卡片背景", page.entry.backgroundImage, (value) => {
     page.entry.backgroundImage = value;
+  }, {
+    onPreview: (value) => applyEntryCardStyle(preview, value)
   }));
-  backgroundRow.append(imageValueField("分页面背景", page.backgroundImage, (value) => {
+  settings.append(compactImageValueField("分页面背景", page.backgroundImage, (value) => {
     page.backgroundImage = value;
+  }, {
+    hint: "影响前台分页面背景，保存后生效。"
   }));
-  backgroundRow.append(renderEntryPreview(page));
 
-  panel.append(head, row, iconRow, sidebarIconRow, backgroundRow);
+  const sideDetails = document.createElement("details");
+  sideDetails.className = "modern-settings-details";
+  sideDetails.append(element("summary", "", "侧边栏单独设置"));
+  const sideGrid = element("div", "modern-details-grid");
+  sideGrid.append(
+    compactTextField("侧边栏标题", page.entry.sidebarTitle, (value) => {
+      page.entry.sidebarTitle = value;
+    }, "留空时使用页面标题。"),
+    compactAreaField("侧边栏说明", page.entry.sidebarDescription, (value) => {
+      page.entry.sidebarDescription = value;
+    }, "留空时显示网址后缀。"),
+    compactTextField("侧边栏图标文字", page.entry.sidebarIconText, (value) => {
+      page.entry.sidebarIconText = value.slice(0, 4).toUpperCase();
+    }, "留空时跟随主页图标文字。"),
+    compactImageValueField("侧边栏图标图片", page.entry.sidebarIconImage, (value) => {
+      page.entry.sidebarIconImage = value;
+    })
+  );
+  sideDetails.append(sideGrid);
+  settings.append(sideDetails);
+
+  layout.append(preview, settings);
+  panel.append(head, layout);
 
   if (!limited) {
-    const passwordPanel = element("section", "entry-settings page-password-settings");
-    passwordPanel.append(element("h3", "", "分页面密码"));
-    const passwordRow = element("div", "admin-row");
-    passwordRow.append(
+    const passwordPanel = document.createElement("details");
+    passwordPanel.className = "modern-settings-details page-password-settings";
+    passwordPanel.append(element("summary", "", "分页面密码与权限"));
+    const passwordGrid = element("div", "modern-details-grid");
+    passwordGrid.append(
       checkbox("进入这个分页面需要密码", page.passwordEnabled, (checked) => {
         page.passwordEnabled = checked;
         renderAdminEditor();
-      })
-    );
-    passwordRow.append(
-      field("分页面专属密码", page.pagePassword, (value) => {
+      }),
+      compactTextField("分页面专属密码", page.pagePassword, (value) => {
         page.pagePassword = value;
       }, "开启后，访客输入正确密码前不会看到这个分页面的标题、模块、评论和背景。")
     );
-    passwordPanel.append(passwordRow);
+    passwordPanel.append(passwordGrid);
     panel.append(passwordPanel);
   }
   return panel;
@@ -1001,18 +1026,38 @@ function renderEntryPreview(page) {
 }
 
 function renderBottomCommentsSettings(page) {
-  const panel = element("section", "entry-settings comments-placement-settings");
+  const panel = element("section", "entry-settings comments-placement-settings modern-comments-settings");
   const head = element("div", "section-head");
-  head.append(element("h2", "", "底部评论区"));
-  head.append(element("p", "", "默认作为页面底部的独立区域；也可以改成和其它模块一样进入模块网格。"));
-  const row = element("div", "admin-row");
-  row.append(
+  head.append(element("h2", "", "评论区"));
+  head.append(element("p", "", "打开后访客可以在这个分页面留言；更多布局和管理项默认收起。"));
+  const quickRow = element("div", "modern-comments-row");
+  quickRow.append(
     checkbox("在页面底部显示评论区", page.comments.enabled, (checked) => {
       page.comments.enabled = checked;
       renderAdminEditor();
     })
   );
-  row.append(
+  quickRow.append(element("span", "modern-comments-status", page.comments.enabled ? "已开启" : "已关闭"));
+  panel.append(head, quickRow);
+
+  if (page.comments.enabled) {
+    const copyGrid = element("div", "modern-comments-copy");
+    copyGrid.append(
+      compactTextField("标题", page.comments.title, (value) => {
+        page.comments.title = value;
+      }),
+      compactAreaField("说明", page.comments.description, (value) => {
+        page.comments.description = value;
+      })
+    );
+    panel.append(copyGrid);
+  }
+
+  const advanced = document.createElement("details");
+  advanced.className = "comments-advanced-details modern-settings-details";
+  advanced.append(element("summary", "", "评论展示和管理"));
+  const advancedGrid = element("div", "modern-details-grid");
+  advancedGrid.append(
     selectField(
       "展示方式",
       page.comments.mode,
@@ -1024,36 +1069,22 @@ function renderBottomCommentsSettings(page) {
         page.comments.mode = value;
         renderAdminEditor();
       }
-    )
-  );
-  panel.append(head, row);
-
-  const titleRow = element("div", "admin-row");
-  titleRow.append(
-    field("底部评论标题", page.comments.title, (value) => {
-      page.comments.title = value;
-    })
-  );
-  titleRow.append(
-    numberField("评论列表高度(px)", page.comments.listHeight, 180, 900, 20, (value) => {
+    ),
+    numberField("列表高度(px)", page.comments.listHeight, 180, 900, 20, (value) => {
       page.comments.listHeight = value;
       renderAdminEditor();
     })
   );
-  panel.append(titleRow);
+  advanced.append(advancedGrid);
 
-  if (page.comments.mode === "module") {
-    panel.append(renderLayoutSettings(page.comments, "评论模块布局"));
+  if (page.comments.enabled && page.comments.mode === "module") {
+    advanced.append(renderLayoutSettings(page.comments, "评论模块布局"));
   }
 
-  panel.append(
-    field("底部评论说明", page.comments.description, (value) => {
-      page.comments.description = value;
-    })
-  );
   if (!isLimitedAdmin()) {
-    panel.append(renderCommentsManager(page));
+    advanced.append(renderCommentsManager(page));
   }
+  panel.append(advanced);
   return panel;
 }
 
@@ -5512,6 +5543,113 @@ function checkbox(label, checked, onChange, disabled = false) {
   return wrapper;
 }
 
+function compactTextField(label, value, onInput, hint = "") {
+  const wrapper = element("label", "field compact-field");
+  wrapper.append(element("span", "", label));
+  const input = document.createElement("input");
+  input.className = "input";
+  input.value = value || "";
+  trackUndoOnEdit(input);
+  input.addEventListener("input", () => {
+    onInput(input.value);
+    markConfigDirty();
+  });
+  wrapper.append(input);
+  if (hint) wrapper.append(element("small", "", hint));
+  return wrapper;
+}
+
+function compactAreaField(label, value, onInput, hint = "") {
+  const wrapper = element("label", "field compact-field");
+  wrapper.append(element("span", "", label));
+  const textarea = document.createElement("textarea");
+  textarea.className = "textarea";
+  textarea.value = value || "";
+  textarea.rows = 3;
+  trackUndoOnEdit(textarea);
+  textarea.addEventListener("input", () => {
+    onInput(textarea.value);
+    markConfigDirty();
+  });
+  wrapper.append(textarea);
+  if (hint) wrapper.append(element("small", "", hint));
+  return wrapper;
+}
+
+function compactImageValueField(label, value, onChange, options = {}) {
+  const wrapper = element("div", "compact-image-field");
+  const preview = element("span", "compact-image-preview");
+  const status = element("span", "compact-image-status");
+  const paste = document.createElement("input");
+  paste.className = "input compact-image-url";
+  paste.placeholder = "可选：粘贴图片地址后回车";
+  paste.value = value && !value.startsWith("data:") ? value : "";
+
+  const applyValue = (nextValue, message = "有未保存修改。") => {
+    onChange(nextValue);
+    updateCompactImagePreview(preview, status, nextValue);
+    if (options.onPreview) options.onPreview(nextValue);
+    markConfigDirty(message);
+  };
+
+  const head = element("div", "compact-image-head");
+  head.append(element("strong", "", label), status);
+  wrapper.append(head, preview);
+
+  trackUndoOnEdit(paste);
+  paste.addEventListener("change", () => {
+    rememberConfigChange();
+    applyValue(paste.value.trim());
+  });
+
+  const upload = document.createElement("input");
+  upload.type = "file";
+  upload.accept = "image/*";
+  upload.hidden = true;
+  const uploadButton = button("上传", "button", "button");
+  uploadButton.addEventListener("click", () => upload.click());
+  upload.addEventListener("change", async () => {
+    const file = upload.files?.[0];
+    if (!file) return;
+
+    rememberConfigChange();
+    state.saveStatus = "正在处理图片...";
+    setSaveBarStatus(state.saveStatus, true);
+    uploadButton.disabled = true;
+
+    try {
+      const dataUrl = await imageFileToDataUrl(file);
+      paste.value = "";
+      applyValue(dataUrl, "图片已加入预览，记得保存配置。");
+    } catch (error) {
+      state.saveStatus = error.message;
+      setSaveBarStatus(state.saveStatus);
+    } finally {
+      uploadButton.disabled = false;
+      upload.value = "";
+    }
+  });
+
+  const clear = button("清除", "button", "button");
+  clear.addEventListener("click", () => {
+    rememberConfigChange();
+    paste.value = "";
+    applyValue("");
+  });
+  const actions = element("div", "compact-image-actions");
+  actions.append(uploadButton, clear);
+  wrapper.append(actions, paste, upload);
+  if (options.hint) wrapper.append(element("small", "", options.hint));
+  updateCompactImagePreview(preview, status, value);
+  return wrapper;
+}
+
+function updateCompactImagePreview(preview, status, value) {
+  preview.style.backgroundImage = value ? `url("${cssUrl(value)}")` : "";
+  preview.classList.toggle("has-image", Boolean(value));
+  status.textContent = value ? (value.startsWith("data:") ? "已上传图片" : "已设置地址") : "未设置";
+}
+
 function imageValueField(label, value, onChange) {
   const wrapper = element("div", "field image-value-field");
   wrapper.append(element("span", "", label));
@@ -5821,6 +5959,8 @@ function clampNumber(value, min, max) {
 
 function applyEntryCardStyle(card, image) {
   if (!image) {
+    card.classList.remove("has-entry-background");
+    card.style.backgroundImage = "";
     return;
   }
 

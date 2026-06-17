@@ -16,7 +16,7 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`3c78468b-3aca-4733-97e6-cbbafa211d5d`
+- 最新 Cloudflare Version ID：`262acaea-c869-4642-a585-c556a95804c7`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -77,6 +77,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 导航模块支持管理员维护名称和网址、排序及删除；前台自动获取目标网站 favicon，单模块时铺满页面多列展示，多模块时使用独立可滚动卡片，手机端为单列。
 - 导航模块顶部显示无文字的整宽鲜艳渐变磁贴，并根据模块 ID 稳定分配不同配色。
 - 管理员配置保存优先使用带 `updatedAt` 冲突校验的增量补丁；普通字段修改不再上传和下载约 3.15 MiB 的完整配置。补丁应用层请求上限为 `100 MB`，Worker 最终仍整值写入 KV。
+- 管理后台分页面入口编辑已改为现代化简洁界面：入口卡片标题和说明可直接在预览卡内编辑，图片控件不再显示 Base64 长串，侧边栏/密码/评论管理默认折叠。
 
 “传输模块”已经从网页模块新增入口和配置清洗中移除。不要重新加入，除非用户明确要求。本地 Electron 客户端代码暂时保留。
 
