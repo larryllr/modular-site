@@ -5984,7 +5984,7 @@ function applyPageBackground(node, image) {
   }
 
   node.classList.add("has-page-background");
-  node.style.backgroundImage = `linear-gradient(180deg, rgba(251, 250, 246, 0.84), rgba(251, 250, 246, 0.68)), url("${cssUrl(image)}")`;
+  node.style.backgroundImage = `linear-gradient(180deg, rgba(251, 250, 246, 0.9), rgba(251, 250, 246, 0.82)), url("${cssUrl(image)}")`;
 }
 
 function normalizeExternalUrl(value) {

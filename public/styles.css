@@ -303,6 +303,14 @@ textarea {
   min-height: 100vh;
 }
 
+.workspace.has-page-background .status-strip > div,
+.workspace.has-page-background .module-card {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 14px 34px rgba(23, 32, 29, 0.1);
+  backdrop-filter: blur(10px);
+}
+
 .page-password-workspace {
   min-height: 100vh;
   place-items: center;
@@ -486,6 +494,27 @@ h1 {
 
 .page-module-grid {
   align-items: start;
+}
+
+.workspace.has-page-background .page-module-grid {
+  align-items: stretch;
+  gap: 14px;
+}
+
+.workspace.has-page-background .page-module-grid > .module-card {
+  grid-column: auto !important;
+  height: clamp(220px, 24vw, 280px);
+  min-height: 0 !important;
+  overflow: auto;
+}
+
+.workspace.has-page-background .page-module-grid > .navigation-section {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.workspace.has-page-background .navigation-list {
+  max-height: none;
+  min-height: 0;
 }
 
 .page-module-grid.layout-fixed {
@@ -2969,6 +2998,13 @@ h1 {
 
   .module-grid {
     grid-template-columns: 1fr;
+  }
+
+  .workspace.has-page-background .page-module-grid > .module-card {
+    grid-column: 1 !important;
+    height: 220px;
+    min-height: 0 !important;
+    overflow: auto;
   }
 
   .blog-article-card > img {
