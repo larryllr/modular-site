@@ -21,6 +21,15 @@ html {
   min-width: 320px;
 }
 
+html.app-booting,
+html.app-booting body {
+  background: #073f47;
+}
+
+html.app-booting #app {
+  visibility: hidden;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -292,23 +301,54 @@ textarea {
   padding: 28px;
 }
 
-.workspace.has-page-background,
-.page-preview.has-page-background {
+.workspace.has-page-background {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.workspace.has-page-background::before,
+.workspace.has-page-background::after {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.workspace.has-page-background::before {
+  background-color: rgba(70, 157, 174, 0.32);
+  background-image: var(--page-background-image);
+  background-blend-mode: screen;
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
+  filter: saturate(0.85) brightness(1.15) contrast(0.9);
+  transform: scale(1.002);
 }
 
-.workspace.has-page-background {
-  min-height: 100vh;
+.workspace.has-page-background::after {
+  z-index: -1;
+  background: linear-gradient(135deg, rgba(3, 61, 70, 0.38) 0%, rgba(3, 61, 70, 0.12) 38%, rgba(3, 61, 70, 0.02) 72%, rgba(3, 61, 70, 0) 100%);
 }
 
 .workspace.has-page-background .status-strip > div,
 .workspace.has-page-background .module-card {
-  border-color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 14px 34px rgba(23, 32, 29, 0.1);
-  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 28px rgba(1, 36, 42, 0.14);
+  backdrop-filter: blur(3px);
+}
+
+.workspace.has-page-background .workspace-header {
+  border-bottom-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.workspace.has-page-background .workspace-header .eyebrow,
+.workspace.has-page-background .workspace-header .lead {
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .page-password-workspace {
@@ -952,6 +992,12 @@ h1 {
 
 .page-preview.has-page-background {
   background-color: #f2f5ef;
+  background-image:
+    linear-gradient(135deg, rgba(3, 61, 70, 0.58), rgba(3, 61, 70, 0.08)),
+    var(--page-background-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .preview-page-header {

@@ -50,6 +50,7 @@ const fallbackConfig = {
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
       backgroundImage: "",
+      dailyBackgroundEnabled: false,
       locked: false,
       passwordEnabled: false,
       pagePassword: "",
@@ -113,6 +114,7 @@ const state = {
   commentCache: new Map(),
   commentRequests: new Map(),
   visitorSummary: null,
+  preparedPageBackground: new Map(),
   saveStatus: "",
   savedConfig: null
 };
@@ -151,21 +153,60 @@ const api = {
 init();
 
 async function init() {
-  const loaded = await Promise.all(moduleLoaders.map((entry) => entry.load()));
-  state.modules = loaded.map((module) => module.default);
+  try {
+    const loaded = await Promise.all(moduleLoaders.map((entry) => entry.load()));
+    state.modules = loaded.map((module) => module.default);
 
-  if (getRouteSlug() === "admin") {
-    await renderAdmin();
+    if (getRouteSlug() === "admin") {
+      await renderAdmin();
+      return;
+    }
+
+    setLoadedConfig(await loadPublicConfig());
+    if (getRouteSlug() === "p2p") {
+      renderP2PTransferPage();
+      return;
+    }
+
+    const pageSlug = getRouteSlug().split("/")[0];
+    const page = state.config.pages.find((item) => item.visible && item.slug === pageSlug);
+    if (page?.dailyBackgroundEnabled) {
+      await prepareDailyBackground(page);
+    }
+    renderPublicSite();
+  } finally {
+    document.documentElement.classList.remove("app-booting");
+  }
+}
+
+async function prepareDailyBackground(page) {
+  if (!page?.dailyBackgroundEnabled || state.preparedPageBackground.has(page.slug)) {
     return;
   }
 
-  setLoadedConfig(await loadPublicConfig());
-  if (getRouteSlug() === "p2p") {
-    renderP2PTransferPage();
-    return;
-  }
+  const day = new Date().toISOString().slice(0, 10);
+  const url = `/api/daily-background?day=${day}`;
+  const image = new Image();
+  image.src = url;
+  let timeoutId;
 
-  renderPublicSite();
+  try {
+    const decoded = typeof image.decode === "function"
+      ? image.decode()
+      : new Promise((resolve, reject) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", reject, { once: true });
+      });
+    const timeout = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error("Daily background timed out")), 5000);
+    });
+    await Promise.race([decoded, timeout]);
+    state.preparedPageBackground.set(page.slug, url);
+  } catch {
+    state.preparedPageBackground.delete(page.slug);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function requestOptions(method, body, useAuth) {
@@ -972,6 +1013,10 @@ function renderModernEntryEditor(page) {
     page.backgroundImage = value;
   }, {
     hint: "影响前台分页面背景，保存后生效。"
+  }));
+  settings.append(checkbox("每日自动背景", page.dailyBackgroundEnabled, (checked) => {
+    page.dailyBackgroundEnabled = checked;
+    markConfigDirty();
   }));
 
   const sideDetails = document.createElement("details");
@@ -2178,7 +2223,7 @@ function renderPage(page, articleId = "") {
   document.title = page.title;
   const columnMode = getPageColumnMode(page.slug);
   const main = element("main", "workspace");
-  applyPageBackground(main, page.backgroundImage);
+  applyPageBackground(main, resolvePageBackground(page));
   const grid = element("section", `module-grid page-module-grid ${columnMode === "default" ? "layout-default" : "layout-fixed"}`);
   if (columnMode !== "default") {
     grid.style.setProperty("--grid-columns", String(columnMode));
@@ -2288,6 +2333,7 @@ function renderPagePasswordGate(page) {
       const fullPage = hydratePage(payload.page);
       rememberUnlockedPage(fullPage);
       replaceConfigPage(fullPage);
+      await prepareDailyBackground(fullPage);
       renderPublicSite();
     } catch (error) {
       feedback.textContent = error.message;
@@ -3132,7 +3178,7 @@ function renderBlogPage(page, articleId = "") {
   }
 
   const main = element("main", "workspace blog-page-workspace");
-  applyPageBackground(main, page.backgroundImage);
+  applyPageBackground(main, resolvePageBackground(page));
   const articles = orderedArticles;
   const categories = blog.categories?.length ? blog.categories : [...new Set(articles.map((article) => article.category).filter(Boolean))];
   const filterKey = `cloudflare-modular-site.blog-filter.${page.slug}`;
@@ -4565,6 +4611,7 @@ function hydratePage(page) {
     modules: sections.filter((section) => section.type === "system").map((section) => section.moduleId),
     blocks: sections.filter((section) => section.type === "text"),
     backgroundImage: page.backgroundImage || "",
+    dailyBackgroundEnabled: Boolean(page.dailyBackgroundEnabled),
     locked: Boolean(page.locked),
     passwordEnabled: Boolean(page.passwordEnabled),
     pagePassword: page.pagePassword || "",
@@ -4879,6 +4926,7 @@ function createPage() {
     title: `新分页面 ${index}`,
     description: "在这里填写页面说明。",
     backgroundImage: "",
+    dailyBackgroundEnabled: false,
     locked: false,
     passwordEnabled: false,
     pagePassword: "",
@@ -5980,11 +6028,22 @@ function applyEntryCardStyle(card, image) {
 
 function applyPageBackground(node, image) {
   if (!image) {
+    node.classList.remove("has-page-background");
+    node.style.removeProperty("--page-background-image");
+    node.style.backgroundImage = "";
     return;
   }
 
   node.classList.add("has-page-background");
-  node.style.backgroundImage = `linear-gradient(180deg, rgba(251, 250, 246, 0.9), rgba(251, 250, 246, 0.82)), url("${cssUrl(image)}")`;
+  node.style.backgroundImage = "";
+  node.style.setProperty("--page-background-image", `url("${cssUrl(image)}")`);
+}
+
+function resolvePageBackground(page) {
+  const prepared = page.dailyBackgroundEnabled
+    ? state.preparedPageBackground.get(page.slug)
+    : "";
+  return prepared || page.backgroundImage || "";
 }
 
 function normalizeExternalUrl(value) {

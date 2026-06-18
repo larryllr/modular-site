@@ -214,6 +214,7 @@ type SitePage = {
   title: string;
   description: string;
   backgroundImage: string;
+  dailyBackgroundEnabled: boolean;
   locked: boolean;
   passwordEnabled: boolean;
   pagePassword: string;
@@ -283,6 +284,8 @@ const tokenMaxAgeMs = 12 * 60 * 60 * 1000;
 const maxAccessLogs = 1000;
 const cubeCityLinkId = "builtin-cubecity";
 const cubeCityPath = "/llrgamecubecity";
+const bingOrigin = "https://www.bing.com";
+const bingDailyMetadataUrl = `${bingOrigin}/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN`;
 
 function defaultCubeCityLink(): SiteLink {
   return {
@@ -320,6 +323,7 @@ const defaultSiteConfig: SiteConfig = {
       title: "模块工作台",
       description: "集中查看站点状态、便签、API 和发布清单。",
       backgroundImage: "",
+      dailyBackgroundEnabled: false,
       locked: false,
       passwordEnabled: false,
       pagePassword: "",
@@ -510,6 +514,8 @@ const apiRoutes: Record<string, ApiRoute> = {
     json({
       config: toPublicSiteConfig(await readSiteConfig(env))
     }),
+
+  "/api/daily-background": fetchDailyBackground,
 
   "/api/visitor-summary": async (request, env) => {
     await recordAccessLog(request, env, { force: true });
@@ -1001,6 +1007,77 @@ const apiRoutes: Record<string, ApiRoute> = {
   }
 };
 
+async function fetchDailyBackground(request: Request): Promise<Response> {
+  if (request.method !== "GET") {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+
+  const cached = await caches.default.match(request);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const metadataResponse = await fetch(bingDailyMetadataUrl, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!metadataResponse.ok) {
+      return json({ error: "每日背景元数据暂不可用" }, 502);
+    }
+
+    const metadata = asRecord(await metadataResponse.json());
+    const images = Array.isArray(metadata.images) ? metadata.images : [];
+    const metadataImage = asRecord(images[0]);
+    const urlbase = asString(metadataImage.urlbase);
+    const fallbackPath = asString(metadataImage.url);
+    const candidates = [
+      urlbase ? `${urlbase}_UHD.jpg` : "",
+      fallbackPath
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+      const url = bingImageUrl(candidate);
+      if (!url) {
+        continue;
+      }
+
+      const imageResponse = await fetch(url.toString(), {
+        headers: { accept: "image/avif,image/webp,image/*" },
+        signal: AbortSignal.timeout(8000)
+      });
+      const contentType = imageResponse.headers.get("content-type") || "";
+      if (!imageResponse.ok || !contentType.startsWith("image/")) {
+        continue;
+      }
+
+      const headers = new Headers();
+      headers.set("content-type", contentType);
+      headers.set("cache-control", "public, max-age=3600, s-maxage=21600");
+      headers.set("x-content-type-options", "nosniff");
+      const response = new Response(imageResponse.body, { status: 200, headers });
+      await caches.default.put(request, response.clone());
+      return response;
+    }
+  } catch {
+    return json({ error: "每日背景暂不可用" }, 502);
+  }
+
+  return json({ error: "每日背景图片暂不可用" }, 502);
+}
+
+function bingImageUrl(value: string): URL | null {
+  try {
+    const url = new URL(value, bingOrigin);
+    if (url.origin !== bingOrigin || url.pathname !== "/th") {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 async function readSiteConfig(env: AppEnv): Promise<SiteConfig> {
   if (!env.SITE_CONFIG) {
     return defaultSiteConfig;
@@ -1173,6 +1250,7 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
       title: limitText(asString(record.title) || `分页面 ${index + 1}`, 80),
       description: limitText(asString(record.description), 220),
       backgroundImage: normalizeImageSrc(asString(record.backgroundImage)),
+      dailyBackgroundEnabled: typeof record.dailyBackgroundEnabled === "boolean" ? record.dailyBackgroundEnabled : false,
       locked: typeof record.locked === "boolean" ? record.locked : false,
       passwordEnabled: typeof record.passwordEnabled === "boolean" ? record.passwordEnabled : false,
       pagePassword: limitText(asString(record.pagePassword), 120),
