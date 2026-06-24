@@ -400,7 +400,22 @@ const gameAssetSlots: GameAssetSlot[] = [
   { id: "audio.coin", label: "金币音效", kind: "audio" },
   { id: "audio.hurt", label: "受伤音效", kind: "audio" },
   { id: "audio.win", label: "胜利音效", kind: "audio" },
-  { id: "audio.bgm", label: "背景音乐", kind: "audio" }
+  { id: "audio.bgm", label: "背景音乐", kind: "audio" },
+  { id: "sm63.player.sheet", label: "SM63 主角整张动作表", kind: "image" },
+  { id: "sm63.fludd.sheet", label: "SM63 喷水背包动作表", kind: "image" },
+  { id: "sm63.enemy.goomba.walk", label: "SM63 Goomba 行走表", kind: "image" },
+  { id: "sm63.enemy.goomba.jump", label: "SM63 Goomba 跳跃表", kind: "image" },
+  { id: "sm63.enemy.goomba.squish", label: "SM63 Goomba 踩扁表", kind: "image" },
+  { id: "sm63.enemy.koopa.walk", label: "SM63 Koopa 行走表", kind: "image" },
+  { id: "sm63.pickup.coins", label: "SM63 金币整张表", kind: "image" },
+  { id: "sm63.terrain.jungle", label: "SM63 丛林地形图集", kind: "image" },
+  { id: "sm63.ui.title.logo", label: "SM63 标题 Logo", kind: "image" },
+  { id: "sm63.audio.title", label: "SM63 标题音乐", kind: "audio" },
+  { id: "sm63.audio.menu.day", label: "SM63 菜单音乐", kind: "audio" },
+  { id: "sm63.audio.editor.1", label: "SM63 编辑器音乐 1", kind: "audio" },
+  { id: "sm63.audio.editor.2", label: "SM63 编辑器音乐 2", kind: "audio" },
+  { id: "sm63.audio.editor.3", label: "SM63 编辑器音乐 3", kind: "audio" },
+  { id: "sm63.audio.editor.4", label: "SM63 编辑器音乐 4", kind: "audio" }
 ];
 
 const defaultGameAssetPacks: GameAssetPack[] = [

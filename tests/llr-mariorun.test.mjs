@@ -32,7 +32,7 @@ test("llr-mariorun has R2-ready KV-backed Worker game APIs", () => {
 
 test("default game content includes asset slots and ten fair long levels", () => {
   assert.match(worker, /const gameAssetSlots: GameAssetSlot\[\] = \[/);
-  for (const slot of ["player.idle", "enemy.goomba", "powerup.mushroom", "boss.main", "princess.idle", "audio.bgm"]) {
+  for (const slot of ["player.idle", "enemy.goomba", "powerup.mushroom", "boss.main", "princess.idle", "audio.bgm", "sm63.player.sheet", "sm63.enemy.goomba.walk", "sm63.pickup.coins", "sm63.audio.title"]) {
     assert.match(worker, new RegExp(`id: "${slot.replace(".", "\\.")}"`));
   }
   assert.match(worker, /const defaultGameAssetPacks: GameAssetPack\[\] = \[/);
