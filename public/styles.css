@@ -483,6 +483,57 @@ h1 {
   font-size: 18px;
 }
 
+.game-admin-panel {
+  gap: 14px;
+}
+
+.game-admin-content,
+.game-editor-card {
+  display: grid;
+  gap: 12px;
+}
+
+.game-editor-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(15, 118, 110, 0.05);
+  padding: 14px;
+}
+
+.game-editor-card h4 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.game-asset-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.game-asset-slot {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.game-asset-slot small {
+  color: var(--muted);
+}
+
+.game-json-editor {
+  min-height: 260px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.game-level-editor .game-json-editor {
+  min-height: 360px;
+}
+
 @keyframes announcement-marquee {
   from {
     transform: translateX(100%);

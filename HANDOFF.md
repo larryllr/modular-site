@@ -16,10 +16,11 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`c470354a-3067-4e01-83a9-ca79e0e82fc7`
+- 最新 Cloudflare Version ID：`14afc150-087e-4053-8c2f-23da7c69ee23`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
+- `/llr-mariorun` 素材上传当前优先使用 R2 代码路径；但 2026-06-24 部署时 Cloudflare 账号返回 R2 `10042 Please enable R2 through the Cloudflare Dashboard`，因此线上暂用 `SITE_CONFIG` KV 的 `game-assets-kv/` 前缀兜底存储素材二进制。账号在 Dashboard 开通 R2 后，可重新添加 `GAME_ASSETS` binding 与 `llr-mariorun-assets` bucket，后端会自动优先写入 R2。
 
 不要在界面显示默认密码，也不要把真实密码或本地 `.dev.vars` 提交到 GitHub。
 
@@ -71,6 +72,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 手机端侧边栏不固定。
 - 首页与分页面支持不同列数布局。
 - `/llrgamecubecity` 提供全屏 CubeCity 小游戏。
+- `/llr-mariorun` 提供“老师大冒险”横版跳跃游戏：开始前选择素材包和关卡，默认 10 个原创长流程关卡；管理员可在线编辑素材包和关卡，上传主角、怪物、蘑菇、Boss、公主、背景、音频等 27 个素材槽；默认关卡公平且不包含猫里奥陷阱，可复制后自行添加；桌面端显示键位提示，手机端提供虚拟按键并在竖屏浏览器中强制横向显示游戏舞台。
 - 主页和侧边栏默认显示“放松一下”入口，完整管理员可隐藏或自定义入口背景和图标。
 - CubeCity 默认使用简体中文，右上角仍保留中英文切换。
 - 普通分页面只有一个实际可见模块时进入沉浸模式：隐藏侧边栏、页面标题和状态栏，模块铺满视口且不显示卡片边框。

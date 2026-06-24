@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>老师大冒险</title>
+    <link rel="stylesheet" href="/llr-mariorun/game.css" />
+  </head>
+  <body>
+    <main id="game-root" class="mariorun-shell">
+      <section class="mariorun-menu" data-screen="menu">
+        <p class="eyebrow">LLR Mario Run</p>
+        <h1>老师大冒险</h1>
+        <p class="lead">选择素材包和关卡，开始横版跳跃挑战。</p>
+        <div id="keyboard-hints" class="keyboard-hints"></div>
+        <section>
+          <h2>选择素材包</h2>
+          <div id="pack-list" class="card-grid"></div>
+        </section>
+        <section>
+          <h2>选择关卡</h2>
+          <div id="level-list" class="card-grid level-grid"></div>
+        </section>
+        <button id="start-game" class="primary-button" type="button">开始游戏</button>
+        <p id="menu-feedback" class="feedback"></p>
+      </section>
+
+      <section class="mariorun-stage" data-screen="game" hidden>
+        <div class="stage-rotator">
+          <canvas id="game-canvas" width="960" height="540" aria-label="老师大冒险游戏画面"></canvas>
+          <div class="hud">
+            <span id="hud-level">关卡</span>
+            <span id="hud-coins">金币 0</span>
+            <span id="hud-lives">生命 3</span>
+            <button id="pause-game" type="button">暂停</button>
+            <button id="restart-game" type="button">重开</button>
+            <button id="back-menu" type="button">返回</button>
+          </div>
+          <div class="virtual-controls" aria-label="手机虚拟按键">
+            <div class="virtual-pad">
+              <button data-action="left" type="button">←</button>
+              <button data-action="down" type="button">↓</button>
+              <button data-action="right" type="button">→</button>
+            </div>
+            <div class="virtual-actions">
+              <button data-action="run" type="button">加速</button>
+              <button data-action="jump" type="button">跳跃</button>
+            </div>
+          </div>
+        </div>
+        <p class="orientation-note">当前为兼容横屏模式，横拿手机体验更好。</p>
+      </section>
+    </main>
+    <script type="module" src="/llr-mariorun/game.js"></script>
+  </body>
+</html>

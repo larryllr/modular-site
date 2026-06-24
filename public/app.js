@@ -13,6 +13,8 @@ const moduleClickMoveThreshold = 10;
 const moduleInteractionIgnoreSelector = "a, button, input, textarea, select, option, video, audio, details, summary, [contenteditable], [role=\"button\"], [role=\"link\"]";
 const cubeCityLinkId = "builtin-cubecity";
 const cubeCityPath = "/llrgamecubecity";
+const llrMarioRunLinkId = "builtin-llr-mariorun";
+const llrMarioRunPath = "/llr-mariorun";
 const cubeCityLink = {
   id: cubeCityLinkId,
   title: "放松一下",
@@ -22,6 +24,16 @@ const cubeCityLink = {
   iconText: "GAME",
   iconImage: "/llrgamecubecity-entry.webp",
   backgroundImage: "/llrgamecubecity-entry.webp"
+};
+const llrMarioRunLink = {
+  id: llrMarioRunLinkId,
+  title: "老师大冒险",
+  description: "选择素材包和关卡，开始横版跳跃挑战。",
+  targetUrl: llrMarioRunPath,
+  visible: true,
+  iconText: "RUN",
+  iconImage: "",
+  backgroundImage: ""
 };
 const visitorSummaryFallback = {
   ip: "获取中",
@@ -43,8 +55,8 @@ const fallbackConfig = {
     text: "",
     durationSeconds: 8
   },
-  navOrder: ["page:workspace", `link:${cubeCityLinkId}`],
-  links: [cubeCityLink],
+  navOrder: ["page:workspace", `link:${cubeCityLinkId}`, `link:${llrMarioRunLinkId}`],
+  links: [cubeCityLink, llrMarioRunLink],
   pages: [
     {
       id: "workspace",
@@ -588,6 +600,7 @@ function renderHomeSettings() {
   if (!isLimitedAdmin()) {
     panel.append(renderAdminPasswordSettings());
     panel.append(renderCommentBlockWordsSettings());
+    panel.append(renderAdminGameEditor());
   }
   const notice = element("section", "announcement-settings");
   notice.append(element("h3", "", "主页公告"));
@@ -618,6 +631,172 @@ function renderHomeSettings() {
   notice.append(element("p", "form-hint", "填 0 秒表示不自动关闭；公告只在主页显示，会以弹幕形式横向滚动。"));
   panel.append(notice);
   return panel;
+}
+
+function renderAdminGameEditor() {
+  const section = element("section", "announcement-settings game-admin-panel");
+  section.dataset.gameEditor = "root";
+  section.append(element("h3", "", "老师大冒险：素材包与关卡"));
+  section.append(element("p", "form-hint", "完整管理员可在线编辑 /llr-mariorun 的素材包和关卡。素材文件走 R2，元数据走 KV。"));
+
+  const status = element("p", "form-hint", "正在加载游戏配置…");
+  const content = element("div", "game-admin-content");
+  section.append(status, content);
+
+  loadAdminGameConfig().then((config) => {
+    status.textContent = "";
+    content.replaceChildren(renderGameAssetPackEditor(config), renderGameLevelEditor(config));
+  }).catch((error) => {
+    status.textContent = `加载失败：${error.message}`;
+  });
+
+  return section;
+}
+
+async function loadAdminGameConfig() {
+  return adminGameRequest("/api/admin/game", { method: "GET" });
+}
+
+function renderGameAssetPackEditor(config) {
+  const panel = element("div", "game-editor-card");
+  panel.dataset.gameEditor = "asset-packs";
+  const packs = structuredClone(config.assetPacks || []);
+  const slots = config.slots || [];
+  const textarea = document.createElement("textarea");
+  textarea.className = "input game-json-editor";
+  textarea.value = JSON.stringify(packs, null, 2);
+  const save = button("保存素材包元数据", "button primary", "button");
+  const add = button("复制第一个素材包", "button", "button");
+  const slotGrid = element("div", "game-asset-slot-grid");
+  const feedback = element("p", "form-hint", "");
+
+  add.addEventListener("click", () => {
+    const source = JSON.parse(textarea.value || "[]")[0] || { assets: {} };
+    const next = {
+      ...source,
+      id: `pack-${Date.now()}`,
+      name: `${source.name || "素材包"} 副本`,
+      builtin: false,
+      default: false,
+      updatedAt: new Date().toISOString()
+    };
+    textarea.value = JSON.stringify([...(JSON.parse(textarea.value || "[]")), next], null, 2);
+  });
+
+  save.addEventListener("click", async () => {
+    try {
+      const assetPacks = JSON.parse(textarea.value || "[]");
+      await adminGameRequest("/api/admin/game/asset-packs", { method: "PUT", body: JSON.stringify({ assetPacks }) });
+      feedback.textContent = "素材包已保存。";
+    } catch (error) {
+      feedback.textContent = `保存失败：${error.message}`;
+    }
+  });
+
+  for (const slot of slots) {
+    const item = element("label", "game-asset-slot");
+    item.dataset.gameSlot = slot.id;
+    const upload = document.createElement("input");
+    upload.type = "file";
+    upload.accept = slot.kind === "audio" ? "audio/*" : "image/*";
+    upload.addEventListener("change", async () => {
+      const file = upload.files?.[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append("slotId", slot.id);
+      form.append("file", file);
+      feedback.textContent = `上传 ${slot.label} 中…`;
+      try {
+        const payload = await adminGameUpload("/api/admin/game/assets", form);
+        const assetPacks = JSON.parse(textarea.value || "[]");
+        const first = assetPacks[0] || { id: "teacher-default", name: "老师默认版", assets: {} };
+        first.assets = first.assets || {};
+        first.assets[slot.id] = payload.asset;
+        assetPacks[0] = first;
+        textarea.value = JSON.stringify(assetPacks, null, 2);
+        feedback.textContent = `${slot.label} 已上传，记得保存素材包元数据。`;
+      } catch (error) {
+        feedback.textContent = `上传失败：${error.message}`;
+      } finally {
+        upload.value = "";
+      }
+    });
+    item.append(element("strong", "", slot.label), element("small", "", slot.id), upload);
+    slotGrid.append(item);
+  }
+
+  panel.append(element("h4", "", "素材包"), element("p", "form-hint", "上传槽位默认写入第一个素材包；可在 JSON 中复制或调整多个素材包。"), slotGrid, textarea, add, save, feedback);
+  return panel;
+}
+
+function renderGameLevelEditor(config) {
+  const panel = element("div", "game-editor-card game-level-editor");
+  panel.dataset.gameEditor = "levels";
+  const textarea = document.createElement("textarea");
+  textarea.className = "input game-json-editor";
+  textarea.value = JSON.stringify(config.levels || [], null, 2);
+  const save = button("保存关卡", "button primary", "button");
+  const add = button("复制第一关", "button", "button");
+  const feedback = element("p", "form-hint", "");
+
+  add.addEventListener("click", () => {
+    const levels = JSON.parse(textarea.value || "[]");
+    const source = levels[0];
+    if (!source) return;
+    levels.push({
+      ...structuredClone(source),
+      id: `custom-level-${Date.now()}`,
+      name: `${source.name} 副本`,
+      builtin: false,
+      default: false,
+      updatedAt: new Date().toISOString()
+    });
+    textarea.value = JSON.stringify(levels, null, 2);
+  });
+
+  save.addEventListener("click", async () => {
+    try {
+      const levels = JSON.parse(textarea.value || "[]");
+      await adminGameRequest("/api/admin/game/levels", { method: "PUT", body: JSON.stringify({ levels }) });
+      feedback.textContent = "关卡已保存。";
+    } catch (error) {
+      feedback.textContent = `保存失败：${error.message}`;
+    }
+  });
+
+  panel.append(element("h4", "", "关卡"), element("p", "form-hint", "第一版使用 JSON 导入/导出编辑；后续可在同一数据结构上加网格画布。默认关卡不含猫里奥陷阱，你可复制后添加 trap 类物件。"), textarea, add, save, feedback);
+  return panel;
+}
+
+async function adminGameRequest(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${state.token}`,
+      ...(options.headers || {})
+    }
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed: ${response.status}`);
+  }
+  return payload;
+}
+
+async function adminGameUpload(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${state.token}`
+    },
+    body
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Request failed: ${response.status}`);
+  }
+  return payload;
 }
 
 function renderAdminPasswordSettings() {
@@ -4697,6 +4876,12 @@ function hydrateConfig(config) {
   );
   if (!hasCubeCityLink) {
     links.push({ ...cubeCityLink });
+  }
+  const hasLlrMarioRunLink = links.some(
+    (link) => link.id === llrMarioRunLinkId || normalizeInternalPath(link.targetUrl) === llrMarioRunPath
+  );
+  if (!hasLlrMarioRunLink) {
+    links.push({ ...llrMarioRunLink });
   }
   const pages = (next.pages || fallbackConfig.pages).map(hydratePage);
 

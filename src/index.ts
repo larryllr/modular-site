@@ -4,6 +4,7 @@ type ModuleStatus = "active" | "planned";
 
 type AppEnv = Env & {
   SITE_CONFIG?: KVNamespace;
+  GAME_ASSETS?: R2Bucket;
   admin?: string;
   ADMIN_PASSWORD?: string;
   LIMITED_ADMIN_PASSWORD?: string;
@@ -178,6 +179,59 @@ type SiteLink = {
   backgroundImage: string;
 };
 
+type GameAssetSlot = {
+  id: string;
+  label: string;
+  kind: "image" | "audio";
+};
+
+type GameAssetRef = {
+  key: string;
+  url: string;
+  contentType: string;
+  size: number;
+  updatedAt: string;
+};
+
+type GameAssetPack = {
+  id: string;
+  name: string;
+  description: string;
+  coverSlot: string;
+  enabled: boolean;
+  builtin: boolean;
+  default: boolean;
+  assets: Record<string, GameAssetRef>;
+  updatedAt: string;
+};
+
+type GameLevelObject = {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  value?: string;
+};
+
+type GameLevel = {
+  id: string;
+  name: string;
+  description: string;
+  difficulty: string;
+  theme: "grass" | "pipe" | "underground" | "sky" | "forest" | "mushroom" | "ice" | "night" | "castle" | "boss";
+  enabled: boolean;
+  builtin: boolean;
+  default: boolean;
+  width: number;
+  height: number;
+  checkpoints: { x: number; y: number }[];
+  segments: string[];
+  objects: GameLevelObject[];
+  updatedAt: string;
+};
+
 type HomeAnnouncement = {
   enabled: boolean;
   title: string;
@@ -284,6 +338,12 @@ const tokenMaxAgeMs = 12 * 60 * 60 * 1000;
 const maxAccessLogs = 1000;
 const cubeCityLinkId = "builtin-cubecity";
 const cubeCityPath = "/llrgamecubecity";
+const llrMarioRunLinkId = "builtin-llr-mariorun";
+const llrMarioRunPath = "/llr-mariorun";
+const gameAssetPacksKey = "game:asset-packs";
+const gameLevelsKey = "game:levels";
+const gameAssetKvPrefix = "game-assets-kv/";
+const gameAssetR2Prefix = "game-assets/";
 const bingOrigin = "https://www.bing.com";
 const bingDailyMetadataUrl = `${bingOrigin}/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN`;
 
@@ -300,6 +360,67 @@ function defaultCubeCityLink(): SiteLink {
   };
 }
 
+function defaultLlrMarioRunLink(): SiteLink {
+  return {
+    id: llrMarioRunLinkId,
+    title: "老师大冒险",
+    description: "选择素材包和关卡，开始横版跳跃挑战。",
+    targetUrl: llrMarioRunPath,
+    visible: true,
+    iconText: "RUN",
+    iconImage: "",
+    backgroundImage: ""
+  };
+}
+
+const gameAssetSlots: GameAssetSlot[] = [
+  { id: "player.idle", label: "主角站立", kind: "image" },
+  { id: "player.walk1", label: "主角行走 1", kind: "image" },
+  { id: "player.walk2", label: "主角行走 2", kind: "image" },
+  { id: "player.jump", label: "主角跳跃", kind: "image" },
+  { id: "player.hurt", label: "主角受伤", kind: "image" },
+  { id: "enemy.goomba", label: "普通怪", kind: "image" },
+  { id: "enemy.turtle", label: "乌龟怪", kind: "image" },
+  { id: "enemy.flower", label: "食人花", kind: "image" },
+  { id: "powerup.mushroom", label: "蘑菇", kind: "image" },
+  { id: "powerup.flower", label: "花", kind: "image" },
+  { id: "powerup.star", label: "星星", kind: "image" },
+  { id: "item.coin", label: "金币", kind: "image" },
+  { id: "tile.brick", label: "砖块", kind: "image" },
+  { id: "tile.question", label: "问号块", kind: "image" },
+  { id: "tile.ground", label: "地面", kind: "image" },
+  { id: "tile.pipe", label: "管道", kind: "image" },
+  { id: "boss.main", label: "Boss", kind: "image" },
+  { id: "princess.idle", label: "救出目标", kind: "image" },
+  { id: "background.world1", label: "草地背景", kind: "image" },
+  { id: "background.underground", label: "地下背景", kind: "image" },
+  { id: "background.castle", label: "城堡背景", kind: "image" },
+  { id: "ui.cover", label: "素材包封面", kind: "image" },
+  { id: "audio.jump", label: "跳跃音效", kind: "audio" },
+  { id: "audio.coin", label: "金币音效", kind: "audio" },
+  { id: "audio.hurt", label: "受伤音效", kind: "audio" },
+  { id: "audio.win", label: "胜利音效", kind: "audio" },
+  { id: "audio.bgm", label: "背景音乐", kind: "audio" }
+];
+
+const defaultGameAssetPacks: GameAssetPack[] = [
+  {
+    id: "teacher-default",
+    name: "老师默认版",
+    description: "内置占位素材包，后台可以复制后替换成老师、怪物、Boss 和公主素材。",
+    coverSlot: "ui.cover",
+    enabled: true,
+    builtin: true,
+    default: true,
+    assets: {},
+    updatedAt: "2026-06-24T00:00:00.000Z"
+  }
+];
+
+const defaultGameLevels: GameLevel[] = [
+  ...createDefaultGameLevels()
+];
+
 const defaultSiteConfig: SiteConfig = {
   version: 1,
   updatedAt: "2026-05-09T00:00:00.000Z",
@@ -313,8 +434,8 @@ const defaultSiteConfig: SiteConfig = {
     text: "",
     durationSeconds: 8
   },
-  navOrder: ["page:workspace", `link:${cubeCityLinkId}`],
-  links: [defaultCubeCityLink()],
+  navOrder: ["page:workspace", `link:${cubeCityLinkId}`, `link:${llrMarioRunLinkId}`],
+  links: [defaultCubeCityLink(), defaultLlrMarioRunLink()],
   pages: [
     {
       id: "workspace",
@@ -390,6 +511,67 @@ const defaultSiteConfig: SiteConfig = {
     }
   ]
 };
+
+function createDefaultGameLevels(): GameLevel[] {
+  const descriptors: Array<{ id: string; name: string; theme: GameLevel["theme"] }> = [
+    { id: "level-01", name: "新手草地长路", theme: "grass" },
+    { id: "level-02", name: "管道丘陵", theme: "pipe" },
+    { id: "level-03", name: "地下金币矿洞", theme: "underground" },
+    { id: "level-04", name: "高空平台群岛", theme: "sky" },
+    { id: "level-05", name: "森林怪物巡逻线", theme: "forest" },
+    { id: "level-06", name: "蘑菇弹跳峡谷", theme: "mushroom" },
+    { id: "level-07", name: "冰面滑行工厂", theme: "ice" },
+    { id: "level-08", name: "黑夜管道迷宫", theme: "night" },
+    { id: "level-09", name: "城堡火焰桥", theme: "castle" },
+    { id: "level-10", name: "Boss 与公主终章", theme: "boss" }
+  ];
+
+  return descriptors.map((descriptor, index) => {
+    const name = descriptor.name;
+    const levelNumber = String(index + 1).padStart(2, "0");
+    const width = index === 9 ? 5200 : 6200 + index * 180;
+    const baseY = 416;
+    const objects: GameLevelObject[] = [
+      { id: `start-${levelNumber}`, type: "start", x: 96, y: baseY },
+      { id: `ground-a-${levelNumber}`, type: "ground", x: 0, y: 464, width, height: 96 },
+      { id: `coin-a-${levelNumber}`, type: "coin", x: 420, y: 300 },
+      { id: `question-a-${levelNumber}`, type: "question", x: 620, y: 288, value: "powerup.mushroom" },
+      { id: `enemy-a-${levelNumber}`, type: "enemy.goomba", x: 900, y: baseY },
+      { id: `pipe-a-${levelNumber}`, type: "pipe", x: 1260, y: 368, width: 64, height: 96 },
+      { id: `checkpoint-a-${levelNumber}`, type: "checkpoint", x: 1800, y: baseY },
+      { id: `brick-a-${levelNumber}`, type: "brick", x: 2100, y: 300 },
+      { id: `enemy-b-${levelNumber}`, type: index > 1 ? "enemy.turtle" : "enemy.goomba", x: 2500, y: baseY },
+      { id: `platform-a-${levelNumber}`, type: index > 3 ? "moving-platform" : "platform", x: 3000, y: 350, width: 192, height: 32 },
+      { id: `coin-b-${levelNumber}`, type: "coin", x: 3120, y: 260 },
+      { id: `checkpoint-b-${levelNumber}`, type: "checkpoint", x: 3400, y: baseY },
+      { id: `power-a-${levelNumber}`, type: index > 5 ? "powerup.star" : "powerup.mushroom", x: 3800, y: 300 },
+      { id: `hazard-a-${levelNumber}`, type: index > 7 ? "firebar" : "gap", x: 4300, y: 464, width: 160, height: 96 },
+      { id: `enemy-c-${levelNumber}`, type: index > 7 ? "enemy.flower" : "enemy.goomba", x: 4700, y: baseY },
+      { id: `finish-${levelNumber}`, type: index === 9 ? "princess.idle" : index === 8 ? "castle-door" : "finish", x: width - 380, y: baseY }
+    ];
+
+    if (index === 9) {
+      objects.push({ id: "boss-final", type: "boss.main", x: width - 900, y: baseY, value: "3" });
+    }
+
+    return {
+      id: descriptor.id,
+      name,
+      description: `原创长流程平台跳跃关卡：${name}。默认公平，不包含猫里奥陷阱，可由管理员复制后自行添加。`,
+      difficulty: index < 2 ? "简单" : index < 6 ? "中等" : index < 8 ? "偏高" : "高",
+      theme: descriptor.theme,
+      enabled: true,
+      builtin: true,
+      default: index === 0,
+      width,
+      height: 560,
+      checkpoints: [{ x: 600, y: baseY }, { x: 1800, y: baseY }, { x: 3400, y: baseY }],
+      segments: ["开场", "第一挑战", "中段变化", "第二挑战", "补给检查点", "终点"],
+      objects,
+      updatedAt: "2026-06-24T00:00:00.000Z"
+    };
+  });
+}
 
 const serverModules: ServerModule[] = [
   {
@@ -514,6 +696,9 @@ const apiRoutes: Record<string, ApiRoute> = {
     json({
       config: toPublicSiteConfig(await readSiteConfig(env))
     }),
+
+  "/api/game/manifest": fetchGameManifest,
+  "/api/admin/game": handleAdminGame,
 
   "/api/daily-background": fetchDailyBackground,
 
@@ -1277,6 +1462,12 @@ function normalizeSiteConfig(value: unknown): SiteConfig {
   if (!hasCubeCityLink && links.length < 40) {
     links.push(defaultCubeCityLink());
   }
+  const hasLlrMarioRunLink = links.some(
+    (link) => link.id === llrMarioRunLinkId || normalizeInternalPath(link.targetUrl) === llrMarioRunPath
+  );
+  if (!hasLlrMarioRunLink && links.length < 40) {
+    links.push(defaultLlrMarioRunLink());
+  }
   const navOrder = normalizeNavOrder(source.navOrder, pages, links);
 
   return {
@@ -1645,6 +1836,410 @@ function normalizeExternalUrl(value: string): string {
   } catch {
     return "";
   }
+}
+
+async function fetchGameManifest(request: Request, env: AppEnv): Promise<Response> {
+  const packs = (await readGameAssetPacks(env)).filter((pack) => pack.enabled);
+  const levels = (await readGameLevels(env)).filter((level) => level.enabled);
+  const defaultPack = packs.find((pack) => pack.default) || packs[0] || defaultGameAssetPacks[0];
+  const defaultLevel = levels.find((level) => level.default) || levels[0] || defaultGameLevels[0];
+
+  return json({
+    slots: gameAssetSlots,
+    assetSlots: gameAssetSlots,
+    assetPacks: packs.map(toPublicGameAssetPack),
+    levels,
+    defaultAssetPackId: defaultPack.id,
+    defaultLevelId: defaultLevel.id,
+    assetBaseUrl: new URL("/api/game/assets/", request.url).pathname
+  });
+}
+
+async function handleAdminGame(request: Request, env: AppEnv): Promise<Response> {
+  const auth = await requireFullAdmin(request, env);
+
+  if (auth) {
+    return auth;
+  }
+
+  if (request.method !== "GET") {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+
+  return json({
+    slots: gameAssetSlots,
+    assetPacks: await readGameAssetPacks(env),
+    levels: await readGameLevels(env),
+    limits: {
+      imageMaxBytes: 2 * 1024 * 1024,
+      audioMaxBytes: 8 * 1024 * 1024
+    }
+  });
+}
+
+async function handleAdminGameAssetPacks(request: Request, env: AppEnv): Promise<Response> {
+  const auth = await requireFullAdmin(request, env);
+
+  if (auth) {
+    return auth;
+  }
+
+  if (request.method !== "PUT") {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+
+  if (!env.SITE_CONFIG) {
+    return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+  }
+
+  const body = asRecord(await readJson(request));
+  const packs = normalizeGameAssetPacks(body.assetPacks).slice(0, 30);
+  await env.SITE_CONFIG.put(gameAssetPacksKey, JSON.stringify(packs));
+
+  return json({ ok: true, assetPacks: packs });
+}
+
+async function handleAdminGameLevels(request: Request, env: AppEnv): Promise<Response> {
+  const auth = await requireFullAdmin(request, env);
+
+  if (auth) {
+    return auth;
+  }
+
+  if (request.method !== "PUT") {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+
+  if (!env.SITE_CONFIG) {
+    return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+  }
+
+  const body = asRecord(await readJson(request));
+  const levels = normalizeGameLevels(body.levels).slice(0, 80);
+  await env.SITE_CONFIG.put(gameLevelsKey, JSON.stringify(levels));
+
+  return json({ ok: true, levels });
+}
+
+async function handleGameAssetUpload(request: Request, env: AppEnv): Promise<Response> {
+  const auth = await requireFullAdmin(request, env);
+
+  if (auth) {
+    return auth;
+  }
+
+  if (!env.GAME_ASSETS && !env.SITE_CONFIG) {
+    return json({ error: "Game asset storage is missing" }, 503);
+  }
+
+  const form = await request.formData();
+  const slotId = limitText(asString(form.get("slotId")), 80);
+  const file = asUploadFile(form.get("file"));
+  const slot = gameAssetSlots.find((item) => item.id === slotId);
+
+  if (!slot || !file) {
+    return json({ error: "素材槽位和文件不能为空" }, 400);
+  }
+
+  const allowedImageTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+  const allowedAudioTypes = ["audio/mpeg", "audio/ogg", "audio/wav"];
+  const allowed = slot.kind === "image" ? allowedImageTypes : allowedAudioTypes;
+  const maxBytes = slot.kind === "image" ? 2 * 1024 * 1024 : 8 * 1024 * 1024;
+
+  if (!allowed.includes(file.type) || file.size > maxBytes) {
+    return json({ error: "素材类型或大小不符合限制" }, 400);
+  }
+
+  const extension = assetExtension(file.type);
+  const filename = `${slot.id.replace(/[^a-z0-9.-]/gi, "-")}.${extension}`;
+  const key = env.GAME_ASSETS
+    ? `${gameAssetR2Prefix}${crypto.randomUUID()}/${filename}`
+    : `${gameAssetKvPrefix}${crypto.randomUUID()}/${filename}`;
+
+  if (env.GAME_ASSETS) {
+    await env.GAME_ASSETS.put(key, file.stream(), {
+      httpMetadata: {
+        contentType: file.type,
+        cacheControl: "public, max-age=31536000, immutable"
+      },
+      customMetadata: {
+        slotId,
+        originalName: limitText(file.name, 160)
+      }
+    });
+  } else if (env.SITE_CONFIG) {
+    await env.SITE_CONFIG.put(key, await file.arrayBuffer(), {
+      metadata: {
+        contentType: file.type,
+        cacheControl: "public, max-age=31536000, immutable",
+        slotId,
+        originalName: limitText(file.name, 160),
+        size: String(file.size)
+      }
+    });
+  }
+
+  const asset: GameAssetRef = {
+    key,
+    url: `/api/game/assets/${encodeURIComponent(key)}`,
+    contentType: file.type,
+    size: file.size,
+    updatedAt: new Date().toISOString()
+  };
+
+  return json({ ok: true, asset });
+}
+
+type UploadFileLike = {
+  name: string;
+  type: string;
+  size: number;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+  stream: () => ReadableStream<Uint8Array>;
+};
+
+function asUploadFile(value: unknown): UploadFileLike | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Partial<UploadFileLike>;
+  return typeof record.name === "string"
+    && typeof record.type === "string"
+    && typeof record.size === "number"
+    && typeof record.arrayBuffer === "function"
+    && typeof record.stream === "function"
+    ? record as UploadFileLike
+    : null;
+}
+
+async function fetchGameAsset(request: Request, env: AppEnv, key: string): Promise<Response> {
+  if (!isSafeGameAssetKey(key)) {
+    return json({ error: "Invalid asset key" }, 400);
+  }
+
+  if (env.GAME_ASSETS && key.startsWith(gameAssetR2Prefix)) {
+    const object = await env.GAME_ASSETS.get(key);
+
+    if (!object) {
+      return json({ error: "素材不存在" }, 404);
+    }
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("etag", object.httpEtag);
+    headers.set("cache-control", headers.get("cache-control") || "public, max-age=31536000, immutable");
+
+    return new Response(object.body, { headers });
+  }
+
+  if (env.SITE_CONFIG && key.startsWith(gameAssetKvPrefix)) {
+    const object = await env.SITE_CONFIG.getWithMetadata<{
+      contentType?: string;
+      cacheControl?: string;
+    }>(key, "arrayBuffer");
+
+    if (!object.value) {
+      return json({ error: "素材不存在" }, 404);
+    }
+
+    const headers = new Headers({
+      "content-type": object.metadata?.contentType || "application/octet-stream",
+      "cache-control": object.metadata?.cacheControl || "public, max-age=31536000, immutable"
+    });
+
+    return new Response(object.value, { headers });
+  }
+
+  return json({ error: "Game asset storage is missing" }, 503);
+}
+
+async function deleteGameAsset(request: Request, env: AppEnv, key: string): Promise<Response> {
+  const auth = await requireFullAdmin(request, env);
+
+  if (auth) {
+    return auth;
+  }
+
+  if (!isSafeGameAssetKey(key)) {
+    return json({ error: "Invalid asset key" }, 400);
+  }
+
+  if (env.GAME_ASSETS && key.startsWith(gameAssetR2Prefix)) {
+    await env.GAME_ASSETS.delete(key);
+    return json({ ok: true });
+  }
+
+  if (env.SITE_CONFIG && key.startsWith(gameAssetKvPrefix)) {
+    await env.SITE_CONFIG.delete(key);
+    return json({ ok: true });
+  }
+
+  return json({ error: "Game asset storage is missing" }, 503);
+}
+
+async function readGameAssetPacks(env: AppEnv): Promise<GameAssetPack[]> {
+  const stored = env.SITE_CONFIG ? await env.SITE_CONFIG.get(gameAssetPacksKey, "json") : null;
+  const packs = normalizeGameAssetPacks(stored);
+  return packs.length > 0 ? packs : defaultGameAssetPacks;
+}
+
+async function readGameLevels(env: AppEnv): Promise<GameLevel[]> {
+  const stored = env.SITE_CONFIG ? await env.SITE_CONFIG.get(gameLevelsKey, "json") : null;
+  const levels = normalizeGameLevels(stored);
+  return levels.length > 0 ? levels : defaultGameLevels;
+}
+
+function normalizeGameAssetPacks(value: unknown): GameAssetPack[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item, index) => {
+    const record = asRecord(item);
+    const id = normalizeId(asString(record.id) || `asset-pack-${index + 1}`, 80);
+    const rawAssets = asRecord(record.assets);
+    const assets: Record<string, GameAssetRef> = {};
+
+    for (const slot of gameAssetSlots) {
+      const asset = normalizeGameAssetRef(rawAssets[slot.id]);
+      if (asset) {
+        assets[slot.id] = asset;
+      }
+    }
+
+    return {
+      id,
+      name: limitText(asString(record.name) || `素材包 ${index + 1}`, 80),
+      description: limitText(asString(record.description), 220),
+      coverSlot: gameAssetSlots.some((slot) => slot.id === asString(record.coverSlot)) ? asString(record.coverSlot) : "ui.cover",
+      enabled: typeof record.enabled === "boolean" ? record.enabled : true,
+      builtin: typeof record.builtin === "boolean" ? record.builtin : false,
+      default: typeof record.default === "boolean" ? record.default : index === 0,
+      assets,
+      updatedAt: limitText(asString(record.updatedAt), 40) || new Date().toISOString()
+    };
+  }).filter((pack) => pack.id);
+}
+
+function normalizeGameAssetRef(value: unknown): GameAssetRef | null {
+  const record = asRecord(value);
+  const key = limitText(asString(record.key), 220);
+
+  if (!isSafeGameAssetKey(key)) {
+    return null;
+  }
+
+  return {
+    key,
+    url: `/api/game/assets/${encodeURIComponent(key)}`,
+    contentType: limitText(asString(record.contentType), 80),
+    size: clampNumber(record.size, 0, 8 * 1024 * 1024, 0),
+    updatedAt: limitText(asString(record.updatedAt), 40) || new Date().toISOString()
+  };
+}
+
+function normalizeGameLevels(value: unknown): GameLevel[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item, index) => {
+    const record = asRecord(item);
+    const fallback = defaultGameLevels[index] || defaultGameLevels[0];
+    const objects = Array.isArray(record.objects)
+      ? record.objects.map((object, objectIndex) => normalizeGameLevelObject(object, objectIndex)).filter((object): object is GameLevelObject => Boolean(object))
+      : fallback.objects;
+
+    return {
+      id: normalizeId(asString(record.id) || `level-${String(index + 1).padStart(2, "0")}`, 80),
+      name: limitText(asString(record.name) || fallback.name, 80),
+      description: limitText(asString(record.description) || fallback.description, 260),
+      difficulty: limitText(asString(record.difficulty) || fallback.difficulty, 40),
+      theme: normalizeGameTheme(asString(record.theme), fallback.theme),
+      enabled: typeof record.enabled === "boolean" ? record.enabled : true,
+      builtin: typeof record.builtin === "boolean" ? record.builtin : false,
+      default: typeof record.default === "boolean" ? record.default : index === 0,
+      width: clampNumber(record.width, 1600, 20000, fallback.width),
+      height: clampNumber(record.height, 320, 1600, fallback.height),
+      checkpoints: normalizeGameCheckpoints(record.checkpoints, fallback.checkpoints),
+      segments: normalizeStringList(record.segments, 12, 40).length ? normalizeStringList(record.segments, 12, 40) : fallback.segments,
+      objects: objects.slice(0, 1200),
+      updatedAt: limitText(asString(record.updatedAt), 40) || new Date().toISOString()
+    };
+  });
+}
+
+function normalizeGameLevelObject(value: unknown, index: number): GameLevelObject | null {
+  const record = asRecord(value);
+  const type = normalizeGameObjectType(asString(record.type));
+
+  if (!type) {
+    return null;
+  }
+
+  return {
+    id: normalizeId(asString(record.id) || `object-${index + 1}`, 80),
+    type,
+    x: clampNumber(record.x, 0, 20000, 0),
+    y: clampNumber(record.y, 0, 1600, 0),
+    width: typeof record.width === "undefined" ? undefined : clampNumber(record.width, 1, 20000, 32),
+    height: typeof record.height === "undefined" ? undefined : clampNumber(record.height, 1, 1600, 32),
+    value: limitText(asString(record.value), 120)
+  };
+}
+
+function normalizeGameCheckpoints(value: unknown, fallback: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  const checkpoints = value.map((item) => {
+    const record = asRecord(item);
+    return {
+      x: clampNumber(record.x, 0, 20000, 0),
+      y: clampNumber(record.y, 0, 1600, 416)
+    };
+  });
+
+  return checkpoints.length ? checkpoints.slice(0, 20) : fallback;
+}
+
+function normalizeGameTheme(value: string, fallback: GameLevel["theme"]): GameLevel["theme"] {
+  const allowed: Array<GameLevel["theme"]> = ["grass", "pipe", "underground", "sky", "forest", "mushroom", "ice", "night", "castle", "boss"];
+  return allowed.includes(value as GameLevel["theme"]) ? (value as GameLevel["theme"]) : fallback;
+}
+
+function normalizeGameObjectType(value: string): string {
+  return /^[a-z0-9_.-]{1,80}$/i.test(value) ? value : "";
+}
+
+function normalizeId(value: string, maxLength: number): string {
+  return limitText(value, maxLength).toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function toPublicGameAssetPack(pack: GameAssetPack): GameAssetPack {
+  return {
+    ...pack,
+    assets: Object.fromEntries(Object.entries(pack.assets).map(([slotId, asset]) => [slotId, { ...asset, url: `/api/game/assets/${encodeURIComponent(asset.key)}` }]))
+  };
+}
+
+function assetExtension(contentType: string): string {
+  const map: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "audio/mpeg": "mp3",
+    "audio/ogg": "ogg",
+    "audio/wav": "wav"
+  };
+  return map[contentType] || "bin";
+}
+
+function isSafeGameAssetKey(key: string): boolean {
+  return /^(game-assets|game-assets-kv)\/[a-f0-9-]{36}\/[a-z0-9_.-]+\.(?:png|jpg|webp|gif|mp3|ogg|wav)$/i.test(key);
 }
 
 async function readComments(env: AppEnv, page: string): Promise<CommentRecord[]> {
@@ -2187,12 +2782,38 @@ export default {
       return route(request, env as AppEnv);
     }
 
+    if (url.pathname.startsWith("/api/game/assets/")) {
+      const key = decodeURIComponent(url.pathname.slice("/api/game/assets/".length));
+      return fetchGameAsset(request, env as AppEnv, key);
+    }
+
+    if (url.pathname === "/api/admin/game/assets" && request.method === "POST") {
+      return handleGameAssetUpload(request, env as AppEnv);
+    }
+
+    if (url.pathname === "/api/admin/game/asset-packs") {
+      return handleAdminGameAssetPacks(request, env as AppEnv);
+    }
+
+    if (url.pathname === "/api/admin/game/levels") {
+      return handleAdminGameLevels(request, env as AppEnv);
+    }
+
+    if (url.pathname.startsWith("/api/admin/game/assets/") && request.method === "DELETE") {
+      const key = decodeURIComponent(url.pathname.slice("/api/admin/game/assets/".length));
+      return deleteGameAsset(request, env as AppEnv, key);
+    }
+
     if (url.pathname.startsWith("/api/")) {
       return json({ error: "API route not found", path: url.pathname }, 404);
     }
 
     if (url.pathname === cubeCityPath) {
       return Response.redirect(new URL(`${cubeCityPath}/`, url.origin).toString(), 308);
+    }
+
+    if (url.pathname === llrMarioRunPath) {
+      return Response.redirect(new URL(`${llrMarioRunPath}/`, url.origin).toString(), 308);
     }
 
     ctx.waitUntil(recordAccessLog(request, env as AppEnv));
