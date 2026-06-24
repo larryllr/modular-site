@@ -357,7 +357,16 @@ h1 {
   }
 
   .prelaunch-panel {
-    display: none;
+    position: fixed;
+    inset: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) auto max(12px, env(safe-area-inset-left));
+    z-index: 8;
+    grid-template-columns: 1fr;
+    max-height: calc(100svh - 24px);
+    overflow: auto;
+    align-items: stretch;
+    padding: 16px;
+    border-radius: 22px;
+    background: rgba(8, 11, 33, 0.94);
   }
 
   .game-frame-shell {
@@ -376,6 +385,10 @@ h1 {
     max-width: 52vw;
     font-size: 12px;
   }
+}
+
+body.game-has-launched .prelaunch-panel {
+  display: none;
 }
 
 body.is-forced-landscape .redux-shell {
@@ -457,6 +470,11 @@ body.is-forced-landscape .game-frame-shell {
 .custom-menu h1,
 .custom-menu h2 {
   margin: 0;
+}
+
+.custom-menu[hidden],
+.custom-stage[hidden] {
+  display: none !important;
 }
 
 .keyboard-hints,

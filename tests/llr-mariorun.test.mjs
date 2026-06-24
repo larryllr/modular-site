@@ -103,7 +103,9 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(css, /\.virtual-controls/);
   assert.match(css, /\.prelaunch-panel/);
   assert.match(css, /\.launch-buttons/);
+  assert.match(css, /body\.game-has-launched \.prelaunch-panel/);
   assert.match(css, /\.custom-runner/);
+  assert.match(css, /\.custom-menu\[hidden\]/);
   assert.match(css, /\.keyboard-hints/);
   assert.match(css, /\.choice-grid/);
   assert.match(css, /\.is-pressed/);
@@ -115,6 +117,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function renderPrelaunchChoices/);
   assert.match(launcher, /function selectedGameUrl/);
   assert.match(launcher, /function startSelectedGame/);
+  assert.match(launcher, /document\.body\.classList\.add\("game-has-launched"\)/);
   assert.match(launcher, /mode === "custom"/);
   assert.match(launcher, /\/llr-mariorun\/custom\.html/);
   assert.match(launcher, /searchParams\.set\("autostart", "1"\)/);

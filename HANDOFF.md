@@ -1,6 +1,6 @@
 # 项目交接说明
 
-更新时间：2026-06-24
+更新时间：2026-06-25
 
 ## 新对话启动语
 
@@ -15,8 +15,8 @@
 - 正式域名：`https://neyc.de5.net`
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
-- 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`39ebf7e6-d19c-47ee-abe5-fc434f1a8547`
+- 最新提交：以 `git log -1 --oneline` 为准
+- 最新 Cloudflare Version ID：`2fd83d1d-86ad-4b58-8d83-11ae28606ab9`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -76,6 +76,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 2026-06-24 晚修复 `/llr-mariorun` 移动端体验：虚拟按键改为匹配 Godot 项目的真实输入（方向/下蹲、跳跃 ArrowUp、旋转 X、喷水 C、砸地/交互 Z），禁用手机长按选中文本和系统菜单；“横屏全屏”按钮会先全屏根节点再尝试 `screen.orientation.lock("landscape")`，失败时用 `.is-forced-landscape` CSS 继续强制横屏显示。Godot 内页 `lang/title/GODOT_CONFIG.locale` 默认中文 `zh_CN`。后台“素材在线编辑”就是管理后台老师大冒险素材包区；关卡区已加入可视化在线设计器，可选关卡和物件类型，点击画布添加物件，支持猫里奥陷阱类物件，同时保留 JSON 高级编辑。
 - 2026-06-24 深夜补齐开始前选择：`/llr-mariorun/` 的 Godot iframe 初始为 `about:blank`，页面先展示“开始前选择”区，用户选择素材包和关卡后再启动 Godot iframe，并把 `pack`/`level`/`locale=zh_CN` 写入 URL。Worker 返回 `/llr-mariorun/godot/index.pck` 时会读取 iframe Referer 的 `pack` 参数，优先用该素材包里的 `game.bundle.pck`；没有自定义 PCK 时回退默认包。
 - 2026-06-25 补齐“后台关卡可试玩”闭环：`/llr-mariorun/` 的开始前选择区新增“试玩编辑关卡”按钮，仍保留“开始完整游戏”进入 Godot。试玩按钮把当前素材包和关卡写入 `/llr-mariorun/custom.html?pack=...&level=...&autostart=1&locale=zh_CN`，在 iframe 中启动轻量网页试玩引擎 `game.js`。该模式直接读取 `/api/game/manifest` 里的后台素材包、素材图片和关卡 JSON，能验证管理员在线关卡设计结果；完整 Godot 游戏继续通过 PCK 替换实现深度素材/游戏本体替换。
+- 2026-06-25 移动端浏览器烟测修复：手机视口下启动前“开始前选择”面板不能隐藏，否则 iframe 仍是 `about:blank` 会看起来空屏；现在只在用户点击“开始完整游戏”或“试玩编辑关卡”后给 `body` 加 `game-has-launched` 并隐藏面板。`custom.html` 的菜单/舞台也补了 `[hidden]` 强制隐藏，避免 `.custom-menu { display: grid }` 覆盖 HTML hidden 属性。已用系统 Chrome + Playwright 验证 390x844 手机视口：启动前按钮可见，点击试玩后 iframe 进入 custom 试玩页，菜单 `display:none`，canvas/HUD 显示。
 - 2026-06-24 用户要求改用 `Redux-Team/Legacy_SM63Redux` 作为更完整的游戏基础。已在本地临时克隆并验证：上游 HEAD `cde0b9e748d3c7c0827eff644120aae027dfb80c`，Godot 4.3 工程，存在 Web export preset，临时工具链位于 `%TEMP%\godot-4.3-tools`，可导出 Web 产物到 `%TEMP%\sm63redux-web-export`。不要提交 `vendor/Legacy_SM63Redux/`，该目录已加入 `.gitignore`。原始导出会打包 Mario/Nintendo 风格素材，不应直接公开部署；下一步应做 Godot `AssetOverrides` autoload，从 `/api/game/manifest` 读取管理员上传素材后再生成去品牌/可替换构建。后台素材槽已扩展 SM63 专用整图槽：`sm63.player.sheet`、`sm63.enemy.goomba.walk`、`sm63.enemy.koopa.walk`、`sm63.pickup.coins`、`sm63.terrain.jungle`、`sm63.audio.title` 等。
 - 主页和侧边栏默认显示“放松一下”入口，完整管理员可隐藏或自定义入口背景和图标。
 - CubeCity 默认使用简体中文，右上角仍保留中英文切换。

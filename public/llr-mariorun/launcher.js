@@ -70,6 +70,7 @@ function startSelectedGame(mode = "godot") {
   selectedPackId = packSelect?.value || selectedPackId;
   selectedLevelId = levelSelect?.value || selectedLevelId;
   frame.src = selectedGameUrl(mode);
+  document.body.classList.add("game-has-launched");
   statusText.textContent = mode === "custom" ? "正在载入后台关卡试玩模式…" : "正在载入完整 Godot 游戏…";
   loadManifestStatus();
   focusGame();
