@@ -9,6 +9,8 @@ const pageColumnsKeyPrefix = "cloudflare-modular-site.page-columns.";
 const adminCommentIpKeyPrefix = "cloudflare-modular-site.admin-comment-ip.";
 const pageAccessKeyPrefix = "cloudflare-modular-site.page-access.";
 const maxUndoSteps = 50;
+const moduleClickMoveThreshold = 10;
+const moduleInteractionIgnoreSelector = "a, button, input, textarea, select, option, video, audio, details, summary, [contenteditable], [role=\"button\"], [role=\"link\"]";
 const cubeCityLinkId = "builtin-cubecity";
 const cubeCityPath = "/llrgamecubecity";
 const cubeCityLink = {
@@ -2261,6 +2263,9 @@ function renderPage(page, articleId = "") {
   }
 
   grid.append(...renderedSections);
+  if (!immersive) {
+    attachPageModuleCardInteractions(grid);
+  }
 
   if (renderedSections.length === 0 && !hasBottomComments) {
     grid.append(element("p", "empty-state", "这个分页面还没有模块。可以进入 /admin 添加。"));
@@ -2277,6 +2282,163 @@ function renderPage(page, articleId = "") {
   }
 
   app.append(main);
+}
+
+function attachPageModuleCardInteractions(grid) {
+  const cards = Array.from(grid.children).filter((child) => child.classList.contains("module-card"));
+
+  for (const card of cards) {
+    card.classList.add("is-module-clickable");
+    card.tabIndex = 0;
+    card.setAttribute("aria-expanded", "false");
+
+    let gesture = null;
+
+    const cancelGesture = () => {
+      gesture = null;
+    };
+
+    card.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.isPrimary === false || isModuleInteractionTarget(event.target)) {
+        gesture = null;
+        return;
+      }
+
+      gesture = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        pageScrollX: window.scrollX,
+        pageScrollY: window.scrollY,
+        cardScrollLeft: card.scrollLeft,
+        cardScrollTop: card.scrollTop,
+        cancelled: false
+      };
+
+      try {
+        card.setPointerCapture(event.pointerId);
+      } catch {
+        gesture = null;
+      }
+    });
+
+    card.addEventListener("pointermove", (event) => {
+      if (!gesture || event.pointerId !== gesture.pointerId) {
+        return;
+      }
+
+      const moved = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > moduleClickMoveThreshold;
+      const pageScrolled = window.scrollX !== gesture.pageScrollX || window.scrollY !== gesture.pageScrollY;
+      const cardScrolled = card.scrollLeft !== gesture.cardScrollLeft || card.scrollTop !== gesture.cardScrollTop;
+
+      if (moved || pageScrolled || cardScrolled) {
+        gesture.cancelled = true;
+      }
+    });
+
+    card.addEventListener("pointerup", (event) => {
+      if (!gesture || event.pointerId !== gesture.pointerId) {
+        return;
+      }
+
+      const currentGesture = gesture;
+      gesture = null;
+
+      try {
+        card.releasePointerCapture(event.pointerId);
+      } catch {
+        // Pointer capture can already be released by the browser.
+      }
+
+      const endedInside = event.target instanceof Node && card.contains(event.target);
+      const moved = Math.hypot(event.clientX - currentGesture.startX, event.clientY - currentGesture.startY) > moduleClickMoveThreshold;
+      const pageScrolled = window.scrollX !== currentGesture.pageScrollX || window.scrollY !== currentGesture.pageScrollY;
+      const cardScrolled = card.scrollLeft !== currentGesture.cardScrollLeft || card.scrollTop !== currentGesture.cardScrollTop;
+
+      if (currentGesture.cancelled || moved || pageScrolled || cardScrolled || !endedInside || isModuleInteractionTarget(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      cycleModuleCardState(card, grid);
+    });
+
+    card.addEventListener("pointercancel", cancelGesture);
+    card.addEventListener("lostpointercapture", cancelGesture);
+
+    card.addEventListener("keydown", (event) => {
+      if (isModuleInteractionTarget(event.target)) {
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        cycleModuleCardState(card, grid);
+        return;
+      }
+
+      if (event.key === "Escape" && card.dataset.moduleViewState) {
+        event.preventDefault();
+        clearActiveModuleCard(grid);
+        card.focus({ preventScroll: true });
+      }
+    });
+  }
+}
+
+function isModuleInteractionTarget(target) {
+  return target instanceof Element && Boolean(target.closest(moduleInteractionIgnoreSelector));
+}
+
+function cycleModuleCardState(card, grid) {
+  if (card.dataset.moduleViewState === "expanded") {
+    activateModuleCard(card, grid, "fullscreen");
+    return;
+  }
+
+  if (card.dataset.moduleViewState === "fullscreen") {
+    clearActiveModuleCard(grid);
+    return;
+  }
+
+  activateModuleCard(card, grid, "expanded");
+}
+
+function activateModuleCard(card, grid, viewState) {
+  for (const otherCard of Array.from(grid.children).filter((child) => child.classList.contains("module-card"))) {
+    if (otherCard !== card) {
+      resetModuleCardState(otherCard);
+    }
+  }
+
+  resetModuleCardState(card);
+  card.dataset.moduleViewState = viewState;
+  card.setAttribute("aria-expanded", "true");
+
+  if (viewState === "fullscreen") {
+    card.classList.add("is-module-fullscreen");
+    card.setAttribute("aria-modal", "true");
+    document.documentElement.classList.add("module-fullscreen-open");
+    return;
+  }
+
+  card.classList.add("is-module-expanded");
+  document.documentElement.classList.remove("module-fullscreen-open");
+}
+
+function clearActiveModuleCard(grid) {
+  for (const card of Array.from(grid.children).filter((child) => child.classList.contains("module-card"))) {
+    resetModuleCardState(card);
+  }
+
+  document.documentElement.classList.remove("module-fullscreen-open");
+}
+
+function resetModuleCardState(card) {
+  delete card.dataset.moduleViewState;
+  card.classList.remove("is-module-expanded", "is-module-fullscreen");
+  card.setAttribute("aria-expanded", "false");
+  card.removeAttribute("aria-modal");
 }
 
 function renderHomeViewControl() {

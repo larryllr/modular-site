@@ -557,6 +557,49 @@ h1 {
   min-height: 0;
 }
 
+.page-module-grid > .module-card.is-module-clickable {
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, min-height 160ms ease;
+}
+
+.page-module-grid > .module-card.is-module-expanded {
+  grid-column: 1 / -1 !important;
+  height: auto !important;
+  min-height: clamp(360px, 58vh, 720px) !important;
+  overflow: visible;
+}
+
+.workspace.has-page-background .page-module-grid > .module-card.is-module-expanded {
+  grid-column: 1 / -1 !important;
+  height: auto !important;
+  min-height: clamp(360px, 58vh, 720px) !important;
+  overflow: visible;
+}
+
+.page-module-grid > .module-card.is-module-fullscreen {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  width: 100vw;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding:
+    max(20px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+}
+
+html.module-fullscreen-open,
+html.module-fullscreen-open body {
+  overflow: hidden;
+}
+
 .page-module-grid.layout-fixed {
   grid-template-columns: repeat(var(--grid-columns, 1), minmax(0, 1fr));
 }
@@ -3051,6 +3094,13 @@ h1 {
     height: 220px;
     min-height: 0 !important;
     overflow: auto;
+  }
+
+  .workspace.has-page-background .page-module-grid > .module-card.is-module-expanded {
+    grid-column: 1 / -1 !important;
+    height: auto !important;
+    min-height: min(72vh, 620px) !important;
+    overflow: visible;
   }
 
   .blog-article-card > img {
