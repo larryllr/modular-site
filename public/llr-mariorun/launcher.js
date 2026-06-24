@@ -7,6 +7,7 @@ const shell = document.querySelector(".game-frame-shell");
 const packSelect = document.querySelector("#pack-select");
 const levelSelect = document.querySelector("#level-select");
 const startSelectedButton = document.querySelector("#start-selected-game");
+const startCustomLevelButton = document.querySelector("#start-custom-level");
 let manifest = null;
 let selectedPackId = "";
 let selectedLevelId = "";
@@ -52,20 +53,24 @@ function renderPrelaunchChoices() {
   levelSelect.replaceChildren(...levels.map((level) => new Option(`${level.name || level.id} · ${level.difficulty || "默认"}`, level.id, false, level.id === selectedLevelId)));
 }
 
-function selectedGameUrl() {
-  const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
+function selectedGameUrl(mode = "godot") {
+  const base = mode === "custom"
+    ? "/llr-mariorun/custom.html"
+    : frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
   const url = new URL(base, window.location.origin);
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
   if (selectedLevelId) url.searchParams.set("level", selectedLevelId);
   url.searchParams.set("locale", "zh_CN");
+  if (mode === "custom") url.searchParams.set("autostart", "1");
   return `${url.pathname}${url.search}`;
 }
 
-function startSelectedGame() {
+function startSelectedGame(mode = "godot") {
   if (!frame) return;
   selectedPackId = packSelect?.value || selectedPackId;
   selectedLevelId = levelSelect?.value || selectedLevelId;
-  frame.src = selectedGameUrl();
+  frame.src = selectedGameUrl(mode);
+  statusText.textContent = mode === "custom" ? "正在载入后台关卡试玩模式…" : "正在载入完整 Godot 游戏…";
   loadManifestStatus();
   focusGame();
 }
@@ -159,7 +164,8 @@ levelSelect?.addEventListener("change", () => {
   selectedLevelId = levelSelect.value;
   loadManifestStatus();
 });
-startSelectedButton?.addEventListener("click", startSelectedGame);
+startSelectedButton?.addEventListener("click", () => startSelectedGame("godot"));
+startCustomLevelButton?.addEventListener("click", () => startSelectedGame("custom"));
 frame?.addEventListener("load", () => {
   focusGame();
   loadManifestStatus();

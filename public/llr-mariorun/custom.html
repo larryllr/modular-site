@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>老师大冒险 · 自定义关卡试玩</title>
+    <link rel="stylesheet" href="/llr-mariorun/game.css" />
+  </head>
+  <body class="custom-runner-body">
+    <main class="custom-runner">
+      <section class="custom-menu" data-screen="menu">
+        <p class="eyebrow">CUSTOM LEVEL PLAYTEST</p>
+        <h1>自定义关卡试玩</h1>
+        <p class="lead">这里会直接读取管理员后台保存的素材包和关卡 JSON，用网页试玩引擎跑出来，方便检查在线关卡设计结果。</p>
+        <div id="keyboard-hints" class="keyboard-hints" aria-label="电脑键位提示"></div>
+        <h2>素材包</h2>
+        <div id="pack-list" class="choice-grid"></div>
+        <h2>关卡</h2>
+        <div id="level-list" class="choice-grid"></div>
+        <p id="menu-feedback" class="runner-feedback"></p>
+        <div class="redux-actions">
+          <button id="start-game" class="primary-button" type="button">开始试玩</button>
+          <a class="secondary-button" href="/llr-mariorun/">返回完整游戏</a>
+          <a class="secondary-button" href="/admin">去后台编辑</a>
+        </div>
+      </section>
+
+      <section class="custom-stage" data-screen="game" hidden>
+        <div class="runner-hud">
+          <span id="hud-level">关卡</span>
+          <span id="hud-coins">金币 0</span>
+          <span id="hud-lives">生命 3</span>
+          <button id="pause-game" type="button">暂停</button>
+          <button id="restart-game" type="button">重开</button>
+          <button id="back-menu" type="button">返回</button>
+        </div>
+        <canvas id="game-canvas" width="960" height="540"></canvas>
+        <div class="virtual-controls runner-controls" aria-label="手机虚拟按键">
+          <div class="virtual-pad">
+            <button data-action="left" type="button">←</button>
+            <button data-action="down" type="button">↓</button>
+            <button data-action="right" type="button">→</button>
+          </div>
+          <div class="virtual-actions">
+            <button data-action="jump" type="button">跳跃</button>
+            <button data-action="run" type="button">加速</button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="/llr-mariorun/game.js"></script>
+  </body>
+</html>

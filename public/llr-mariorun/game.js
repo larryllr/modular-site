@@ -28,6 +28,7 @@ let paused = false;
 let frameHandle = 0;
 let checkpoint = { x: 96, y: 416 };
 let assetImages = new Map();
+const launchParams = new URLSearchParams(window.location.search);
 
 init();
 
@@ -42,10 +43,14 @@ async function init() {
 
   try {
     manifest = await fetch(gameManifestUrl).then((response) => response.json());
-    selectedPackId = manifest.defaultAssetPackId;
-    selectedLevelId = manifest.defaultLevelId;
+    selectedPackId = launchParams.get("pack") || manifest.defaultAssetPackId;
+    selectedLevelId = launchParams.get("level") || manifest.defaultLevelId;
     renderPackSelection();
     renderLevelSelection();
+    if (launchParams.get("autostart") === "1") {
+      const level = manifest.levels.find((item) => item.id === selectedLevelId) || manifest.levels[0];
+      if (level) await startLevel(level);
+    }
   } catch (error) {
     feedback.textContent = `游戏清单加载失败：${error.message}`;
   }
@@ -560,12 +565,19 @@ function bindVirtualControls() {
     };
     button.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      event.stopPropagation();
       button.setPointerCapture(event.pointerId);
       set(true);
     });
-    button.addEventListener("pointerup", () => set(false));
+    button.addEventListener("pointerup", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      set(false);
+    });
     button.addEventListener("pointercancel", () => set(false));
     button.addEventListener("lostpointercapture", () => set(false));
+    button.addEventListener("contextmenu", (event) => event.preventDefault());
+    button.addEventListener("selectstart", (event) => event.preventDefault());
   }
 }
 

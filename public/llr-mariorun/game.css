@@ -424,3 +424,137 @@ body.is-forced-landscape .game-frame-shell {
     transition: none !important;
   }
 }
+
+.launch-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.custom-runner-body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(250, 204, 21, 0.16), transparent 26%),
+    linear-gradient(135deg, #10233f 0%, #101827 45%, #271433 100%);
+}
+
+.custom-runner {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 32px);
+}
+
+.custom-menu {
+  display: grid;
+  gap: 18px;
+  padding: clamp(18px, 4vw, 34px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 34px;
+  background: rgba(9, 15, 31, 0.82);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+}
+
+.custom-menu h1,
+.custom-menu h2 {
+  margin: 0;
+}
+
+.keyboard-hints,
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.keyboard-hints span,
+.pack-card,
+.level-card {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 14px;
+  text-align: left;
+}
+
+.pack-card,
+.level-card {
+  cursor: pointer;
+}
+
+.pack-card.is-selected,
+.level-card.is-selected {
+  border-color: rgba(255, 214, 102, 0.9);
+  box-shadow: 0 0 0 3px rgba(255, 214, 102, 0.18);
+}
+
+.pack-card span,
+.level-card span,
+.level-card small {
+  display: block;
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.runner-feedback {
+  min-height: 1.5em;
+  color: #ffd666;
+}
+
+.custom-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 30px;
+  background: #050816;
+  box-shadow: 0 26px 90px rgba(0, 0, 0, 0.44);
+}
+
+.runner-hud {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.runner-hud span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.runner-hud button {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: #111827;
+  background: #ffd666;
+  font-weight: 800;
+}
+
+.runner-hud button:first-of-type {
+  margin-left: auto;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #74c9ff;
+}
+
+.runner-controls {
+  left: 16px;
+  right: 16px;
+}
+
+.portrait-compat {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 100svh;
+  height: 100svw;
+  transform: translate(-50%, -50%) rotate(90deg);
+  transform-origin: center;
+}
