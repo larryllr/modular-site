@@ -667,6 +667,13 @@ function renderGameAssetPackEditor(config) {
   textarea.value = JSON.stringify(packs, null, 2);
   const save = button("保存素材包元数据", "button primary", "button");
   const add = button("复制第一个素材包", "button", "button");
+  const exportButton = button("导出当前素材包", "button", "button");
+  const templateButton = button("下载素材包模板", "button", "button");
+  const importLabel = element("label", "button game-import-button", "导入本地素材包");
+  const importInput = document.createElement("input");
+  importInput.type = "file";
+  importInput.accept = "application/json,.json";
+  importLabel.append(importInput);
   const slotGrid = element("div", "game-asset-slot-grid");
   const feedback = element("p", "form-hint", "");
 
@@ -693,12 +700,62 @@ function renderGameAssetPackEditor(config) {
     }
   });
 
+  exportButton.addEventListener("click", () => {
+    try {
+      const assetPacks = JSON.parse(textarea.value || "[]");
+      downloadJson(`llr-mariorun-asset-packs-${Date.now()}.json`, {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        assetPacks
+      });
+      feedback.textContent = "已导出当前素材包 JSON。";
+    } catch (error) {
+      feedback.textContent = `导出失败：${error.message}`;
+    }
+  });
+
+  templateButton.addEventListener("click", () => {
+    const templateAssets = {};
+    for (const slot of slots) {
+      templateAssets[slot.id] = templateAssetForSlot(slot);
+    }
+    downloadJson("llr-mariorun-asset-pack-template.json", {
+      version: 1,
+      assetPacks: [{
+        id: "local-teacher-pack",
+        name: "本地老师素材包",
+        description: "JSON 负责素材包清单；小素材可用 dataUrl 内嵌导入，大素材会上传后转成 key/url 引用。Godot 游戏本体仍需要 pck 或等价构建产物。",
+        coverSlot: "ui.cover",
+        enabled: true,
+        builtin: false,
+        default: true,
+        assets: templateAssets,
+        updatedAt: new Date().toISOString()
+      }]
+    });
+  });
+
+  importInput.addEventListener("change", async () => {
+    const file = importInput.files?.[0];
+    if (!file) return;
+    feedback.textContent = `导入 ${file.name} 中…`;
+    try {
+      const importedPacks = await importLocalGameAssetPacks(file, slots, feedback);
+      textarea.value = JSON.stringify(importedPacks, null, 2);
+      feedback.textContent = `已导入 ${importedPacks.length} 个素材包；确认无误后点“保存素材包元数据”。`;
+    } catch (error) {
+      feedback.textContent = `导入失败：${error.message}`;
+    } finally {
+      importInput.value = "";
+    }
+  });
+
   for (const slot of slots) {
     const item = element("label", "game-asset-slot");
     item.dataset.gameSlot = slot.id;
     const upload = document.createElement("input");
     upload.type = "file";
-    upload.accept = slot.kind === "audio" ? "audio/*" : "image/*";
+    upload.accept = slot.kind === "audio" ? "audio/*" : slot.kind === "bundle" ? ".pck,application/octet-stream" : "image/*";
     upload.addEventListener("change", async () => {
       const file = upload.files?.[0];
       if (!file) return;
@@ -721,12 +778,135 @@ function renderGameAssetPackEditor(config) {
         upload.value = "";
       }
     });
-    item.append(element("strong", "", slot.label), element("small", "", slot.id), upload);
+    const downloadCurrent = button("下载当前素材", "button small", "button");
+    downloadCurrent.addEventListener("click", () => {
+      const asset = findFirstAssetForSlot(textarea.value, slot.id);
+      if (!asset?.url) {
+        feedback.textContent = `${slot.label} 还没有可下载的素材。`;
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = asset.url;
+      link.download = asset.key?.split("/").pop() || defaultAssetFilename(slot);
+      document.body.append(link);
+      link.click();
+      link.remove();
+      feedback.textContent = `已开始下载 ${slot.label}。`;
+    });
+    item.append(element("strong", "", slot.label), element("small", "", slot.id), upload, downloadCurrent);
     slotGrid.append(item);
   }
 
-  panel.append(element("h4", "", "素材包"), element("p", "form-hint", "上传槽位默认写入第一个素材包；可在 JSON 中复制或调整多个素材包。"), slotGrid, textarea, add, save, feedback);
+  const tools = element("div", "game-editor-tools");
+  tools.append(importLabel, exportButton, templateButton);
+  panel.append(element("h4", "", "素材包"), element("p", "form-hint", "上传槽位默认写入第一个素材包；JSON 用来管理素材包清单，不建议塞完整 pck。导入本地 JSON 时，内嵌 dataUrl 会自动上传并改成素材引用。"), tools, slotGrid, textarea, add, save, feedback);
   return panel;
+}
+
+async function importLocalGameAssetPacks(file, slots, feedback) {
+  const text = await file.text();
+  const payload = JSON.parse(text);
+  const packs = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload.assetPacks)
+      ? payload.assetPacks
+      : payload.pack
+        ? [payload.pack]
+        : [];
+
+  if (!packs.length) {
+    throw new Error("文件里没有 assetPacks 数组。");
+  }
+
+  const slotMap = new Map(slots.map((slot) => [slot.id, slot]));
+  const imported = [];
+
+  for (const pack of packs) {
+    const nextPack = {
+      ...pack,
+      id: String(pack.id || `local-pack-${Date.now()}`),
+      name: String(pack.name || "本地素材包"),
+      builtin: false,
+      enabled: pack.enabled !== false,
+      assets: { ...(pack.assets || {}) },
+      updatedAt: new Date().toISOString()
+    };
+
+    for (const [slotId, asset] of Object.entries(nextPack.assets)) {
+      const slot = slotMap.get(slotId);
+      const dataUrl = typeof asset === "string" ? asset : asset?.dataUrl;
+
+      if (!slot || !dataUrl || !String(dataUrl).startsWith("data:")) {
+        continue;
+      }
+
+      feedback.textContent = `上传本地素材：${slot.label}…`;
+      const uploadFile = dataUrlToFile(dataUrl, asset?.name || defaultAssetFilename(slot));
+      const form = new FormData();
+      form.append("slotId", slot.id);
+      form.append("file", uploadFile);
+      const result = await adminGameUpload("/api/admin/game/assets", form);
+      nextPack.assets[slotId] = result.asset;
+    }
+
+    imported.push(nextPack);
+  }
+
+  return imported;
+}
+
+function templateAssetForSlot(slot) {
+  if (slot.kind === "audio") {
+    return { dataUrl: "data:audio/ogg;base64,...", name: defaultAssetFilename(slot) };
+  }
+  if (slot.kind === "bundle") {
+    return { dataUrl: "data:application/octet-stream;base64,...", name: defaultAssetFilename(slot) };
+  }
+  return { dataUrl: "data:image/png;base64,...", name: defaultAssetFilename(slot) };
+}
+
+function defaultAssetFilename(slot) {
+  const extension = slot.kind === "audio" ? "ogg" : slot.kind === "bundle" ? "pck" : "png";
+  return `${slot.id}.${extension}`;
+}
+
+function findFirstAssetForSlot(textareaValue, slotId) {
+  try {
+    const assetPacks = JSON.parse(textareaValue || "[]");
+    for (const pack of assetPacks) {
+      const asset = pack?.assets?.[slotId];
+      if (asset?.url) return asset;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function dataUrlToFile(dataUrl, name) {
+  const [header, base64] = String(dataUrl).split(",");
+  if (!header || !base64) {
+    throw new Error("无效 Data URL。");
+  }
+  const contentType = header.match(/^data:([^;]+)/)?.[1] || "application/octet-stream";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new File([bytes], name, { type: contentType });
+}
+
+function downloadJson(filename, value) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function renderGameLevelEditor(config) {

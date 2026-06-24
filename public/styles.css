@@ -505,6 +505,26 @@ h1 {
   font-size: 17px;
 }
 
+.game-editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.game-import-button {
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.game-import-button input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .game-asset-slot-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

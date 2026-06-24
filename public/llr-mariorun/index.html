@@ -9,9 +9,27 @@
   <body>
     <main id="game-root" class="mariorun-shell">
       <section class="mariorun-menu" data-screen="menu">
-        <p class="eyebrow">LLR Mario Run</p>
-        <h1>老师大冒险</h1>
-        <p class="lead">选择素材包和关卡，开始横版跳跃挑战。</p>
+        <section class="game-cover" aria-label="游戏入口">
+          <div class="cover-copy">
+            <p class="eyebrow">LLR MARIO RUN · WEB EDITION</p>
+            <h1>老师大冒险</h1>
+            <p class="lead">像在线小游戏页面一样，点开始直接进入；素材包和关卡可以在开始前选择，后台可以导入本地素材包。</p>
+            <div class="cover-actions">
+              <button id="start-game" class="primary-button" type="button">▶ 开始游戏</button>
+              <a class="secondary-button" href="/admin">管理员素材库</a>
+            </div>
+          </div>
+          <div class="cover-preview" aria-hidden="true">
+            <div class="mock-sky">
+              <span class="mock-cloud cloud-a"></span>
+              <span class="mock-cloud cloud-b"></span>
+              <span class="mock-block block-a">?</span>
+              <span class="mock-player"></span>
+              <span class="mock-pipe"></span>
+              <span class="mock-ground"></span>
+            </div>
+          </div>
+        </section>
         <div id="keyboard-hints" class="keyboard-hints"></div>
         <section>
           <h2>选择素材包</h2>
@@ -21,7 +39,6 @@
           <h2>选择关卡</h2>
           <div id="level-list" class="card-grid level-grid"></div>
         </section>
-        <button id="start-game" class="primary-button" type="button">开始游戏</button>
         <p id="menu-feedback" class="feedback"></p>
       </section>
 

@@ -554,7 +554,10 @@ function bindKeyboardControls() {
 function bindVirtualControls() {
   for (const button of document.querySelectorAll("[data-action]")) {
     const action = button.dataset.action;
-    const set = (value) => actionState.set(action, value);
+    const set = (value) => {
+      actionState.set(action, value);
+      button.classList.toggle("is-pressed", value);
+    };
     button.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       button.setPointerCapture(event.pointerId);

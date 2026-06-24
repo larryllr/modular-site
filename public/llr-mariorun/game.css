@@ -44,6 +44,149 @@ button {
   padding: clamp(18px, 5vw, 48px);
 }
 
+.game-cover {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.92fr) minmax(300px, 1.08fr);
+  gap: clamp(18px, 4vw, 44px);
+  align-items: stretch;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(6, 20, 34, 0.94), rgba(13, 50, 72, 0.86)),
+    radial-gradient(circle at 80% 20%, rgba(247, 201, 72, 0.24), transparent 34%);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.36);
+  min-height: clamp(360px, 52vh, 560px);
+  overflow: hidden;
+  padding: clamp(18px, 3vw, 34px);
+}
+
+.cover-copy {
+  display: grid;
+  align-content: center;
+  gap: 18px;
+}
+
+.cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.secondary-button {
+  display: inline-grid;
+  min-height: 48px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-weight: 900;
+  text-decoration: none;
+  padding: 0 20px;
+}
+
+.cover-preview {
+  position: relative;
+  min-height: 320px;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #64c4ff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+}
+
+.mock-sky,
+.mock-ground {
+  position: absolute;
+  inset: 0;
+}
+
+.mock-cloud,
+.mock-block,
+.mock-player,
+.mock-pipe {
+  position: absolute;
+  display: block;
+}
+
+.mock-cloud {
+  width: 130px;
+  height: 54px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.mock-cloud::before,
+.mock-cloud::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.mock-cloud::before {
+  left: 20px;
+  width: 62px;
+  height: 62px;
+}
+
+.mock-cloud::after {
+  right: 18px;
+  width: 76px;
+  height: 76px;
+}
+
+.cloud-a {
+  top: 56px;
+  left: 12%;
+}
+
+.cloud-b {
+  top: 112px;
+  right: 10%;
+  transform: scale(0.78);
+}
+
+.mock-block {
+  top: 38%;
+  left: 32%;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 3px solid #d69b19;
+  background: #ffd447;
+  color: #7c2d12;
+  font-weight: 900;
+}
+
+.mock-player {
+  bottom: 92px;
+  left: 22%;
+  width: 44px;
+  height: 62px;
+  border-radius: 14px 14px 6px 6px;
+  background: linear-gradient(#f59e0b 0 68%, #1d4ed8 68%);
+  box-shadow: 14px 18px 0 -8px rgba(17, 24, 39, 0.95);
+}
+
+.mock-pipe {
+  right: 13%;
+  bottom: 70px;
+  width: 72px;
+  height: 100px;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(90deg, #16a34a, #22c55e, #15803d);
+}
+
+.mock-ground {
+  top: auto;
+  height: 74px;
+  background: #6f8f2f;
+  border-top: 6px solid #8fb339;
+}
+
 .eyebrow {
   margin: 0;
   color: var(--accent);
@@ -182,9 +325,9 @@ canvas {
 .virtual-controls {
   position: absolute;
   z-index: 4;
-  right: 20px;
-  bottom: 18px;
-  left: 20px;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  left: max(18px, env(safe-area-inset-left));
   display: none;
   justify-content: space-between;
   pointer-events: none;
@@ -198,14 +341,24 @@ canvas {
 }
 
 .virtual-controls button {
-  width: 62px;
-  height: 62px;
+  width: clamp(62px, 10vw, 82px);
+  height: clamp(62px, 10vw, 82px);
   border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.42);
+  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.22), transparent 32%), rgba(0, 0, 0, 0.52);
   color: #ffffff;
   font-weight: 900;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.virtual-controls button:active,
+.virtual-controls button.is-pressed {
+  transform: translateY(2px) scale(0.97);
+  background: rgba(247, 201, 72, 0.64);
+  color: #1d1600;
 }
 
 .orientation-note {
@@ -240,5 +393,24 @@ canvas {
 
   .portrait-compat .virtual-controls {
     display: flex;
+  }
+}
+
+@media (max-width: 860px) {
+  body {
+    overflow: auto;
+  }
+
+  .game-cover {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .cover-preview {
+    min-height: 220px;
+  }
+
+  .keyboard-hints {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

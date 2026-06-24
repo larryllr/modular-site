@@ -182,7 +182,7 @@ type SiteLink = {
 type GameAssetSlot = {
   id: string;
   label: string;
-  kind: "image" | "audio";
+  kind: "image" | "audio" | "bundle";
 };
 
 type GameAssetRef = {
@@ -415,7 +415,8 @@ const gameAssetSlots: GameAssetSlot[] = [
   { id: "sm63.audio.editor.1", label: "SM63 编辑器音乐 1", kind: "audio" },
   { id: "sm63.audio.editor.2", label: "SM63 编辑器音乐 2", kind: "audio" },
   { id: "sm63.audio.editor.3", label: "SM63 编辑器音乐 3", kind: "audio" },
-  { id: "sm63.audio.editor.4", label: "SM63 编辑器音乐 4", kind: "audio" }
+  { id: "sm63.audio.editor.4", label: "SM63 编辑器音乐 4", kind: "audio" },
+  { id: "game.bundle.pck", label: "Godot 游戏包 .pck", kind: "bundle" }
 ];
 
 const defaultGameAssetPacks: GameAssetPack[] = [
@@ -1958,14 +1959,16 @@ async function handleGameAssetUpload(request: Request, env: AppEnv): Promise<Res
 
   const allowedImageTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
   const allowedAudioTypes = ["audio/mpeg", "audio/ogg", "audio/wav"];
-  const allowed = slot.kind === "image" ? allowedImageTypes : allowedAudioTypes;
-  const maxBytes = slot.kind === "image" ? 2 * 1024 * 1024 : 8 * 1024 * 1024;
+  const allowedBundleTypes = ["application/octet-stream", "application/x-godot-pack", "application/x-pck", ""];
+  const allowed = slot.kind === "image" ? allowedImageTypes : slot.kind === "audio" ? allowedAudioTypes : allowedBundleTypes;
+  const maxBytes = slot.kind === "image" ? 2 * 1024 * 1024 : slot.kind === "audio" ? 8 * 1024 * 1024 : 20 * 1024 * 1024;
+  const looksLikePck = file.name.toLowerCase().endsWith(".pck");
 
-  if (!allowed.includes(file.type) || file.size > maxBytes) {
-    return json({ error: "素材类型或大小不符合限制" }, 400);
+  if ((!allowed.includes(file.type) && !(slot.kind === "bundle" && looksLikePck)) || file.size > maxBytes) {
+    return json({ error: "素材类型或大小不符合限制（图片 2MB / 音频 8MB / PCK 20MB）" }, 400);
   }
 
-  const extension = assetExtension(file.type);
+  const extension = slot.kind === "bundle" ? "pck" : assetExtension(file.type);
   const filename = `${slot.id.replace(/[^a-z0-9.-]/gi, "-")}.${extension}`;
   const key = env.GAME_ASSETS
     ? `${gameAssetR2Prefix}${crypto.randomUUID()}/${filename}`
@@ -2248,13 +2251,16 @@ function assetExtension(contentType: string): string {
     "image/gif": "gif",
     "audio/mpeg": "mp3",
     "audio/ogg": "ogg",
-    "audio/wav": "wav"
+    "audio/wav": "wav",
+    "application/octet-stream": "pck",
+    "application/x-godot-pack": "pck",
+    "application/x-pck": "pck"
   };
   return map[contentType] || "bin";
 }
 
 function isSafeGameAssetKey(key: string): boolean {
-  return /^(game-assets|game-assets-kv)\/[a-f0-9-]{36}\/[a-z0-9_.-]+\.(?:png|jpg|webp|gif|mp3|ogg|wav)$/i.test(key);
+  return /^(game-assets|game-assets-kv)\/[a-f0-9-]{36}\/[a-z0-9_.-]+\.(?:png|jpg|webp|gif|mp3|ogg|wav|pck)$/i.test(key);
 }
 
 async function readComments(env: AppEnv, page: string): Promise<CommentRecord[]> {

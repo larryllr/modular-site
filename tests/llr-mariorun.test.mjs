@@ -32,9 +32,13 @@ test("llr-mariorun has R2-ready KV-backed Worker game APIs", () => {
 
 test("default game content includes asset slots and ten fair long levels", () => {
   assert.match(worker, /const gameAssetSlots: GameAssetSlot\[\] = \[/);
-  for (const slot of ["player.idle", "enemy.goomba", "powerup.mushroom", "boss.main", "princess.idle", "audio.bgm", "sm63.player.sheet", "sm63.enemy.goomba.walk", "sm63.pickup.coins", "sm63.audio.title"]) {
+  for (const slot of ["player.idle", "enemy.goomba", "powerup.mushroom", "boss.main", "princess.idle", "audio.bgm", "sm63.player.sheet", "sm63.enemy.goomba.walk", "sm63.pickup.coins", "sm63.audio.title", "game.bundle.pck"]) {
     assert.match(worker, new RegExp(`id: "${slot.replace(".", "\\.")}"`));
   }
+  assert.match(worker, /kind: "bundle"/);
+  assert.match(worker, /allowedBundleTypes/);
+  assert.match(worker, /slot\.kind === "bundle" \? "pck"/);
+  assert.match(worker, /\|pck/);
   assert.match(worker, /const defaultGameAssetPacks: GameAssetPack\[\] = \[/);
   assert.match(worker, /const defaultGameLevels: GameLevel\[\] = \[/);
   const levelIds = [...worker.matchAll(/id: "level-[0-9]{2}"/g)].map((match) => match[0]);
@@ -54,9 +58,14 @@ test("static llr-mariorun game page has menu controls canvas runtime and mobile 
   const game = source("public/llr-mariorun/game.js");
 
   assert.match(html, /老师大冒险/);
+  assert.match(html, /WEB EDITION/);
+  assert.match(html, /管理员素材库/);
   assert.match(html, /game\.js/);
+  assert.match(css, /\.game-cover/);
+  assert.match(css, /\.cover-preview/);
   assert.match(css, /\.portrait-compat/);
   assert.match(css, /\.virtual-controls/);
+  assert.match(css, /\.is-pressed/);
   assert.match(css, /\[hidden\]\s*{\s*display:\s*none !important;/);
   assert.match(css, /transform:\s*rotate\(90deg\)/);
   assert.match(game, /const gameManifestUrl = "\/api\/game\/manifest"/);
@@ -64,6 +73,7 @@ test("static llr-mariorun game page has menu controls canvas runtime and mobile 
   assert.match(game, /function renderLevelSelection\(\)/);
   assert.match(game, /function renderKeyboardHints\(\)/);
   assert.match(game, /function bindVirtualControls\(\)/);
+  assert.match(game, /button\.classList\.toggle\("is-pressed", value\)/);
   assert.match(game, /function updateOrientationMode\(\)/);
   assert.match(game, /screen\.orientation\.lock\("landscape"\)/);
   assert.match(game, /function restartFromCheckpoint\(\)/);
@@ -75,11 +85,23 @@ test("admin app exposes llr-mariorun entry and online editors", () => {
   assert.match(app, /function renderAdminGameEditor\(\)/);
   assert.match(app, /async function loadAdminGameConfig\(\)/);
   assert.match(app, /function renderGameAssetPackEditor/);
+  assert.match(app, /function importLocalGameAssetPacks/);
+  assert.match(app, /function dataUrlToFile/);
+  assert.match(app, /function downloadJson/);
+  assert.match(app, /function templateAssetForSlot/);
+  assert.match(app, /function defaultAssetFilename/);
+  assert.match(app, /function findFirstAssetForSlot/);
+  assert.match(app, /导入本地素材包/);
+  assert.match(app, /下载素材包模板/);
+  assert.match(app, /下载当前素材/);
+  assert.match(app, /\.pck,application\/octet-stream/);
   assert.match(app, /function renderGameLevelEditor/);
   assert.match(app, /\/api\/admin\/game/);
   assert.match(app, /\/api\/admin\/game\/assets/);
   assert.match(app, /老师大冒险/);
   assert.match(styles, /\.game-admin-panel/);
+  assert.match(styles, /\.game-editor-tools/);
+  assert.match(styles, /\.game-import-button/);
   assert.match(styles, /\.game-asset-slot-grid/);
   assert.match(styles, /\.game-level-editor/);
 });
