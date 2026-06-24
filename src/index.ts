@@ -2075,7 +2075,11 @@ async function fetchGameAsset(request: Request, env: AppEnv, key: string): Promi
 
 async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Response | null> {
   const packs = await readGameAssetPacks(env);
-  const activePack = packs.find((pack) => pack.enabled && pack.default) || packs.find((pack) => pack.enabled);
+  const referer = request.headers.get("referer") || "";
+  const requestedPackId = safeUrlSearchParam(referer, "pack");
+  const activePack = packs.find((pack) => pack.enabled && pack.id === requestedPackId)
+    || packs.find((pack) => pack.enabled && pack.default)
+    || packs.find((pack) => pack.enabled);
   const gamePack = activePack?.assets["game.bundle.pck"];
 
   if (!gamePack?.key) {
@@ -2083,6 +2087,14 @@ async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Respon
   }
 
   return fetchGameAsset(request, env, gamePack.key);
+}
+
+function safeUrlSearchParam(value: string, name: string): string {
+  try {
+    return new URL(value).searchParams.get(name) || "";
+  } catch {
+    return "";
+  }
 }
 
 async function fetchCompressedGodotWasm(request: Request, env: AppEnv, origin: string): Promise<Response> {

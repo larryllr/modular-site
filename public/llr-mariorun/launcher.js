@@ -4,6 +4,12 @@ const reloadButton = document.querySelector("#reload-game");
 const fullscreenButton = document.querySelector("#fullscreen-game");
 const statusText = document.querySelector("#frame-status");
 const shell = document.querySelector(".game-frame-shell");
+const packSelect = document.querySelector("#pack-select");
+const levelSelect = document.querySelector("#level-select");
+const startSelectedButton = document.querySelector("#start-selected-game");
+let manifest = null;
+let selectedPackId = "";
+let selectedLevelId = "";
 const keyLabels = {
   ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
   ArrowUp: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
@@ -19,16 +25,49 @@ async function loadManifestStatus() {
   try {
     const response = await fetch("/api/game/manifest", { cache: "no-store" });
     if (!response.ok) throw new Error("manifest unavailable");
-    const manifest = await response.json();
-    const activePack = (manifest.assetPacks || []).find((pack) => pack.enabled && pack.default)
+    manifest = await response.json();
+    renderPrelaunchChoices();
+    const activePack = (manifest.assetPacks || []).find((pack) => pack.id === selectedPackId)
+      || (manifest.assetPacks || []).find((pack) => pack.enabled && pack.default)
       || (manifest.assetPacks || []).find((pack) => pack.enabled);
+    const activeLevel = (manifest.levels || []).find((level) => level.id === selectedLevelId)
+      || (manifest.levels || []).find((level) => level.default)
+      || (manifest.levels || [])[0];
     const customPck = activePack?.assets?.["game.bundle.pck"];
     statusText.textContent = customPck
-      ? `已加载后台 PCK：${activePack.name || "素材包"}`
-      : "正在运行内置 Godot Web 版，可在后台上传 game.bundle.pck 覆盖。";
+      ? `已选择后台 PCK：${activePack.name || "素材包"} · 关卡：${activeLevel?.name || "默认"}`
+      : `已选择：${activePack?.name || "内置素材包"} · ${activeLevel?.name || "默认关卡"}。可在后台上传 game.bundle.pck 覆盖。`;
   } catch {
     statusText.textContent = "Godot 游戏已嵌入，后台素材状态读取失败。";
   }
+}
+
+function renderPrelaunchChoices() {
+  if (!manifest || !packSelect || !levelSelect) return;
+  const packs = (manifest.assetPacks || []).filter((pack) => pack.enabled !== false);
+  const levels = (manifest.levels || []).filter((level) => level.enabled !== false);
+  selectedPackId = selectedPackId || manifest.defaultAssetPackId || packs[0]?.id || "";
+  selectedLevelId = selectedLevelId || manifest.defaultLevelId || levels[0]?.id || "";
+  packSelect.replaceChildren(...packs.map((pack) => new Option(pack.name || pack.id, pack.id, false, pack.id === selectedPackId)));
+  levelSelect.replaceChildren(...levels.map((level) => new Option(`${level.name || level.id} · ${level.difficulty || "默认"}`, level.id, false, level.id === selectedLevelId)));
+}
+
+function selectedGameUrl() {
+  const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
+  const url = new URL(base, window.location.origin);
+  if (selectedPackId) url.searchParams.set("pack", selectedPackId);
+  if (selectedLevelId) url.searchParams.set("level", selectedLevelId);
+  url.searchParams.set("locale", "zh_CN");
+  return `${url.pathname}${url.search}`;
+}
+
+function startSelectedGame() {
+  if (!frame) return;
+  selectedPackId = packSelect?.value || selectedPackId;
+  selectedLevelId = levelSelect?.value || selectedLevelId;
+  frame.src = selectedGameUrl();
+  loadManifestStatus();
+  focusGame();
 }
 
 function focusGame() {
@@ -112,14 +151,24 @@ async function requestLandscapeFullscreen() {
 }
 
 focusButton?.addEventListener("click", focusGame);
+packSelect?.addEventListener("change", () => {
+  selectedPackId = packSelect.value;
+  loadManifestStatus();
+});
+levelSelect?.addEventListener("change", () => {
+  selectedLevelId = levelSelect.value;
+  loadManifestStatus();
+});
+startSelectedButton?.addEventListener("click", startSelectedGame);
 frame?.addEventListener("load", () => {
   focusGame();
   loadManifestStatus();
 });
 reloadButton?.addEventListener("click", () => {
-  if (frame) frame.src = frame.src;
+  if (frame) frame.src = frame.src === "about:blank" ? selectedGameUrl() : frame.src;
 });
 fullscreenButton?.addEventListener("click", async () => {
+  if (frame?.src === "about:blank") startSelectedGame();
   await requestLandscapeFullscreen();
 });
 document.addEventListener("fullscreenchange", () => {
