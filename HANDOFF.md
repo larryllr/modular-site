@@ -16,11 +16,11 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：集成 CubeCity 后以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`9eca66f4-adc2-450f-82fa-e6d31b6f75ac`
+- 最新 Cloudflare Version ID：`c255ce28-2a38-4386-a59c-7dcbb6b295a9`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
-- `/llr-mariorun` 素材上传当前优先使用 R2 代码路径；但 2026-06-24 部署时 Cloudflare 账号返回 R2 `10042 Please enable R2 through the Cloudflare Dashboard`，因此线上暂用 `SITE_CONFIG` KV 的 `game-assets-kv/` 前缀兜底存储素材二进制。账号在 Dashboard 开通 R2 后，可重新添加 `GAME_ASSETS` binding 与 `llr-mariorun-assets` bucket，后端会自动优先写入 R2。
+- `/llr-mariorun` 最新方案按用户要求不使用 R2：D1 数据库 `llr-mariorun-db`（binding `GAME_DB`，database_id `d4ddc5c7-36ac-472f-95c3-f86c831f97f6`）保存素材包和关卡元数据；后台上传的图片、音频、PCK 暂存入 `SITE_CONFIG` KV 的 `game-assets-kv/` 前缀；Godot 默认 Web 产物随 Workers Assets 部署。D1 迁移文件在 `migrations/0001_llr_mariorun_metadata.sql`，远端和本地均已应用。
 
 不要在界面显示默认密码，也不要把真实密码或本地 `.dev.vars` 提交到 GitHub。
 
@@ -72,7 +72,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 手机端侧边栏不固定。
 - 首页与分页面支持不同列数布局。
 - `/llrgamecubecity` 提供全屏 CubeCity 小游戏。
-- `/llr-mariorun` 提供“老师大冒险”横版跳跃游戏：开始前选择素材包和关卡，默认 10 个原创长流程关卡；管理员可在线编辑素材包和关卡，上传主角、怪物、蘑菇、Boss、公主、背景、音频和 `game.bundle.pck` 等素材槽；每个槽位都能从后台下载当前素材，PCK 上传大小暂限 20MB；JSON 只保存素材包清单和素材引用，不建议直接塞完整大包；默认关卡公平且不包含猫里奥陷阱，可复制后自行添加；桌面端显示键位提示，手机端提供虚拟按键并在竖屏浏览器中强制横向显示游戏舞台。
+- `/llr-mariorun` 提供“老师大冒险”Godot Web 游戏入口：页面嵌入 SM63 Redux 风格 Godot 导出壳，默认 `index.wasm` 因 Cloudflare Workers Assets 单文件限制改为保存 `index.wasm.gz`，Worker 对 `/llr-mariorun/godot/index.wasm` 动态解压返回；`public/llr-mariorun/godot/index.js` 也加入浏览器端 gzip 魔数兜底解压。开始前页面显示桌面键位提示，手机端叠加虚拟按键并在竖屏浏览器中强制横向显示舞台。后台可编辑素材包和关卡，上传主角、怪物、蘑菇、Boss、公主、背景、音频和 `game.bundle.pck` 等素材槽；每个槽位都能从后台下载当前素材。若 D1 中默认素材包配置了 `game.bundle.pck`，Worker 会用后台上传的 PCK 覆盖默认 `/llr-mariorun/godot/index.pck`。PCK 上传大小暂限 20MB；JSON 只保存素材包清单和素材引用，不建议直接塞完整大包。
 - 2026-06-24 用户要求改用 `Redux-Team/Legacy_SM63Redux` 作为更完整的游戏基础。已在本地临时克隆并验证：上游 HEAD `cde0b9e748d3c7c0827eff644120aae027dfb80c`，Godot 4.3 工程，存在 Web export preset，临时工具链位于 `%TEMP%\godot-4.3-tools`，可导出 Web 产物到 `%TEMP%\sm63redux-web-export`。不要提交 `vendor/Legacy_SM63Redux/`，该目录已加入 `.gitignore`。原始导出会打包 Mario/Nintendo 风格素材，不应直接公开部署；下一步应做 Godot `AssetOverrides` autoload，从 `/api/game/manifest` 读取管理员上传素材后再生成去品牌/可替换构建。后台素材槽已扩展 SM63 专用整图槽：`sm63.player.sheet`、`sm63.enemy.goomba.walk`、`sm63.enemy.koopa.walk`、`sm63.pickup.coins`、`sm63.terrain.jungle`、`sm63.audio.title` 等。
 - 主页和侧边栏默认显示“放松一下”入口，完整管理员可隐藏或自定义入口背景和图标。
 - CubeCity 默认使用简体中文，右上角仍保留中英文切换。
@@ -137,7 +137,7 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 
 - 在真实浏览器中重点回归富文本标题、引用、列表和连续编辑。
 - 继续减少管理员页面中的整页 `renderAdminEditor()` 调用。
-- 大量 Base64 图片会增加 KV 配置体积，未来可迁移到 Cloudflare R2。
+- 大量 Base64 图片会增加 KV 配置体积，后续应继续迁移为“文件进 KV/Assets、索引进 D1”的引用式结构；用户已明确 `/llr-mariorun` 不用 R2。
 - 对博客编辑器增加草稿自动保存和离开页面提示。
 - 对访问日志和评论列表增加分页，避免数据多时一次渲染过重。
 

@@ -2,72 +2,61 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>老师大冒险</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>老师大冒险 · SM63 Redux Web</title>
     <link rel="stylesheet" href="/llr-mariorun/game.css" />
   </head>
   <body>
-    <main id="game-root" class="mariorun-shell">
-      <section class="mariorun-menu" data-screen="menu">
-        <section class="game-cover" aria-label="游戏入口">
-          <div class="cover-copy">
-            <p class="eyebrow">LLR MARIO RUN · WEB EDITION</p>
-            <h1>老师大冒险</h1>
-            <p class="lead">像在线小游戏页面一样，点开始直接进入；素材包和关卡可以在开始前选择，后台可以导入本地素材包。</p>
-            <div class="cover-actions">
-              <button id="start-game" class="primary-button" type="button">▶ 开始游戏</button>
-              <a class="secondary-button" href="/admin">管理员素材库</a>
-            </div>
-          </div>
-          <div class="cover-preview" aria-hidden="true">
-            <div class="mock-sky">
-              <span class="mock-cloud cloud-a"></span>
-              <span class="mock-cloud cloud-b"></span>
-              <span class="mock-block block-a">?</span>
-              <span class="mock-player"></span>
-              <span class="mock-pipe"></span>
-              <span class="mock-ground"></span>
-            </div>
-          </div>
-        </section>
-        <div id="keyboard-hints" class="keyboard-hints"></div>
-        <section>
-          <h2>选择素材包</h2>
-          <div id="pack-list" class="card-grid"></div>
-        </section>
-        <section>
-          <h2>选择关卡</h2>
-          <div id="level-list" class="card-grid level-grid"></div>
-        </section>
-        <p id="menu-feedback" class="feedback"></p>
-      </section>
-
-      <section class="mariorun-stage" data-screen="game" hidden>
-        <div class="stage-rotator">
-          <canvas id="game-canvas" width="960" height="540" aria-label="老师大冒险游戏画面"></canvas>
-          <div class="hud">
-            <span id="hud-level">关卡</span>
-            <span id="hud-coins">金币 0</span>
-            <span id="hud-lives">生命 3</span>
-            <button id="pause-game" type="button">暂停</button>
-            <button id="restart-game" type="button">重开</button>
-            <button id="back-menu" type="button">返回</button>
-          </div>
-          <div class="virtual-controls" aria-label="手机虚拟按键">
-            <div class="virtual-pad">
-              <button data-action="left" type="button">←</button>
-              <button data-action="down" type="button">↓</button>
-              <button data-action="right" type="button">→</button>
-            </div>
-            <div class="virtual-actions">
-              <button data-action="run" type="button">加速</button>
-              <button data-action="jump" type="button">跳跃</button>
-            </div>
+    <main class="redux-shell">
+      <section class="redux-hero" aria-label="游戏启动器">
+        <div class="redux-copy">
+          <p class="eyebrow">LLR MARIO RUN · GODOT WEB EDITION</p>
+          <h1>老师大冒险</h1>
+          <p class="lead">基于完整 Godot Web 游戏壳运行，后台可上传素材包和 PCK。手机端叠加虚拟按键，竖屏浏览器也按横屏舞台显示。</p>
+          <div class="redux-actions">
+            <button id="focus-game" class="primary-button" type="button">点我开始 / 聚焦游戏</button>
+            <a class="secondary-button" href="/admin">管理员素材库</a>
           </div>
         </div>
-        <p class="orientation-note">当前为兼容横屏模式，横拿手机体验更好。</p>
+        <aside class="redux-card" aria-label="操作提示">
+          <strong>电脑键位</strong>
+          <span>方向键 / WASD 移动</span>
+          <span>Z / 空格 跳跃</span>
+          <span>X / Shift 加速或动作</span>
+          <span>后台上传的 <code>game.bundle.pck</code> 会优先作为游戏包加载。</span>
+        </aside>
+      </section>
+
+      <section class="game-frame-shell" aria-label="SM63 Redux 游戏窗口">
+        <iframe
+          id="godot-frame"
+          class="godot-frame"
+          title="SM63 Redux Web Game"
+          src="/llr-mariorun/godot/index.html"
+          allow="autoplay; fullscreen; gamepad"
+          allowfullscreen
+        ></iframe>
+
+        <div class="frame-toolbar">
+          <span id="frame-status">正在加载 Godot 游戏…</span>
+          <button id="reload-game" type="button">重载</button>
+          <button id="fullscreen-game" type="button">全屏</button>
+        </div>
+
+        <div class="virtual-controls" aria-label="手机虚拟按键">
+          <div class="virtual-pad">
+            <button data-key="ArrowLeft" type="button">←</button>
+            <button data-key="ArrowDown" type="button">↓</button>
+            <button data-key="ArrowRight" type="button">→</button>
+          </div>
+          <div class="virtual-actions">
+            <button data-key="ShiftLeft" type="button">加速</button>
+            <button data-key="Space" type="button">跳跃</button>
+          </div>
+        </div>
       </section>
     </main>
-    <script type="module" src="/llr-mariorun/game.js"></script>
+
+    <script type="module" src="/llr-mariorun/launcher.js"></script>
   </body>
 </html>

@@ -10,10 +10,14 @@ const worker = source("src/index.ts");
 const app = source("public/app.js");
 const styles = source("public/styles.css");
 
-test("llr-mariorun has R2-ready KV-backed Worker game APIs", () => {
+test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.doesNotMatch(wrangler, /"r2_buckets"\s*:/);
+  assert.match(wrangler, /"d1_databases"\s*:/);
+  assert.match(wrangler, /"binding"\s*:\s*"GAME_DB"/);
   assert.match(wrangler, /"run_worker_first"\s*:\s*\[[\s\S]*"\/llr-mariorun"/);
+  assert.match(wrangler, /"\/llr-mariorun\/\*"/);
   assert.match(worker, /GAME_ASSETS\?: R2Bucket/);
+  assert.match(worker, /GAME_DB\?: D1Database/);
   assert.match(worker, /const gameAssetPacksKey = "game:asset-packs"/);
   assert.match(worker, /const gameLevelsKey = "game:levels"/);
   assert.match(worker, /const gameAssetKvPrefix = "game-assets-kv\/"/);
@@ -21,10 +25,19 @@ test("llr-mariorun has R2-ready KV-backed Worker game APIs", () => {
   assert.match(worker, /const llrMarioRunPath = "\/llr-mariorun"/);
   assert.match(worker, /function defaultLlrMarioRunLink\(\)/);
   assert.match(worker, /async function fetchGameManifest\(request: Request, env: AppEnv\)/);
+  assert.match(worker, /async function writeGameAssetPacks\(env: AppEnv, packs: GameAssetPack\[\]\)/);
+  assert.match(worker, /async function writeGameLevels\(env: AppEnv, levels: GameLevel\[\]\)/);
+  assert.match(worker, /SELECT payload FROM game_asset_packs/);
+  assert.match(worker, /INSERT INTO game_levels/);
   assert.match(worker, /assetSlots: gameAssetSlots/);
   assert.match(worker, /async function handleAdminGame\(request: Request, env: AppEnv\)/);
   assert.match(worker, /async function handleGameAssetUpload\(request: Request, env: AppEnv\)/);
   assert.match(worker, /async function fetchGameAsset\(request: Request, env: AppEnv, key: string\)/);
+  assert.match(worker, /async function fetchGodotGamePack\(request: Request, env: AppEnv\)/);
+  assert.match(worker, /async function fetchCompressedGodotWasm\(request: Request, env: AppEnv, origin: string\)/);
+  assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/godot\/index\.pck`/);
+  assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/godot\/index\.wasm`/);
+  assert.match(worker, /new DecompressionStream\("gzip"\)/);
   assert.match(worker, /env\.SITE_CONFIG\.put\(key, await file\.arrayBuffer\(\)/);
   assert.match(worker, /env\.SITE_CONFIG\.getWithMetadata/);
   assert.match(worker, /url\.pathname\.startsWith\("\/api\/game\/assets\/"\)/);
@@ -48,36 +61,40 @@ test("default game content includes asset slots and ten fair long levels", () =>
   assert.match(worker, /segments: \[[\s\S]*?"开场"[\s\S]*?"终点"/);
 });
 
-test("static llr-mariorun game page has menu controls canvas runtime and mobile rotation", () => {
+test("static llr-mariorun game page embeds Godot runtime with touch controls and mobile rotation", () => {
   assert.equal(existsSync(new URL("public/llr-mariorun/index.html", root)), true);
   assert.equal(existsSync(new URL("public/llr-mariorun/game.css", root)), true);
-  assert.equal(existsSync(new URL("public/llr-mariorun/game.js", root)), true);
+  assert.equal(existsSync(new URL("public/llr-mariorun/launcher.js", root)), true);
+  for (const file of ["index.html", "index.js", "index.wasm.gz", "index.pck"]) {
+    assert.equal(existsSync(new URL(`public/llr-mariorun/godot/${file}`, root)), true);
+  }
+  assert.equal(existsSync(new URL("public/llr-mariorun/godot/index.wasm", root)), false);
 
   const html = source("public/llr-mariorun/index.html");
   const css = source("public/llr-mariorun/game.css");
-  const game = source("public/llr-mariorun/game.js");
+  const launcher = source("public/llr-mariorun/launcher.js");
+  const godotLoader = source("public/llr-mariorun/godot/index.js");
 
   assert.match(html, /老师大冒险/);
-  assert.match(html, /WEB EDITION/);
+  assert.match(html, /GODOT WEB EDITION/);
   assert.match(html, /管理员素材库/);
-  assert.match(html, /game\.js/);
-  assert.match(css, /\.game-cover/);
-  assert.match(css, /\.cover-preview/);
-  assert.match(css, /\.portrait-compat/);
+  assert.match(html, /godot-frame/);
+  assert.match(html, /\/llr-mariorun\/godot\/index\.html/);
+  assert.match(html, /launcher\.js/);
+  assert.match(css, /\.redux-hero/);
+  assert.match(css, /\.game-frame-shell/);
+  assert.match(css, /\.godot-frame/);
   assert.match(css, /\.virtual-controls/);
   assert.match(css, /\.is-pressed/);
-  assert.match(css, /\[hidden\]\s*{\s*display:\s*none !important;/);
-  assert.match(css, /transform:\s*rotate\(90deg\)/);
-  assert.match(game, /const gameManifestUrl = "\/api\/game\/manifest"/);
-  assert.match(game, /function renderPackSelection\(\)/);
-  assert.match(game, /function renderLevelSelection\(\)/);
-  assert.match(game, /function renderKeyboardHints\(\)/);
-  assert.match(game, /function bindVirtualControls\(\)/);
-  assert.match(game, /button\.classList\.toggle\("is-pressed", value\)/);
-  assert.match(game, /function updateOrientationMode\(\)/);
-  assert.match(game, /screen\.orientation\.lock\("landscape"\)/);
-  assert.match(game, /function restartFromCheckpoint\(\)/);
-  assert.match(game, /function buildLevelWorld\(level\)/);
+  assert.match(css, /transform:[^;]*rotate\(90deg\)/);
+  assert.match(launcher, /fetch\("\/api\/game\/manifest"/);
+  assert.match(launcher, /game\.bundle\.pck/);
+  assert.match(launcher, /function bindVirtualControls\(\)/);
+  assert.match(launcher, /button\.classList\.add\("is-pressed"\)/);
+  assert.match(launcher, /new KeyboardEvent\(type/);
+  assert.match(launcher, /requestFullscreen/);
+  assert.match(godotLoader, /new DecompressionStream\('gzip'\)/);
+  assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });
 
 test("admin app exposes llr-mariorun entry and online editors", () => {

@@ -4,6 +4,7 @@ type ModuleStatus = "active" | "planned";
 
 type AppEnv = Env & {
   SITE_CONFIG?: KVNamespace;
+  GAME_DB?: D1Database;
   GAME_ASSETS?: R2Bucket;
   admin?: string;
   ADMIN_PASSWORD?: string;
@@ -1904,13 +1905,13 @@ async function handleAdminGameAssetPacks(request: Request, env: AppEnv): Promise
     return json({ error: "Method Not Allowed" }, 405);
   }
 
-  if (!env.SITE_CONFIG) {
-    return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+  if (!env.GAME_DB && !env.SITE_CONFIG) {
+    return json({ error: "Game metadata storage is missing" }, 503);
   }
 
   const body = asRecord(await readJson(request));
   const packs = normalizeGameAssetPacks(body.assetPacks).slice(0, 30);
-  await env.SITE_CONFIG.put(gameAssetPacksKey, JSON.stringify(packs));
+  await writeGameAssetPacks(env, packs);
 
   return json({ ok: true, assetPacks: packs });
 }
@@ -1926,13 +1927,13 @@ async function handleAdminGameLevels(request: Request, env: AppEnv): Promise<Res
     return json({ error: "Method Not Allowed" }, 405);
   }
 
-  if (!env.SITE_CONFIG) {
-    return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
+  if (!env.GAME_DB && !env.SITE_CONFIG) {
+    return json({ error: "Game metadata storage is missing" }, 503);
   }
 
   const body = asRecord(await readJson(request));
   const levels = normalizeGameLevels(body.levels).slice(0, 80);
-  await env.SITE_CONFIG.put(gameLevelsKey, JSON.stringify(levels));
+  await writeGameLevels(env, levels);
 
   return json({ ok: true, levels });
 }
@@ -2072,6 +2073,36 @@ async function fetchGameAsset(request: Request, env: AppEnv, key: string): Promi
   return json({ error: "Game asset storage is missing" }, 503);
 }
 
+async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Response | null> {
+  const packs = await readGameAssetPacks(env);
+  const activePack = packs.find((pack) => pack.enabled && pack.default) || packs.find((pack) => pack.enabled);
+  const gamePack = activePack?.assets["game.bundle.pck"];
+
+  if (!gamePack?.key) {
+    return null;
+  }
+
+  return fetchGameAsset(request, env, gamePack.key);
+}
+
+async function fetchCompressedGodotWasm(request: Request, env: AppEnv, origin: string): Promise<Response> {
+  const wasmUrl = new URL(`${llrMarioRunPath}/godot/index.wasm.gz`, origin);
+  const response = await env.ASSETS.fetch(new Request(wasmUrl, request));
+  const headers = new Headers({
+    "content-type": "application/wasm",
+    "cache-control": response.headers.get("cache-control") || "public, max-age=31536000, immutable"
+  });
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  const body = response.body?.pipeThrough(new DecompressionStream("gzip")) || null;
+
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 async function deleteGameAsset(request: Request, env: AppEnv, key: string): Promise<Response> {
   const auth = await requireFullAdmin(request, env);
 
@@ -2097,15 +2128,75 @@ async function deleteGameAsset(request: Request, env: AppEnv, key: string): Prom
 }
 
 async function readGameAssetPacks(env: AppEnv): Promise<GameAssetPack[]> {
+  if (env.GAME_DB) {
+    const rows = await env.GAME_DB.prepare("SELECT payload FROM game_asset_packs ORDER BY sort_order ASC, updated_at DESC").all<{ payload: string }>();
+    const d1Packs = normalizeGameAssetPacks(rows.results.map((row) => parseJsonOrNull(row.payload)));
+
+    if (d1Packs.length > 0) {
+      return d1Packs;
+    }
+  }
+
   const stored = env.SITE_CONFIG ? await env.SITE_CONFIG.get(gameAssetPacksKey, "json") : null;
   const packs = normalizeGameAssetPacks(stored);
   return packs.length > 0 ? packs : defaultGameAssetPacks;
 }
 
 async function readGameLevels(env: AppEnv): Promise<GameLevel[]> {
+  if (env.GAME_DB) {
+    const rows = await env.GAME_DB.prepare("SELECT payload FROM game_levels ORDER BY sort_order ASC, updated_at DESC").all<{ payload: string }>();
+    const d1Levels = normalizeGameLevels(rows.results.map((row) => parseJsonOrNull(row.payload)));
+
+    if (d1Levels.length > 0) {
+      return d1Levels;
+    }
+  }
+
   const stored = env.SITE_CONFIG ? await env.SITE_CONFIG.get(gameLevelsKey, "json") : null;
   const levels = normalizeGameLevels(stored);
   return levels.length > 0 ? levels : defaultGameLevels;
+}
+
+async function writeGameAssetPacks(env: AppEnv, packs: GameAssetPack[]): Promise<void> {
+  if (env.GAME_DB) {
+    const statements = [
+      env.GAME_DB.prepare("DELETE FROM game_asset_packs"),
+      ...packs.map((pack, index) => env.GAME_DB!.prepare(
+        "INSERT INTO game_asset_packs (id, name, enabled, is_default, sort_order, payload, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).bind(pack.id, pack.name, pack.enabled ? 1 : 0, pack.default ? 1 : 0, index, JSON.stringify(pack), pack.updatedAt))
+    ];
+    await env.GAME_DB.batch(statements);
+    return;
+  }
+
+  if (env.SITE_CONFIG) {
+    await env.SITE_CONFIG.put(gameAssetPacksKey, JSON.stringify(packs));
+  }
+}
+
+async function writeGameLevels(env: AppEnv, levels: GameLevel[]): Promise<void> {
+  if (env.GAME_DB) {
+    const statements = [
+      env.GAME_DB.prepare("DELETE FROM game_levels"),
+      ...levels.map((level, index) => env.GAME_DB!.prepare(
+        "INSERT INTO game_levels (id, name, enabled, is_default, sort_order, payload, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).bind(level.id, level.name, level.enabled ? 1 : 0, level.default ? 1 : 0, index, JSON.stringify(level), level.updatedAt))
+    ];
+    await env.GAME_DB.batch(statements);
+    return;
+  }
+
+  if (env.SITE_CONFIG) {
+    await env.SITE_CONFIG.put(gameLevelsKey, JSON.stringify(levels));
+  }
+}
+
+function parseJsonOrNull(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 function normalizeGameAssetPacks(value: unknown): GameAssetPack[] {
@@ -2835,6 +2926,18 @@ export default {
 
     if (url.pathname === llrMarioRunPath) {
       return Response.redirect(new URL(`${llrMarioRunPath}/`, url.origin).toString(), 308);
+    }
+
+    if (url.pathname === `${llrMarioRunPath}/godot/index.pck`) {
+      const customGamePack = await fetchGodotGamePack(request, env as AppEnv);
+
+      if (customGamePack) {
+        return customGamePack;
+      }
+    }
+
+    if (url.pathname === `${llrMarioRunPath}/godot/index.wasm`) {
+      return fetchCompressedGodotWasm(request, env as AppEnv, url.origin);
     }
 
     ctx.waitUntil(recordAccessLog(request, env as AppEnv));

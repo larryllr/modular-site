@@ -7,7 +7,7 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/llrgamecubecity", "/llr-mariorun"],
+    "run_worker_first": ["/api/*", "/llrgamecubecity", "/llr-mariorun", "/llr-mariorun/*"],
     "not_found_handling": "single-page-application"
   },
   "kv_namespaces": [
@@ -17,6 +17,13 @@
       // Deploy to Cloudflare requires a KV namespace id.
       // Create one with `wrangler kv namespace create SITE_CONFIG`,
       // then add: "id": "<KV_NAMESPACE_ID>"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "GAME_DB",
+      "database_name": "llr-mariorun-db",
+      "database_id": "d4ddc5c7-36ac-472f-95c3-f86c831f97f6"
     }
   ],
   "observability": {
