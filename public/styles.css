@@ -554,6 +554,107 @@ h1 {
   min-height: 360px;
 }
 
+.game-level-designer {
+  display: grid;
+  gap: 12px;
+}
+
+.game-level-designer .game-editor-tools {
+  align-items: center;
+}
+
+.game-level-designer select.input {
+  min-width: min(100%, 220px);
+}
+
+.game-level-preview {
+  position: relative;
+  overflow: hidden;
+  min-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    linear-gradient(to bottom, rgba(95, 190, 255, 0.32), rgba(255, 255, 255, 0.18) 58%, rgba(80, 181, 78, 0.35) 59%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.18) 0 1px, transparent 1px 32px);
+  cursor: crosshair;
+}
+
+.game-level-preview::after {
+  content: "点击添加物件";
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.game-level-object {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+  min-height: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 5px;
+  background: #a45d28;
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+}
+
+.game-level-object.type-item-coin {
+  border-radius: 999px;
+  background: #f5bd22;
+}
+
+.game-level-object.type-enemy-goomba,
+.game-level-object.type-enemy-turtle {
+  background: #8f4a2f;
+}
+
+.game-level-object.type-powerup-mushroom {
+  background: #e44b4b;
+}
+
+.game-level-object.type-boss-main {
+  background: #7c2430;
+}
+
+.game-level-object.type-princess-idle {
+  background: #e889c7;
+}
+
+.game-level-object.type-trap-spike,
+.game-level-object.type-trap-hidden-block {
+  background: #111827;
+  border-color: #f43f5e;
+}
+
+.game-level-object.is-selected {
+  outline: 3px solid #2563eb;
+  z-index: 2;
+}
+
+.game-level-object-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 150px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.game-level-object-list .is-selected {
+  background: #2563eb;
+  color: #ffffff;
+}
+
 @keyframes announcement-marquee {
   from {
     transform: translateX(100%);

@@ -6,9 +6,12 @@ const statusText = document.querySelector("#frame-status");
 const shell = document.querySelector(".game-frame-shell");
 const keyLabels = {
   ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
+  ArrowUp: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
   ArrowDown: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
   ArrowRight: { key: "ArrowRight", code: "ArrowRight", keyCode: 39 },
-  ShiftLeft: { key: "Shift", code: "ShiftLeft", keyCode: 16 },
+  KeyC: { key: "c", code: "KeyC", keyCode: 67 },
+  KeyX: { key: "x", code: "KeyX", keyCode: 88 },
+  KeyZ: { key: "z", code: "KeyZ", keyCode: 90 },
   Space: { key: " ", code: "Space", keyCode: 32 }
 };
 
@@ -42,18 +45,25 @@ function emitKey(code, type) {
   const target = frame?.contentWindow;
   const details = keyLabels[code];
   if (!target || !details) return;
-  const event = new KeyboardEvent(type, {
+  const base = {
     key: details.key,
     code: details.code,
     bubbles: true,
     cancelable: true
-  });
+  };
+  const event = new KeyboardEvent(type, base);
   Object.defineProperty(event, "keyCode", { get: () => details.keyCode });
   Object.defineProperty(event, "which", { get: () => details.keyCode });
   target.dispatchEvent(event);
   try {
-    frame.contentDocument?.dispatchEvent(event);
-    frame.contentDocument?.querySelector("canvas")?.dispatchEvent(event);
+    const documentEvent = new KeyboardEvent(type, base);
+    Object.defineProperty(documentEvent, "keyCode", { get: () => details.keyCode });
+    Object.defineProperty(documentEvent, "which", { get: () => details.keyCode });
+    const canvasEvent = new KeyboardEvent(type, base);
+    Object.defineProperty(canvasEvent, "keyCode", { get: () => details.keyCode });
+    Object.defineProperty(canvasEvent, "which", { get: () => details.keyCode });
+    frame.contentDocument?.dispatchEvent(documentEvent);
+    frame.contentDocument?.querySelector("canvas")?.dispatchEvent(canvasEvent);
   } catch {
     // Same-origin focus fallback above is best-effort.
   }
@@ -64,12 +74,14 @@ function bindVirtualControls() {
     const code = button.dataset.key;
     const press = (event) => {
       event.preventDefault();
+      event.stopPropagation();
       button.classList.add("is-pressed");
       focusGame();
       emitKey(code, "keydown");
     };
     const release = (event) => {
       event.preventDefault();
+      event.stopPropagation();
       button.classList.remove("is-pressed");
       emitKey(code, "keyup");
     };
@@ -83,7 +95,20 @@ function bindVirtualControls() {
       button.classList.remove("is-pressed");
       emitKey(code, "keyup");
     });
+    button.addEventListener("contextmenu", (event) => event.preventDefault());
+    button.addEventListener("selectstart", (event) => event.preventDefault());
   });
+}
+
+async function requestLandscapeFullscreen() {
+  document.body.classList.add("is-forced-landscape");
+  await (document.documentElement.requestFullscreen?.() || shell?.requestFullscreen?.());
+  try {
+    await screen.orientation?.lock?.("landscape");
+  } catch {
+    statusText.textContent = "浏览器不允许锁定横屏，已启用横屏兼容显示。";
+  }
+  focusGame();
 }
 
 focusButton?.addEventListener("click", focusGame);
@@ -95,8 +120,13 @@ reloadButton?.addEventListener("click", () => {
   if (frame) frame.src = frame.src;
 });
 fullscreenButton?.addEventListener("click", async () => {
-  await (shell?.requestFullscreen?.() || document.documentElement.requestFullscreen?.());
-  focusGame();
+  await requestLandscapeFullscreen();
+});
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) {
+    document.body.classList.remove("is-forced-landscape");
+    screen.orientation?.unlock?.();
+  }
 });
 
 bindVirtualControls();
