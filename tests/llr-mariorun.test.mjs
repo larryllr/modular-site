@@ -54,6 +54,7 @@ test("default game content includes asset slots and ten fair long levels", () =>
   assert.match(worker, /allowedBundleTypes/);
   assert.match(worker, /slot\.kind === "bundle" \? "pck"/);
   assert.match(worker, /\|pck/);
+  assert.match(worker, /clampNumber\(record\.size, 0, 20 \* 1024 \* 1024, 0\)/);
   assert.match(worker, /const defaultGameAssetPacks: GameAssetPack\[\] = \[/);
   assert.match(worker, /const defaultGameLevels: GameLevel\[\] = \[/);
   const levelIds = [...worker.matchAll(/id: "level-[0-9]{2}"/g)].map((match) => match[0]);

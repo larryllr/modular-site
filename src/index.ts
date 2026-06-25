@@ -2267,7 +2267,7 @@ function normalizeGameAssetRef(value: unknown): GameAssetRef | null {
     key,
     url: `/api/game/assets/${encodeURIComponent(key)}`,
     contentType: limitText(asString(record.contentType), 80),
-    size: clampNumber(record.size, 0, 8 * 1024 * 1024, 0),
+    size: clampNumber(record.size, 0, 20 * 1024 * 1024, 0),
     updatedAt: limitText(asString(record.updatedAt), 40) || new Date().toISOString()
   };
 }
