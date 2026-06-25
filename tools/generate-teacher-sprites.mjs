@@ -2,289 +2,386 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 
-const root = "output/stable-character-packs-v2";
+const sourceSheet = "output/stable-character-packs/mario_sheet.original.png";
+const root = "output/stable-character-packs-v4";
 const cell = 48;
 const cols = 10;
 const rows = 10;
+const width = cols * cell;
+const height = rows * cell;
 
 const characters = [
   {
     id: "liushuo",
-    title: "刘硕版 v2",
-    skin: "#f2c4a8",
-    blush: "#e79b8c",
-    hair: "#171717",
-    shirt: "#f7f2e6",
-    vest: "#29323a",
-    pants: "#1f3036",
-    shoes: "#101820",
-    accent: "#b58b47",
-    body: "slim",
+    skin: [245, 190, 152],
+    redTop: [26, 25, 24],
+    redMid: [38, 38, 36],
+    redDark: [8, 8, 8],
+    blueLight: [238, 232, 216],
+    blueDark: [35, 50, 58],
+    white: [250, 246, 232],
+    hair: [16, 15, 14],
+    mouth: [120, 55, 46],
+    faceFill: true,
     glasses: "round",
     ruler: true
   },
   {
     id: "guoliang",
-    title: "郭亮版 v2",
-    skin: "#e5b395",
-    blush: "#d58b7a",
-    hair: "#202020",
-    shirt: "#dce6f4",
-    vest: "#1d2b44",
-    pants: "#172239",
-    shoes: "#111827",
-    accent: "#3b4f78",
-    body: "round",
+    skin: [225, 170, 135],
+    redTop: [28, 28, 28],
+    redMid: [32, 42, 66],
+    redDark: [12, 18, 30],
+    blueLight: [34, 48, 76],
+    blueDark: [20, 30, 50],
+    white: [225, 234, 246],
+    hair: [20, 20, 20],
+    mouth: [85, 48, 44],
+    faceFill: true,
     glasses: "rect",
+    bellyShade: true,
+    bigBelly: true,
     ruler: false
   }
 ];
 
 mkdirSync(root, { recursive: true });
 
+const original = await sharp(sourceSheet).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+if (original.info.width !== width || original.info.height !== height) {
+  throw new Error(`Unexpected source sheet size: ${original.info.width}x${original.info.height}`);
+}
+
 for (const character of characters) {
   const outDir = join(root, character.id);
   mkdirSync(outDir, { recursive: true });
-  const sheetSvg = sheet(character, false);
-  const previewSvg = sheet(character, true);
-  await sharp(Buffer.from(sheetSvg)).png().toFile(join(outDir, "mario_sheet.png"));
-  await sharp(Buffer.from(previewSvg)).png().toFile(join(outDir, "preview.png"));
+  const out = Buffer.from(original.data);
+  recolorSheet(out, original.info, character);
+  await sharp(out, { raw: original.info }).png().toFile(join(outDir, "mario_sheet.png"));
+  await renderPreview(out, original.info, join(outDir, "preview.png"));
 }
 
-function sheet(character, preview) {
-  const width = cols * cell;
-  const height = rows * cell;
-  const bg = preview ? checker(width, height) : "";
-  const frames = [];
-  for (let i = 0; i < cols * rows; i += 1) {
-    const x = (i % cols) * cell;
-    const y = Math.floor(i / cols) * cell;
-    const pose = poseFor(i);
-    if (pose.kind !== "empty") {
-      frames.push(`<g transform="translate(${x} ${y})">${actor(character, pose)}</g>`);
+function recolorSheet(buffer, info, character) {
+  for (let frame = 0; frame < cols * rows; frame += 1) {
+    const frameInfo = analyzeFrame(buffer, info, frame);
+    if (!frameInfo.bounds) continue;
+
+    forEachFramePixel(info, frame, (x, y, absolute) => {
+      const alpha = buffer[absolute + 3];
+      if (alpha < 12) return;
+      const color = [buffer[absolute], buffer[absolute + 1], buffer[absolute + 2]];
+      const mapped = mapOriginalColor(color, x, y, frameInfo, character);
+      buffer[absolute] = mapped[0];
+      buffer[absolute + 1] = mapped[1];
+      buffer[absolute + 2] = mapped[2];
+    });
+
+    drawFaceDetails(buffer, info, frame, frameInfo, character);
+    drawHairShape(buffer, info, frame, frameInfo, character);
+    if (character.bellyShade) drawBellyHint(buffer, info, frame, frameInfo, character);
+    if (character.bigBelly) drawBigBelly(buffer, info, frame, frameInfo, character);
+    if (character.ruler) drawRulerInsideOriginalBounds(buffer, info, frame, frameInfo);
+  }
+}
+
+function mapOriginalColor(color, x, y, frameInfo, c) {
+  const kind = classifyOriginalColor(color);
+  const b = frameInfo.bounds;
+  const localY = y - b.minY;
+  const h = Math.max(1, b.maxY - b.minY + 1);
+
+  if (kind === "outline") return [48, 28, 22];
+  if (kind === "skin") return shade(c.skin, brightness(color), 0.22);
+  if (kind === "white") return shade(c.white, brightness(color), 0.16);
+  if (kind === "yellow") return shade([180, 125, 70], brightness(color), 0.1);
+
+  if (kind === "red") {
+    if (localY < h * 0.36) return shade(c.hair, brightness(color), 0.18);
+    if (localY < h * 0.58) return shade(c.redMid, brightness(color), 0.18);
+    return shade(c.redDark, brightness(color), 0.18);
+  }
+
+  if (kind === "blue") {
+    if (localY < h * 0.58) return shade(c.blueLight, brightness(color), 0.2);
+    return shade(c.blueDark, brightness(color), 0.16);
+  }
+
+  return color;
+}
+
+function classifyOriginalColor([r, g, b]) {
+  const palette = [
+    ["outline", [60, 19, 0]],
+    ["red", [233, 82, 60]],
+    ["red", [188, 48, 62]],
+    ["red", [153, 14, 56]],
+    ["red", [191, 58, 34]],
+    ["blue", [61, 53, 157]],
+    ["blue", [92, 124, 204]],
+    ["skin", [242, 131, 58]],
+    ["skin", [255, 203, 143]],
+    ["white", [250, 231, 233]],
+    ["white", [255, 255, 255]],
+    ["yellow", [252, 186, 85]],
+    ["outline", [70, 60, 57]]
+  ];
+  let best = palette[0];
+  let bestDistance = Infinity;
+  for (const candidate of palette) {
+    const d = distance([r, g, b], candidate[1]);
+    if (d < bestDistance) {
+      best = candidate;
+      bestDistance = d;
     }
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" shape-rendering="geometricPrecision">${bg}${frames.join("")}</svg>`;
+  return best[0];
 }
 
-function checker(width, height) {
-  const tiles = [];
-  for (let y = 0; y < height; y += 24) {
-    for (let x = 0; x < width; x += 24) {
-      tiles.push(`<rect x="${x}" y="${y}" width="24" height="24" fill="${(x / 24 + y / 24) % 2 ? "#d9d9d9" : "#f1f1f1"}"/>`);
-    }
+function drawFaceDetails(buffer, info, frame, frameInfo, c) {
+  const face = frameInfo.skinBounds;
+  if (!face || face.maxX - face.minX < 7 || face.maxY - face.minY < 7) return;
+  const y = clamp(Math.round(face.minY + (face.maxY - face.minY) * 0.43), face.minY + 2, face.maxY - 2);
+  const leftX = Math.round(face.minX + (face.maxX - face.minX) * 0.35);
+  const rightX = Math.round(face.minX + (face.maxX - face.minX) * 0.65);
+  const dark = [18, 22, 24, 255];
+  const shine = [220, 230, 235, 255];
+
+  if (c.faceFill) {
+    softenTeacherFace(buffer, info, frame, face, frameInfo, c);
   }
-  return tiles.join("");
-}
 
-function poseFor(index) {
-  const row = Math.floor(index / cols);
-  const col = index % cols;
-  if (row >= 8) return { kind: "empty" };
-  if (row === 0) return walkPose(col, 0.8, "front");
-  if (row === 1) return walkPose(col, 1.1, "front");
-  if (row === 2) return jumpPose(col);
-  if (row === 3) return walkPose(col, 0.65, "back");
-  if (row === 4 && col <= 5) return { kind: "back", phase: col / 5, squash: 0.02 * Math.sin(col) };
-  if (row === 4) return { kind: "crouch", phase: (col - 6) / 3 };
-  if (row === 5) return spinPose(col);
-  if (row === 6) return actionPose(col);
-  if (row === 7) return groundPoundPose(col);
-  return walkPose(col, 0.8, "front");
-}
-
-function walkPose(col, amp, view) {
-  const phase = (col / cols) * Math.PI * 2;
-  return {
-    kind: view,
-    phase,
-    bob: Math.sin(phase) * 1.2 * amp,
-    lean: Math.sin(phase) * 3 * amp,
-    leftLeg: Math.sin(phase) * 11 * amp,
-    rightLeg: -Math.sin(phase) * 11 * amp,
-    leftArm: -Math.sin(phase) * 9 * amp,
-    rightArm: Math.sin(phase) * 9 * amp
-  };
-}
-
-function jumpPose(col) {
-  const t = col / 9;
-  return {
-    kind: "front",
-    bob: -4 - Math.sin(t * Math.PI) * 4,
-    lean: -5 + t * 10,
-    leftLeg: -12 + t * 18,
-    rightLeg: 12 - t * 18,
-    leftArm: -18 + t * 8,
-    rightArm: 18 - t * 8
-  };
-}
-
-function spinPose(col) {
-  const t = col / 9;
-  return {
-    kind: t < 0.3 ? "front" : t < 0.62 ? "side" : "back",
-    phase: t,
-    bob: Math.sin(t * Math.PI * 4) * 1.5,
-    lean: Math.sin(t * Math.PI * 2) * 12,
-    leftLeg: Math.sin(t * Math.PI * 2) * 16,
-    rightLeg: Math.cos(t * Math.PI * 2) * 16,
-    leftArm: Math.cos(t * Math.PI * 2) * 18,
-    rightArm: -Math.cos(t * Math.PI * 2) * 18
-  };
-}
-
-function actionPose(col) {
-  const t = col / 9;
-  return {
-    kind: t < 0.45 ? "front" : "side",
-    phase: t,
-    bob: -1,
-    lean: -8 + t * 18,
-    leftLeg: -8,
-    rightLeg: 8,
-    leftArm: -20 + t * 28,
-    rightArm: 16 - t * 26,
-    toolAction: true
-  };
-}
-
-function groundPoundPose(col) {
-  const t = col / 9;
-  if (t > 0.58) {
-    return {
-      kind: "pound",
-      upsideDown: true,
-      phase: t,
-      bob: -2,
-      lean: 180,
-      leftLeg: 22,
-      rightLeg: -22,
-      leftArm: -16,
-      rightArm: 16
-    };
-  }
-  return {
-    kind: "pound",
-    phase: t,
-    bob: -6 + t * 4,
-    lean: -18 + t * 36,
-    leftLeg: -18 + t * 8,
-    rightLeg: 18 - t * 8,
-    leftArm: -26 + t * 18,
-    rightArm: 26 - t * 18,
-    toolAction: true
-  };
-}
-
-function actor(c, pose) {
-  const y = 0 + (pose.bob || 0);
-  const transform = pose.upsideDown
-    ? `translate(24 25) rotate(180) translate(-24 -25)`
-    : `translate(24 39) rotate(${pose.lean || 0}) translate(-24 -39)`;
-  return `<g transform="${transform} translate(0 ${y})">
-    ${shadow()}
-    ${legs(c, pose)}
-    ${body(c, pose)}
-    ${arms(c, pose)}
-    ${head(c, pose)}
-    ${tool(c, pose)}
-  </g>`;
-}
-
-function shadow() {
-  return `<ellipse cx="24" cy="41.5" rx="11" ry="2.3" fill="#000" opacity=".16"/>`;
-}
-
-function body(c, p) {
-  if (c.body === "round") {
-    const belly = 15 + Math.sin((p.phase || 0) * Math.PI * 2) * 0.8;
-    return `
-      <ellipse cx="24" cy="28" rx="${belly}" ry="12.5" fill="${c.vest}" stroke="#101827" stroke-width="1.4"/>
-      <path d="M14 21 Q24 18 34 21 L31 33 Q24 38 17 33 Z" fill="${c.vest}"/>
-      <path d="M21 20 L24 31 L28 20" fill="${c.shirt}" stroke="#eef4ff" stroke-width="1"/>
-      <path d="M24 21 L26 27 L24 31 L22 27 Z" fill="#32415f"/>
-    `;
-  }
-  return `
-    <path d="M15 19 Q24 15 33 19 L31 34 Q24 38 17 34 Z" fill="${c.shirt}" stroke="#20242a" stroke-width="1.2"/>
-    <path d="M15.5 20 L21 34 L24 23 L27 34 L32.5 20 L31 34 Q24 38 17 34 Z" fill="${c.vest}" opacity=".94"/>
-    <path d="M23 20 L25 20 L26 29 L24 33 L22 29 Z" fill="#b9423d"/>
-  `;
-}
-
-function legs(c, p) {
-  const left = p.leftLeg || 0;
-  const right = p.rightLeg || 0;
-  return `
-    <g stroke="${c.pants}" stroke-width="4.4" stroke-linecap="round">
-      <path d="M20 33 Q${18 - left * 0.08} ${37 - Math.abs(left) * 0.04} ${17 - left * 0.16} 43"/>
-      <path d="M28 33 Q${30 - right * 0.08} ${37 - Math.abs(right) * 0.04} ${31 - right * 0.16} 43"/>
-    </g>
-    <g stroke="${c.shoes}" stroke-width="3.3" stroke-linecap="round">
-      <path d="M${15 - left * 0.16} 43 L${20 - left * 0.08} 43"/>
-      <path d="M${29 - right * 0.16} 43 L${34 - right * 0.08} 43"/>
-    </g>`;
-}
-
-function arms(c, p) {
-  const left = p.leftArm || 0;
-  const right = p.rightArm || 0;
-  const skin = c.skin;
-  return `
-    <g stroke="#26313a" stroke-width="3.5" stroke-linecap="round">
-      <path d="M16 22 Q${12 + left * 0.06} ${28 + left * 0.04} ${12 + left * 0.14} 34"/>
-      <path d="M32 22 Q${36 + right * 0.06} ${28 + right * 0.04} ${36 + right * 0.14} 34"/>
-    </g>
-    <circle cx="${12 + left * 0.14}" cy="34" r="2.1" fill="${skin}" stroke="#9d725d" stroke-width=".6"/>
-    <circle cx="${36 + right * 0.14}" cy="34" r="2.1" fill="${skin}" stroke="#9d725d" stroke-width=".6"/>`;
-}
-
-function head(c, p) {
-  const back = p.kind === "back";
-  const side = p.kind === "side";
-  const headRx = c.body === "round" ? 11.7 : 10.8;
-  const headRy = c.body === "round" ? 10.8 : 11.2;
-  const face = back ? backHead(c, headRx, headRy) : frontHead(c, headRx, headRy, side);
-  return `<g>${face}</g>`;
-}
-
-function frontHead(c, rx, ry, side) {
-  const eyeDx = side ? 2.4 : 4.2;
-  return `
-    <ellipse cx="24" cy="12" rx="${rx}" ry="${ry}" fill="${c.skin}" stroke="#4b2e22" stroke-width="1.2"/>
-    <path d="M14 ${c.body === "round" ? 9 : 8} Q24 0 35 8 Q33 3 27 2 Q20 1 15 6 Z" fill="${c.hair}"/>
-    <path d="M14 9 Q19 4 25 5 Q31 5 35 10" fill="none" stroke="#0b0b0b" stroke-width="2.4" stroke-linecap="round"/>
-    ${glasses(c, eyeDx)}
-    <circle cx="${24 - eyeDx}" cy="12" r="1" fill="#1f2933"/>
-    <circle cx="${24 + eyeDx}" cy="12" r="1" fill="#1f2933"/>
-    <path d="M21.5 17 Q24 19 27 17" fill="none" stroke="#7f3c35" stroke-width="1.1" stroke-linecap="round"/>
-    <ellipse cx="17" cy="15.5" rx="2.4" ry="1.2" fill="${c.blush}" opacity=".35"/>
-    <ellipse cx="31" cy="15.5" rx="2.4" ry="1.2" fill="${c.blush}" opacity=".35"/>
-  `;
-}
-
-function backHead(c, rx, ry) {
-  return `
-    <ellipse cx="24" cy="12" rx="${rx}" ry="${ry}" fill="${c.skin}" stroke="#4b2e22" stroke-width="1.2"/>
-    <path d="M13 11 Q15 1 24 1 Q34 1 36 11 Q31 8 24 8 Q18 8 13 11 Z" fill="${c.hair}"/>
-    <path d="M15 13 Q24 18 34 13" fill="none" stroke="${c.hair}" stroke-width="2.5" stroke-linecap="round"/>
-  `;
-}
-
-function glasses(c, eyeDx) {
   if (c.glasses === "rect") {
-    return `<g fill="none" stroke="#15191f" stroke-width="1"><rect x="${24 - eyeDx - 3}" y="9.7" width="5.3" height="4.4" rx="1"/><rect x="${24 + eyeDx - 2.3}" y="9.7" width="5.3" height="4.4" rx="1"/><path d="M22 12 L26 12"/></g>`;
+    drawRectOutline(buffer, info, frame, leftX - 3, y - 2, 6, 5, dark, frameInfo);
+    drawRectOutline(buffer, info, frame, rightX - 3, y - 2, 6, 5, dark, frameInfo);
+  } else {
+    drawCircleOutline(buffer, info, frame, leftX, y, 4, dark, frameInfo);
+    drawCircleOutline(buffer, info, frame, rightX, y, 4, dark, frameInfo);
   }
-  return `<g fill="none" stroke="#15191f" stroke-width="1"><circle cx="${24 - eyeDx}" cy="12" r="3.1"/><circle cx="${24 + eyeDx}" cy="12" r="3.1"/><path d="M22 12 L26 12"/></g>`;
+  drawLine(buffer, info, frame, leftX + 2, y, rightX - 2, y, dark, frameInfo);
+  setInside(buffer, info, frame, leftX, y, dark, frameInfo);
+  setInside(buffer, info, frame, rightX, y, dark, frameInfo);
+  setInside(buffer, info, frame, leftX - 1, y - 1, shine, frameInfo, 90);
+  setInside(buffer, info, frame, rightX - 1, y - 1, shine, frameInfo, 90);
+
+  const mouthY = Math.min(face.maxY - 1, y + 5);
+  drawLine(buffer, info, frame, leftX, mouthY, rightX, mouthY, [...c.mouth, 255], frameInfo);
 }
 
-function tool(c, p) {
-  if (!c.ruler) return "";
-  const action = p.toolAction || p.kind === "pound";
-  const x1 = action ? 31 : 34;
-  const y1 = action ? 16 : 25;
-  const x2 = action ? 41 : 32;
-  const y2 = action ? 35 : 43;
-  return `<g stroke="${c.accent}" stroke-width="2.4" stroke-linecap="round"><path d="M${x1} ${y1} L${x2} ${y2}"/></g><g stroke="#7b552b" stroke-width=".6"><path d="M${x1 + 1} ${y1 + 3} L${x1 + 3} ${y1 + 7}"/><path d="M${x1 + 3} ${y1 + 7} L${x1 + 5} ${y1 + 11}"/></g>`;
+function softenTeacherFace(buffer, info, frame, face, frameInfo, c) {
+  const cx = Math.round((face.minX + face.maxX) / 2);
+  const cy = Math.round(face.minY + (face.maxY - face.minY) * 0.58);
+  const rx = Math.max(4, Math.round((face.maxX - face.minX) * 0.34));
+  const ry = Math.max(3, Math.round((face.maxY - face.minY) * 0.26));
+  for (let yy = -ry; yy <= ry; yy += 1) {
+    for (let xx = -rx; xx <= rx; xx += 1) {
+      const d = (xx * xx) / (rx * rx) + (yy * yy) / (ry * ry);
+      if (d <= 1) {
+        blendInside(buffer, info, frame, cx + xx, cy + yy, [...c.skin, 255], 0.72, frameInfo);
+      }
+    }
+  }
+}
+
+function drawHairShape(buffer, info, frame, frameInfo, c) {
+  const face = frameInfo.skinBounds;
+  if (!face || face.maxX - face.minX < 7 || face.maxY - face.minY < 7) return;
+  const top = Math.max(frameInfo.bounds.minY, face.minY - 5);
+  const cx = Math.round((face.minX + face.maxX) / 2);
+  const rx = Math.max(4, Math.round((face.maxX - face.minX) * 0.52));
+  const hairColor = [...c.hair, 255];
+  for (let y = top; y <= face.minY + 2; y += 1) {
+    const band = 1 - Math.abs(y - (face.minY - 1)) / Math.max(1, face.minY - top + 3);
+    const half = Math.max(2, Math.round(rx * (0.55 + band * 0.45)));
+    for (let x = cx - half; x <= cx + half; x += 1) {
+      setInside(buffer, info, frame, x, y, hairColor, frameInfo, 12);
+    }
+  }
+  drawLine(buffer, info, frame, face.minX + 1, face.minY + 2, cx - 1, face.minY, hairColor, frameInfo);
+  drawLine(buffer, info, frame, cx, face.minY, face.maxX - 1, face.minY + 2, hairColor, frameInfo);
+}
+
+function drawBellyHint(buffer, info, frame, frameInfo) {
+  const b = frameInfo.bounds;
+  const cx = Math.round((b.minX + b.maxX) / 2);
+  const cy = Math.round(b.minY + (b.maxY - b.minY) * 0.63);
+  for (let yy = -3; yy <= 4; yy += 1) {
+    for (let xx = -7; xx <= 7; xx += 1) {
+      const d = (xx * xx) / 49 + (yy * yy) / 16;
+      if (d <= 1) {
+        blendInside(buffer, info, frame, cx + xx, cy + yy, [55, 70, 105, 255], 0.18, frameInfo);
+      }
+    }
+  }
+}
+
+function drawBigBelly(buffer, info, frame, frameInfo, c) {
+  const b = frameInfo.bounds;
+  if (!frameInfo.skinBounds) return;
+  if (b.maxX - b.minX > 38 || b.maxY - b.minY > 40) return;
+  const cx = Math.round((b.minX + b.maxX) / 2);
+  const cy = Math.round(b.minY + (b.maxY - b.minY) * 0.60);
+  const rx = Math.max(7, Math.round((b.maxX - b.minX) * 0.34));
+  const ry = Math.max(5, Math.round((b.maxY - b.minY) * 0.20));
+  const minY = Math.max(b.minY + 7, cy - ry);
+  const maxY = Math.min(b.maxY - 5, cy + ry);
+  const bellyBounds = { bounds: { minX: 0, minY: b.minY, maxX: cell - 1, maxY: b.maxY } };
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = Math.max(0, cx - rx); x <= Math.min(cell - 1, cx + rx); x += 1) {
+      const d = ((x - cx) * (x - cx)) / (rx * rx) + ((y - cy) * (y - cy)) / (ry * ry);
+      if (d <= 1) {
+        setPixelInFrame(buffer, info, frame, x, y, [...c.blueLight, 255]);
+      }
+      if (d > 0.86 && d <= 1.14) {
+        setPixelInFrame(buffer, info, frame, x, y, [14, 20, 32, 255]);
+      }
+    }
+  }
+  drawLine(buffer, info, frame, cx - 2, minY + 1, cx, maxY - 1, [228, 236, 248, 255], bellyBounds);
+  drawLine(buffer, info, frame, cx + 1, minY + 1, cx, maxY - 1, [228, 236, 248, 255], bellyBounds);
+}
+
+function drawRulerInsideOriginalBounds(buffer, info, frame, frameInfo) {
+  const b = frameInfo.bounds;
+  const x1 = Math.round(b.maxX - 5);
+  const y1 = Math.round(b.minY + (b.maxY - b.minY) * 0.42);
+  const x2 = Math.round(b.maxX - 1);
+  const y2 = Math.round(b.minY + (b.maxY - b.minY) * 0.78);
+  drawLine(buffer, info, frame, x1, y1, x2, y2, [175, 125, 62, 255], frameInfo);
+  drawLine(buffer, info, frame, x1 + 1, y1, x2 + 1, y2, [105, 70, 35, 255], frameInfo);
+}
+
+function analyzeFrame(buffer, info, frame) {
+  const bounds = emptyBounds();
+  const skinBounds = emptyBounds();
+  forEachFramePixel(info, frame, (x, y, absolute) => {
+    const alpha = buffer[absolute + 3];
+    if (alpha < 12) return;
+    add(bounds, x, y);
+    if (classifyOriginalColor([buffer[absolute], buffer[absolute + 1], buffer[absolute + 2]]) === "skin") {
+      add(skinBounds, x, y);
+    }
+  });
+  return {
+    bounds: valid(bounds) ? bounds : null,
+    skinBounds: valid(skinBounds) ? skinBounds : null
+  };
+}
+
+function forEachFramePixel(info, frame, callback) {
+  const fx = (frame % cols) * cell;
+  const fy = Math.floor(frame / cols) * cell;
+  for (let y = 0; y < cell; y += 1) {
+    for (let x = 0; x < cell; x += 1) {
+      const absolute = ((fy + y) * info.width + fx + x) * info.channels;
+      callback(x, y, absolute);
+    }
+  }
+}
+
+function drawRectOutline(buffer, info, frame, x, y, w, h, color, frameInfo) {
+  drawLine(buffer, info, frame, x, y, x + w, y, color, frameInfo);
+  drawLine(buffer, info, frame, x, y + h, x + w, y + h, color, frameInfo);
+  drawLine(buffer, info, frame, x, y, x, y + h, color, frameInfo);
+  drawLine(buffer, info, frame, x + w, y, x + w, y + h, color, frameInfo);
+}
+
+function drawCircleOutline(buffer, info, frame, cx, cy, r, color, frameInfo) {
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 10) {
+    setInside(buffer, info, frame, Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), color, frameInfo);
+  }
+}
+
+function drawLine(buffer, info, frame, x1, y1, x2, y2, color, frameInfo) {
+  const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1), 1);
+  for (let i = 0; i <= steps; i += 1) {
+    const t = i / steps;
+    setInside(buffer, info, frame, Math.round(x1 + (x2 - x1) * t), Math.round(y1 + (y2 - y1) * t), color, frameInfo);
+  }
+}
+
+function setInside(buffer, info, frame, x, y, color, frameInfo, minAlpha = 12) {
+  const b = frameInfo.bounds;
+  if (!b || x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) return;
+  const fx = (frame % cols) * cell;
+  const fy = Math.floor(frame / cols) * cell;
+  const absolute = ((fy + y) * info.width + fx + x) * info.channels;
+  if (buffer[absolute + 3] < minAlpha) return;
+  buffer[absolute] = color[0];
+  buffer[absolute + 1] = color[1];
+  buffer[absolute + 2] = color[2];
+  buffer[absolute + 3] = color[3];
+}
+
+function setPixelInFrame(buffer, info, frame, x, y, color) {
+  if (x < 0 || x >= cell || y < 0 || y >= cell) return;
+  const fx = (frame % cols) * cell;
+  const fy = Math.floor(frame / cols) * cell;
+  const absolute = ((fy + y) * info.width + fx + x) * info.channels;
+  buffer[absolute] = color[0];
+  buffer[absolute + 1] = color[1];
+  buffer[absolute + 2] = color[2];
+  buffer[absolute + 3] = color[3];
+}
+
+function blendInside(buffer, info, frame, x, y, color, amount, frameInfo) {
+  const b = frameInfo.bounds;
+  if (!b || x < b.minX || x > b.maxX || y < b.minY || y > b.maxY) return;
+  const fx = (frame % cols) * cell;
+  const fy = Math.floor(frame / cols) * cell;
+  const absolute = ((fy + y) * info.width + fx + x) * info.channels;
+  if (buffer[absolute + 3] < 12) return;
+  buffer[absolute] = Math.round(buffer[absolute] * (1 - amount) + color[0] * amount);
+  buffer[absolute + 1] = Math.round(buffer[absolute + 1] * (1 - amount) + color[1] * amount);
+  buffer[absolute + 2] = Math.round(buffer[absolute + 2] * (1 - amount) + color[2] * amount);
+}
+
+async function renderPreview(data, info, output) {
+  const checker = Buffer.alloc(info.width * info.height * info.channels);
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      const tile = (Math.floor(x / 24) + Math.floor(y / 24)) % 2;
+      const value = tile ? 214 : 239;
+      const i = (y * info.width + x) * info.channels;
+      checker[i] = value;
+      checker[i + 1] = value;
+      checker[i + 2] = value;
+      checker[i + 3] = 255;
+    }
+  }
+  await sharp(checker, { raw: info })
+    .composite([{ input: data, raw: info }])
+    .png()
+    .toFile(output);
+}
+
+function emptyBounds() {
+  return { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+}
+
+function add(bounds, x, y) {
+  bounds.minX = Math.min(bounds.minX, x);
+  bounds.minY = Math.min(bounds.minY, y);
+  bounds.maxX = Math.max(bounds.maxX, x);
+  bounds.maxY = Math.max(bounds.maxY, y);
+}
+
+function valid(bounds) {
+  return Number.isFinite(bounds.minX) && bounds.maxX >= bounds.minX && bounds.maxY >= bounds.minY;
+}
+
+function distance(a, b) {
+  return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+}
+
+function brightness([r, g, b]) {
+  return (r + g + b) / (255 * 3);
+}
+
+function shade(base, sourceBrightness, strength) {
+  const factor = 1 + (sourceBrightness - 0.5) * strength;
+  return base.map((channel) => clamp(Math.round(channel * factor), 0, 255));
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
