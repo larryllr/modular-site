@@ -130,6 +130,10 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /KeyA/);
   assert.match(launcher, /KeyW/);
   assert.match(launcher, /function emitMovementKey/);
+  assert.match(launcher, /const horizontalThreshold = radius \* 0\.28/);
+  assert.match(launcher, /const verticalThreshold = radius \* 0\.48/);
+  assert.match(launcher, /setKey\("ArrowUp", y < -verticalThreshold\)/);
+  assert.match(launcher, /setKey\("ArrowDown", y > verticalThreshold\)/);
   assert.match(launcher, /window\.setInterval\(\(\) => \{/);
   assert.match(launcher, /emitMovementKey\(code, "keydown", \{ repeat: true \}\)/);
   assert.match(launcher, /function resetVirtualInputs/);

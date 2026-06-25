@@ -299,13 +299,14 @@ function bindVirtualJoystick() {
     const angle = Math.atan2(rawY, rawX);
     const x = Math.cos(angle) * distance;
     const y = Math.sin(angle) * distance;
-    const threshold = radius * 0.28;
+    const horizontalThreshold = radius * 0.28;
+    const verticalThreshold = radius * 0.48;
     joystickKnob.style.transform = "translate(calc(-50% + " + x + "px), calc(-50% + " + y + "px))";
     joystick.classList.add("is-active");
-    setKey("ArrowLeft", x < -threshold);
-    setKey("ArrowRight", x > threshold);
-    setKey("ArrowUp", y < -threshold);
-    setKey("ArrowDown", y > threshold);
+    setKey("ArrowLeft", x < -horizontalThreshold);
+    setKey("ArrowRight", x > horizontalThreshold);
+    setKey("ArrowUp", y < -verticalThreshold);
+    setKey("ArrowDown", y > verticalThreshold);
   };
   joystick.addEventListener("pointerdown", (event) => {
     event.preventDefault();

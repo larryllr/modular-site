@@ -16,7 +16,7 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`7544894f-a493-4f8a-9151-c9d0af7da4d5`
+- 最新 Cloudflare Version ID：`6aef53d8-38be-40b2-ba78-68206330689a`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -94,6 +94,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 2026-06-25 修复 `/llr-mariorun` 启动器残留关卡选择：开始前只选择素材包，不再向 Godot iframe URL 写入 `level` 参数，Story Mode 和关卡流程完全交给游戏内自带系统。启动区和游戏工具栏都提供“重置游戏存档”，用于清理 Godot Web 的 IndexedDB/IDBFS 本地存档，处理 Story Mode 读到坏进度后黑屏卡住的情况。
 - 2026-06-25 调整 `/llr-mariorun` 素材在线编辑入口：游戏页只在检测到完整管理员 token 且 `/api/admin/game` 校验成功后显示“素材在线编辑”；普通 `/admin` 不再默认显示老师大冒险素材编辑器，只有从游戏页进入 `/admin?game=llr-mariorun` 时才显示该编辑器。
 - 2026-06-25 针对 Story Mode 第四场景偶发黑屏/摇杆失效增强外层容错：虚拟摇杆方向同时发送方向键和 WASD；按住摇杆时每 140ms 重发 keydown 并重新聚焦 Godot canvas，降低 iframe/Godot 场景切换后输入状态丢失概率；iframe load、页面失焦和隐藏时释放虚拟输入；Godot canvas 监听 `webglcontextlost`/`webglcontextrestored` 并提示重载或重置存档。
+- 2026-06-25 调低 `/llr-mariorun` 摇杆上下方向灵敏度：左右触发阈值保持 `0.28 * 半径`，上下触发阈值提高到 `0.48 * 半径`，减少误触跳跃/下蹲。
 
 “传输模块”已经从网页模块新增入口和配置清洗中移除。不要重新加入，除非用户明确要求。本地 Electron 客户端代码暂时保留。
 
