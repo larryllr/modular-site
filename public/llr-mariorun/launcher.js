@@ -7,6 +7,8 @@ const shell = document.querySelector(".game-frame-shell");
 const packSelect = document.querySelector("#pack-select");
 const startSelectedButton = document.querySelector("#start-selected-game");
 const resetGameDataButtons = document.querySelectorAll("[data-reset-game-data]");
+const adminAssetEditorLink = document.querySelector("[data-admin-asset-editor]");
+const adminTokenKey = "cloudflare-modular-site.admin-token";
 let manifest = null;
 let selectedPackId = "";
 let fullscreenOrientationLocked = false;
@@ -38,6 +40,25 @@ async function loadManifestStatus() {
       : `已选择：${activePack?.name || "内置素材包"}。可在后台上传 game.bundle.pck 覆盖，Story Mode 使用游戏内自带关卡。`;
   } catch {
     statusText.textContent = "Godot 游戏已嵌入，后台素材状态读取失败。";
+  }
+}
+
+async function revealAdminAssetEditorLink() {
+  if (!adminAssetEditorLink) return;
+  const token = localStorage.getItem(adminTokenKey);
+  if (!token) return;
+
+  try {
+    const response = await fetch("/api/admin/game", {
+      cache: "no-store",
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+    if (!response.ok) return;
+    adminAssetEditorLink.hidden = false;
+  } catch {
+    adminAssetEditorLink.hidden = true;
   }
 }
 
@@ -284,3 +305,4 @@ document.addEventListener("fullscreenchange", () => {
 
 bindVirtualControls();
 loadManifestStatus();
+revealAdminAssetEditorLink();

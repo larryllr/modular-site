@@ -80,7 +80,10 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
 
   assert.match(html, /老师大冒险/);
   assert.match(html, /GODOT WEB EDITION/);
-  assert.match(html, /管理员素材库/);
+  assert.doesNotMatch(html, />管理员素材库</);
+  assert.match(html, /data-admin-asset-editor hidden/);
+  assert.match(html, /href="\/admin\?game=llr-mariorun"/);
+  assert.match(html, />素材在线编辑</);
   assert.match(html, /开始前选择/);
   assert.match(html, /id="pack-select"/);
   assert.doesNotMatch(html, /id="level-select"/);
@@ -113,6 +116,10 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(css, /body\.is-forced-landscape/);
   assert.match(css, /transform:[^;]*rotate\(90deg\)/);
   assert.match(launcher, /fetch\("\/api\/game\/manifest"/);
+  assert.match(launcher, /const adminTokenKey = "cloudflare-modular-site\.admin-token"/);
+  assert.match(launcher, /function revealAdminAssetEditorLink/);
+  assert.match(launcher, /fetch\("\/api\/admin\/game"/);
+  assert.match(launcher, /adminAssetEditorLink\.hidden = false/);
   assert.match(launcher, /game\.bundle\.pck/);
   assert.match(launcher, /function renderPrelaunchChoices/);
   assert.match(launcher, /function selectedGameUrl/);
@@ -145,6 +152,11 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
 test("admin app exposes llr-mariorun entry and online editors", () => {
   assert.match(app, /const llrMarioRunPath = "\/llr-mariorun"/);
   assert.match(app, /function renderAdminGameEditor\(\)/);
+  assert.match(app, /function shouldRenderAdminGameEditor\(\)/);
+  assert.match(app, /get\("game"\) === "llr-mariorun"/);
+  assert.match(app, /function clearAdminGameEditorMode\(\)/);
+  assert.match(app, /if \(gameEditorMode\) \{[\s\S]*?main\.append\(renderAdminGameEditor\(\)\)/);
+  assert.doesNotMatch(app, /panel\.append\(renderAdminGameEditor\(\)\)/);
   assert.match(app, /async function loadAdminGameConfig\(\)/);
   assert.match(app, /function renderGameAssetPackEditor/);
   assert.match(app, /function importLocalGameAssetPacks/);

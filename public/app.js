@@ -342,6 +342,7 @@ function renderAdminEditor() {
   const selectedLink = selectedItem?.type === "link" ? selectedItem.link : null;
   const selectedLogs = selectedItem?.type === "logs";
   const limited = isLimitedAdmin();
+  const gameEditorMode = shouldRenderAdminGameEditor() && !limited;
 
   const homeSettingsNav = element("nav", "module-nav");
   const homeSettingsButton = document.createElement("button");
@@ -350,6 +351,7 @@ function renderAdminEditor() {
   homeSettingsButton.disabled = limited;
   homeSettingsButton.append(mark("HM"), textBlock("主页设置", "标题、公告和全站设置"));
   homeSettingsButton.addEventListener("click", () => {
+    clearAdminGameEditorMode();
     state.selectedItemType = "home";
     state.expandedSettings = "";
     renderAdminEditor();
@@ -382,6 +384,7 @@ function renderAdminEditor() {
         state.selectedItemType = "link";
         state.selectedLinkId = link.id;
         state.expandedSettings = "";
+        clearAdminGameEditorMode();
         renderAdminEditor();
       });
       group.append(item);
@@ -415,6 +418,7 @@ function renderAdminEditor() {
       state.selectedItemType = "page";
       state.selectedPageId = page.id;
       state.expandedSettings = "";
+      clearAdminGameEditorMode();
       renderAdminEditor();
     });
 
@@ -430,6 +434,7 @@ function renderAdminEditor() {
   const addPageButton = button("新增分页面", "button primary", "button");
   addPageButton.disabled = limited;
   addPageButton.addEventListener("click", () => {
+    clearAdminGameEditorMode();
     rememberConfigChange();
     const page = createPage();
     state.config.pages.push(page);
@@ -443,6 +448,7 @@ function renderAdminEditor() {
   const addBlogPageButton = button("新增博客分页面", "button", "button");
   addBlogPageButton.disabled = limited;
   addBlogPageButton.addEventListener("click", () => {
+    clearAdminGameEditorMode();
     rememberConfigChange();
     const page = createBlogPage();
     state.config.pages.push(page);
@@ -456,6 +462,7 @@ function renderAdminEditor() {
   const addLinkButton = button("新增网站入口", "button", "button");
   addLinkButton.disabled = limited;
   addLinkButton.addEventListener("click", () => {
+    clearAdminGameEditorMode();
     rememberConfigChange();
     const link = createExternalLink();
     state.config.links.push(link);
@@ -475,6 +482,7 @@ function renderAdminEditor() {
   logsButton.classList.toggle("is-active", selectedLogs);
   logsButton.disabled = limited;
   logsButton.addEventListener("click", () => {
+    clearAdminGameEditorMode();
     state.selectedItemType = "logs";
     state.expandedSettings = "";
     renderAdminEditor();
@@ -504,7 +512,9 @@ function renderAdminEditor() {
 
   main.append(title);
 
-  if (selectedLogs) {
+  if (gameEditorMode) {
+    main.append(renderAdminGameEditor());
+  } else if (selectedLogs) {
     main.append(renderAccessLogsPanel());
   } else if (selectedHome) {
     main.append(renderHomeSettings());
@@ -514,8 +524,21 @@ function renderAdminEditor() {
     main.append(renderExternalLinkEditor(selectedLink));
   }
 
-  main.append(renderSaveBar(selectedItem));
+  if (!gameEditorMode) {
+    main.append(renderSaveBar(selectedItem));
+  }
   app.replaceChildren(sidebar, main);
+}
+
+function shouldRenderAdminGameEditor() {
+  return new URLSearchParams(window.location.search).get("game") === "llr-mariorun";
+}
+
+function clearAdminGameEditorMode() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("game")) return;
+  url.searchParams.delete("game");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function renderPageSidebarSettings(page) {
@@ -605,7 +628,6 @@ function renderHomeSettings() {
   if (!isLimitedAdmin()) {
     panel.append(renderAdminPasswordSettings());
     panel.append(renderCommentBlockWordsSettings());
-    panel.append(renderAdminGameEditor());
   }
   const notice = element("section", "announcement-settings");
   notice.append(element("h3", "", "主页公告"));

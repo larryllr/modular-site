@@ -16,7 +16,7 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`78bff2f6-882d-4f16-baf9-4cbc2ef5f3f4`
+- 最新 Cloudflare Version ID：`8ed9ec97-ff88-47fb-aaf0-2c0f7b286f3b`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -92,6 +92,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 普通多模块分页面的模块卡片支持点击三态循环：第一次展开为整行，第二次全屏覆盖视口，第三次恢复默认；滑动/拖动超过 10px、页面或卡片滚动、按钮/输入框/链接/音视频等交互控件不会触发状态切换，`Enter`/空格可键盘切换，`Escape` 恢复默认。
 - 2026-06-25 修复博客文章更新后需要清除网站数据才显示的问题：所有 API fetch 显式 `cache: "no-store"`；管理员保存配置成功后会清理 `sessionStorage` 中的分页面解锁缓存，避免受密码保护的博客页继续渲染旧文章数据。
 - 2026-06-25 修复 `/llr-mariorun` 启动器残留关卡选择：开始前只选择素材包，不再向 Godot iframe URL 写入 `level` 参数，Story Mode 和关卡流程完全交给游戏内自带系统。启动区和游戏工具栏都提供“重置游戏存档”，用于清理 Godot Web 的 IndexedDB/IDBFS 本地存档，处理 Story Mode 读到坏进度后黑屏卡住的情况。
+- 2026-06-25 调整 `/llr-mariorun` 素材在线编辑入口：游戏页只在检测到完整管理员 token 且 `/api/admin/game` 校验成功后显示“素材在线编辑”；普通 `/admin` 不再默认显示老师大冒险素材编辑器，只有从游戏页进入 `/admin?game=llr-mariorun` 时才显示该编辑器。
 
 “传输模块”已经从网页模块新增入口和配置清洗中移除。不要重新加入，除非用户明确要求。本地 Electron 客户端代码暂时保留。
 
