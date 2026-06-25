@@ -241,6 +241,7 @@ function requestOptions(method, body, useAuth) {
   return {
     method,
     headers,
+    cache: "no-store",
     body: body ? JSON.stringify(body) : undefined
   };
 }
@@ -2353,6 +2354,7 @@ async function persistConfig(nextConfig) {
     config.updatedAt = payload.updatedAt || config.updatedAt;
     state.config = config;
     state.savedConfig = cloneConfig(config);
+    clearUnlockedPageCache();
     updateAdminRole(payload.role);
     return payload;
   } catch (error) {
@@ -2362,6 +2364,7 @@ async function persistConfig(nextConfig) {
   }
 
   const payload = await api.postJson("/api/admin/config", { config }, true);
+  clearUnlockedPageCache();
   setLoadedConfig(payload.config);
   updateAdminRole(payload.role);
   return payload;
@@ -2907,6 +2910,15 @@ function getUnlockedPage(slug) {
   } catch {
     sessionStorage.removeItem(`${pageAccessKeyPrefix}${slug}`);
     return null;
+  }
+}
+
+function clearUnlockedPageCache() {
+  for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+    const key = sessionStorage.key(index);
+    if (key?.startsWith(pageAccessKeyPrefix)) {
+      sessionStorage.removeItem(key);
+    }
   }
 }
 
