@@ -111,7 +111,7 @@ function loadGameRuntime(options = {}) {
 }
 
 function startSelectedGame() {
-  loadGameRuntime();
+  loadGameRuntime({ cacheBust: true });
 }
 
 function recoverGameRuntime(message = "正在重建游戏运行时…") {

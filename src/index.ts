@@ -2075,8 +2075,9 @@ async function fetchGameAsset(request: Request, env: AppEnv, key: string): Promi
 
 async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Response | null> {
   const packs = await readGameAssetPacks(env);
+  const requestUrl = new URL(request.url);
   const referer = request.headers.get("referer") || "";
-  const requestedPackId = safeUrlSearchParam(referer, "pack");
+  const requestedPackId = requestUrl.searchParams.get("pack") || safeUrlSearchParam(referer, "pack");
   const activePack = packs.find((pack) => pack.enabled && pack.id === requestedPackId)
     || packs.find((pack) => pack.enabled && pack.default)
     || packs.find((pack) => pack.enabled);
@@ -2086,7 +2087,18 @@ async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Respon
     return null;
   }
 
-  return fetchGameAsset(request, env, gamePack.key);
+  const response = await fetchGameAsset(request, env, gamePack.key);
+  const headers = new Headers(response.headers);
+  headers.set("content-type", headers.get("content-type") || "application/octet-stream");
+  headers.set("cache-control", "no-store, max-age=0");
+  headers.set("x-llr-pack-id", activePack?.id || requestedPackId || "default");
+  headers.append("vary", "Referer");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 }
 
 function safeUrlSearchParam(value: string, name: string): string {

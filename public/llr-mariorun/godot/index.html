@@ -95,6 +95,37 @@ body {
 			<div id="status-notice"></div>
 		</div>
 
+		<script>
+(function () {
+	const pageUrl = new URL(window.location.href);
+	const selectedPack = pageUrl.searchParams.get('pack') || '';
+	const runId = pageUrl.searchParams.get('run') || '';
+	const nativeFetch = window.fetch.bind(window);
+
+	window.fetch = function (input, init) {
+		const requestUrl = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+		try {
+			const url = new URL(requestUrl, window.location.href);
+			if (/\/index\.pck$/.test(url.pathname)) {
+				if (selectedPack) {
+					url.searchParams.set('pack', selectedPack);
+				}
+				if (runId) {
+					url.searchParams.set('run', runId);
+				}
+				return nativeFetch(url.toString(), {
+					...init,
+					cache: 'no-store',
+					credentials: init?.credentials || 'same-origin'
+				});
+			}
+		} catch {
+			// Fall through to the native fetch below.
+		}
+		return nativeFetch(input, init);
+	};
+}());
+		</script>
 		<script src="index.js"></script>
 		<script>
 const GODOT_CONFIG = {"args":["--locale","zh_CN"],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":9326176,"index.wasm":35376909},"focusCanvas":true,"gdextensionLibs":[],"locale":"zh_CN"};

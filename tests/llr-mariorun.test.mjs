@@ -76,6 +76,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   const html = source("public/llr-mariorun/index.html");
   const css = source("public/llr-mariorun/game.css");
   const launcher = source("public/llr-mariorun/launcher.js");
+  const godotHtml = source("public/llr-mariorun/godot/index.html");
   const godotLoader = source("public/llr-mariorun/godot/index.js");
 
   assert.match(html, /老师大冒险/);
@@ -125,6 +126,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function renderPrelaunchChoices/);
   assert.match(launcher, /function selectedGameUrl/);
   assert.match(launcher, /function startSelectedGame/);
+  assert.match(launcher, /loadGameRuntime\(\{ cacheBust: true \}\)/);
   assert.match(launcher, /function recoverGameRuntime/);
   assert.match(launcher, /frame\.src = "about:blank"/);
   assert.match(launcher, /cacheBust: true/);
@@ -150,6 +152,15 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /screen\.orientation\?\.lock\?\.\("landscape-primary"\)/);
   assert.doesNotMatch(launcher, /\/llr-mariorun\/custom\.html/);
   assert.match(launcher, /searchParams\.set\("pack", selectedPackId\)/);
+  assert.match(godotHtml, /window\.fetch = function/);
+  assert.match(godotHtml, /\/\\\/index\\\.pck\$/);
+  assert.match(godotHtml, /url\.searchParams\.set\('pack', selectedPack\)/);
+  assert.match(godotHtml, /url\.searchParams\.set\('run', runId\)/);
+  assert.match(godotHtml, /cache: 'no-store'/);
+  assert.match(worker, /const requestUrl = new URL\(request\.url\)/);
+  assert.match(worker, /requestUrl\.searchParams\.get\("pack"\) \|\| safeUrlSearchParam\(referer, "pack"\)/);
+  assert.match(worker, /headers\.set\("cache-control", "no-store, max-age=0"\)/);
+  assert.match(worker, /headers\.set\("x-llr-pack-id", activePack\?\.id \|\| requestedPackId \|\| "default"\)/);
   assert.doesNotMatch(launcher, /searchParams\.set\("level"/);
   assert.doesNotMatch(launcher, /selectedLevelId/);
   assert.doesNotMatch(launcher, /levelSelect/);
