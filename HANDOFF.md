@@ -157,3 +157,10 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 ## 当前工作区状态
 
 `/llr-mariorun` 黑屏恢复、退出全屏自动重建 iframe、移动端工具栏压缩，以及每日自动背景真正后加载已部署到 Cloudflare；完成提交和推送后工作区除本地浏览器 QA 目录外应保持干净。
+
+## 2026-06-25 老师动作表素材包更新
+
+- 用户提供两张完整像素动作表后，已停止使用此前程序化重画方案；新素材直接从参考图切 10×10 共 100 格，清理棋盘背景并生成 4800×4800 主角动作表。
+- 刘硕包使用参考图白衬衫蓝裤子/圆眼镜版本，并只在 3 个砸地相关格轻量叠加小戒尺；郭亮包使用参考图蓝西服/圆肚子版本。两包都通过 Godot 工程级导出，不再只替换 `.ctex`，`player.tscn` 的主角 atlas 区域按 10 倍缩放，并把主角显示缩放设为 `0.125`，保证高分图可用且游戏内尺寸不会失控。
+- 线上 KV/D1 已更新并验证：`liushuo` PCK 11,425,536 bytes、素材图 2,399,063 bytes；`guoliang` PCK 11,304,592 bytes、素材图 2,405,721 bytes。线上 `/llr-mariorun/godot/index.pck?pack=...` 实测返回对应大小，响应头仍为 `cache-control: no-store, max-age=0` 和正确 `x-llr-pack-id`。
+- 新工具脚本：`tools/build-teacher-sheet-from-reference.mjs`（切参考图/清背景/生成 4800 sheet）、`tools/add-liushuo-ruler-overlay.mjs`（只给指定格叠加戒尺）、`tools/build-ultrahd-godot-pack.mjs`（临时打补丁导出 Godot Web PCK）。`output/` 下是生成产物，不提交。
