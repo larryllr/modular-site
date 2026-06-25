@@ -164,3 +164,4 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 - 刘硕包使用参考图白衬衫蓝裤子/圆眼镜版本，并只在 3 个砸地相关格轻量叠加小戒尺；郭亮包使用参考图蓝西服/圆肚子版本。两包都通过 Godot 工程级导出，不再只替换 `.ctex`，`player.tscn` 的主角 atlas 区域按 10 倍缩放，并把主角显示缩放设为 `0.125`，保证高分图可用且游戏内尺寸不会失控。
 - 线上 KV/D1 已更新并验证：`liushuo` PCK 11,425,536 bytes、素材图 2,399,063 bytes；`guoliang` PCK 11,304,592 bytes、素材图 2,405,721 bytes。线上 `/llr-mariorun/godot/index.pck?pack=...` 实测返回对应大小，响应头仍为 `cache-control: no-store, max-age=0` 和正确 `x-llr-pack-id`。
 - 新工具脚本：`tools/build-teacher-sheet-from-reference.mjs`（切参考图/清背景/生成 4800 sheet）、`tools/add-liushuo-ruler-overlay.mjs`（只给指定格叠加戒尺）、`tools/build-ultrahd-godot-pack.mjs`（临时打补丁导出 Godot Web PCK）。`output/` 下是生成产物，不提交。
+- 2026-06-26 用户指出旧包跳跃/旋转上方有像素条、走路鬼畜且电脑端卡。已改用用户新发动作表，输出降到 2400×2400（每格 240），`build-ultrahd-godot-pack.mjs --teacher-action-map` 按 Godot 动画名重映射站立/走路/跳跃/旋转/砸地/受伤，避免按格子顺序错配。线上验证：`liushuo` PCK 10,730,656 bytes、素材图 1,637,400 bytes；`guoliang` PCK 10,834,096 bytes、素材图 1,794,020 bytes。

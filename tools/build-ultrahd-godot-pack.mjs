@@ -9,6 +9,7 @@ const sheet = args.get("--sheet");
 const outDir = args.get("--out-dir");
 const scale = Number(args.get("--scale") ?? "10");
 const displayScale = Number(args.get("--display-scale") ?? "0.125");
+const teacherActionMap = args.has("--teacher-action-map");
 const poundFrames = (args.get("--pound-frames") ?? "")
   .split(",")
   .map((value) => Number(value.trim()))
@@ -40,7 +41,8 @@ console.log(JSON.stringify({
   scale,
   displayScale,
   fluddScale: 1 / displayScale,
-  poundFrames
+  poundFrames,
+  teacherActionMap
 }, null, 2));
 
 function patchPlayerScene(scene, regionScale, spriteScale, poundFrameIds) {
@@ -48,11 +50,13 @@ function patchPlayerScene(scene, regionScale, spriteScale, poundFrameIds) {
   let inAtlas8 = false;
   let currentSubResourceId = "";
   let regionCount = 0;
-  const poundResourceIds = new Map([
-    ["125", poundFrameIds[0]],
-    ["126", poundFrameIds[1]],
-    ["133", poundFrameIds[2]]
-  ]);
+  const resourceTargetFrames = teacherActionMap
+    ? teacherResourceTargetFrames()
+    : new Map([
+      ["125", poundFrameIds[0]],
+      ["126", poundFrameIds[1]],
+      ["133", poundFrameIds[2]]
+    ]);
   const out = [];
   for (let index = 0; index < lines.length; index += 1) {
     let line = lines[index];
@@ -65,7 +69,7 @@ function patchPlayerScene(scene, regionScale, spriteScale, poundFrameIds) {
     if (inAtlas8) {
       line = line.replace(/region = Rect2\((\d+), (\d+), 48, 48\)/, (_m, x, y) => {
         regionCount += 1;
-        const remapFrame = poundResourceIds.get(currentSubResourceId);
+        const remapFrame = resourceTargetFrames.get(currentSubResourceId);
         if (Number.isFinite(remapFrame)) {
           const col = remapFrame % 10;
           const row = Math.floor(remapFrame / 10);
@@ -85,4 +89,124 @@ function patchPlayerScene(scene, regionScale, spriteScale, poundFrameIds) {
   }
   if (regionCount < 80) throw new Error(`Patched too few player atlas regions: ${regionCount}`);
   return out.join("\n");
+}
+
+function teacherResourceTargetFrames() {
+  return new Map(Object.entries({
+    // Idle and direction poses.
+    "129": 7,       // back
+    "132": 0,       // front
+
+    // Crouch / low movement.
+    "130": 31,
+    "131": 39,
+    "AtlasTexture_byplk": 39,
+    "103": 31,
+    "104": 32,
+    "105": 33,
+
+    // Dive / belly slide / prone recovery.
+    "106": 33,
+    "178": 34,
+    "179": 35,
+    "180": 36,
+    "176": 34,
+    "177": 35,
+    "111": 36,
+    "112": 37,
+    "127": 30,
+    "128": 31,
+
+    // Jumps, falls, landings. Keep these out of spin/crawl rows.
+    "74": 20,
+    "182": 21,
+    "183": 22,
+    "184": 23,
+    "78": 24,
+    "185": 25,
+    "186": 26,
+    "187": 27,
+    "82": 24,
+    "83": 25,
+    "188": 26,
+    "189": 27,
+    "181": 26,
+    "119": 24,
+    "120": 25,
+    "173": 28,
+    "86": 28,
+    "87": 29,
+    "88": 28,
+    "89": 28,
+    "90": 29,
+
+    // Hurt / knockdown.
+    "171": 66,
+    "172": 67,
+    "70": 66,
+    "71": 67,
+    "72": 68,
+    "73": 69,
+    "113": 35,
+    "114": 36,
+    "115": 37,
+    "116": 38,
+    "117": 43,
+    "118": 44,
+
+    // Pound / ground-hit. Uses the new sheets' explicit impact row.
+    "125": 60,
+    "126": 61,
+    "133": 62,
+
+    // Spin. Only these resources use turn/roll frames now.
+    "151": 45,
+    "152": 46,
+    "153": 47,
+    "154": 45,
+    "155": 46,
+    "156": 47,
+    "157": 48,
+    "158": 45,
+    "159": 46,
+    "160": 47,
+    "161": 48,
+    "162": 45,
+    "163": 46,
+    "164": 47,
+    "165": 48,
+    "166": 45,
+    "167": 46,
+    "168": 47,
+    "169": 48,
+    "170": 46,
+
+    // Swimming can reuse prone/crawl frames rather than walking or spin.
+    "91": 30,
+    "92": 31,
+    "93": 32,
+    "94": 33,
+    "95": 34,
+    "96": 35,
+    "97": 34,
+    "98": 35,
+    "99": 36,
+    "100": 37,
+    "101": 38,
+
+    // Walking. Only side-walk frames, no front/turn/spin frames.
+    "57": 10,
+    "58": 11,
+    "59": 12,
+    "60": 13,
+    "61": 14,
+    "62": 15,
+    "63": 10,
+    "64": 11,
+    "65": 12,
+    "66": 13,
+    "67": 14,
+    "68": 15,
+    "69": 16
+  }).map(([key, value]) => [key, value]));
 }
