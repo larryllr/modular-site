@@ -96,6 +96,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 2026-06-25 针对 Story Mode 第四场景偶发黑屏/摇杆失效增强外层容错：虚拟摇杆方向同时发送方向键和 WASD；按住摇杆时每 140ms 重发 keydown 并重新聚焦 Godot canvas，降低 iframe/Godot 场景切换后输入状态丢失概率；iframe load、页面失焦和隐藏时释放虚拟输入；Godot canvas 监听 `webglcontextlost`/`webglcontextrestored` 并提示重载或重置存档。
 - 2026-06-25 调低 `/llr-mariorun` 摇杆上下方向灵敏度：左右触发阈值保持 `0.28 * 半径`，上下触发阈值提高到 `0.48 * 半径`，减少误触跳跃/下蹲。
 - 2026-06-25 针对用户截图中的 `/llr-mariorun` 黑屏卡死继续修复：不再把根因归到摇杆，改为外层运行时恢复。工具栏按钮改为“恢复/重载”，点击后先把 iframe 置为 `about:blank`，再带 `run=Date.now()` 重建 Godot iframe；`webglcontextlost` 和退出全屏后也会自动走同一套恢复流程。顶部状态文案缩短，移动端工具栏允许换行并缩小按钮，避免覆盖游戏 HUD。
+- 2026-06-25 根据用户上传的老师头像生成“老师默认版”素材：本地输出位于 `output/teacher-pack/`，包括 `teacher-sprite-sheet-green.png`、透明 `teacher-sprite-sheet.png`、兼容原 atlas 的 `mario_sheet.teacher.png` 和完整导出的 `game.bundle.pck`。已通过 Wrangler 将 PCK 上传到 `SITE_CONFIG` KV，并在 D1 `game_asset_packs` 中写入默认素材包 `teacher-default`；线上 `/api/game/manifest` 默认返回该包，`/llr-mariorun/godot/index.pck` 在 `pack=teacher-default` Referer 下返回 9,505,856 字节的老师版 PCK。生成方式是保留原 `player.tscn` atlas 坐标，把老师动作帧缩放贴进原 `mario_sheet.png` 布局；砸地相关帧使用戒尺下砸动作。
 
 “传输模块”已经从网页模块新增入口和配置清洗中移除。不要重新加入，除非用户明确要求。本地 Electron 客户端代码暂时保留。
 
