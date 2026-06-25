@@ -5,11 +5,10 @@ const fullscreenButton = document.querySelector("#fullscreen-game");
 const statusText = document.querySelector("#frame-status");
 const shell = document.querySelector(".game-frame-shell");
 const packSelect = document.querySelector("#pack-select");
-const levelSelect = document.querySelector("#level-select");
 const startSelectedButton = document.querySelector("#start-selected-game");
+const resetGameDataButtons = document.querySelectorAll("[data-reset-game-data]");
 let manifest = null;
 let selectedPackId = "";
-let selectedLevelId = "";
 let fullscreenOrientationLocked = false;
 const joystick = document.querySelector("[data-joystick]");
 const joystickKnob = document.querySelector(".joystick-knob");
@@ -33,33 +32,26 @@ async function loadManifestStatus() {
     const activePack = (manifest.assetPacks || []).find((pack) => pack.id === selectedPackId)
       || (manifest.assetPacks || []).find((pack) => pack.enabled && pack.default)
       || (manifest.assetPacks || []).find((pack) => pack.enabled);
-    const activeLevel = (manifest.levels || []).find((level) => level.id === selectedLevelId)
-      || (manifest.levels || []).find((level) => level.default)
-      || (manifest.levels || [])[0];
     const customPck = activePack?.assets?.["game.bundle.pck"];
     statusText.textContent = customPck
-      ? `已选择后台 PCK：${activePack.name || "素材包"} · 关卡：${activeLevel?.name || "默认"}`
-      : `已选择：${activePack?.name || "内置素材包"} · ${activeLevel?.name || "默认关卡"}。可在后台上传 game.bundle.pck 覆盖。`;
+      ? `已选择后台 PCK：${activePack.name || "素材包"}。Story Mode 使用游戏内自带关卡。`
+      : `已选择：${activePack?.name || "内置素材包"}。可在后台上传 game.bundle.pck 覆盖，Story Mode 使用游戏内自带关卡。`;
   } catch {
     statusText.textContent = "Godot 游戏已嵌入，后台素材状态读取失败。";
   }
 }
 
 function renderPrelaunchChoices() {
-  if (!manifest || !packSelect || !levelSelect) return;
+  if (!manifest || !packSelect) return;
   const packs = (manifest.assetPacks || []).filter((pack) => pack.enabled !== false);
-  const levels = (manifest.levels || []).filter((level) => level.enabled !== false);
   selectedPackId = selectedPackId || manifest.defaultAssetPackId || packs[0]?.id || "";
-  selectedLevelId = selectedLevelId || manifest.defaultLevelId || levels[0]?.id || "";
   packSelect.replaceChildren(...packs.map((pack) => new Option(pack.name || pack.id, pack.id, false, pack.id === selectedPackId)));
-  levelSelect.replaceChildren(...levels.map((level) => new Option(`${level.name || level.id} · ${level.difficulty || "默认"}`, level.id, false, level.id === selectedLevelId)));
 }
 
 function selectedGameUrl() {
   const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
   const url = new URL(base, window.location.origin);
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
-  if (selectedLevelId) url.searchParams.set("level", selectedLevelId);
   url.searchParams.set("locale", "zh_CN");
   return `${url.pathname}${url.search}`;
 }
@@ -67,12 +59,55 @@ function selectedGameUrl() {
 function startSelectedGame() {
   if (!frame) return;
   selectedPackId = packSelect?.value || selectedPackId;
-  selectedLevelId = levelSelect?.value || selectedLevelId;
   frame.src = selectedGameUrl();
   document.body.classList.add("game-has-launched");
   statusText.textContent = "正在载入完整 Godot 游戏…";
   loadManifestStatus();
   focusGame();
+}
+
+function deleteDatabase(name) {
+  return new Promise((resolve) => {
+    if (!name || !window.indexedDB) {
+      resolve(false);
+      return;
+    }
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = () => resolve(true);
+    request.onerror = () => resolve(false);
+    request.onblocked = () => resolve(false);
+  });
+}
+
+async function resetGameData() {
+  if (!confirm("确定重置游戏存档？这会清除当前浏览器里的 Story Mode 进度和 Godot 本地存档。")) {
+    return;
+  }
+
+  if (frame) frame.src = "about:blank";
+  document.body.classList.remove("game-has-launched");
+  statusText.textContent = "正在清理 Godot 本地存档…";
+
+  const databaseNames = new Set(["FILE_DATA"]);
+  if (window.indexedDB?.databases) {
+    try {
+      const databases = await window.indexedDB.databases();
+      for (const database of databases) {
+        if (database.name) databaseNames.add(database.name);
+      }
+    } catch {
+      // Some browsers do not expose database enumeration.
+    }
+  }
+
+  let deletedCount = 0;
+  for (const name of databaseNames) {
+    if (await deleteDatabase(name)) deletedCount += 1;
+  }
+
+  statusText.textContent = deletedCount
+    ? "游戏存档已重置，可以重新开始 Story Mode。"
+    : "已尝试重置存档；如果仍黑屏，请刷新页面后再进入 Story Mode。";
 }
 
 function focusGame() {
@@ -225,11 +260,8 @@ packSelect?.addEventListener("change", () => {
   selectedPackId = packSelect.value;
   loadManifestStatus();
 });
-levelSelect?.addEventListener("change", () => {
-  selectedLevelId = levelSelect.value;
-  loadManifestStatus();
-});
 startSelectedButton?.addEventListener("click", startSelectedGame);
+resetGameDataButtons.forEach((button) => button.addEventListener("click", resetGameData));
 frame?.addEventListener("load", () => {
   focusGame();
   loadManifestStatus();

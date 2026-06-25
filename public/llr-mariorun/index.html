@@ -30,19 +30,16 @@
       <section class="prelaunch-panel" aria-label="开始前选择">
         <div>
           <p class="eyebrow">开始前选择</p>
-          <h2>选择素材包和关卡</h2>
-          <p>素材包会决定后台上传的 PCK 是否覆盖默认游戏包；关卡选择会记录在启动参数和状态栏，方便对照后台关卡编辑。</p>
+          <h2>选择素材包</h2>
+          <p>素材包会决定后台上传的 PCK 是否覆盖默认游戏包；关卡和 Story Mode 进度使用游戏内自带流程。</p>
         </div>
         <label>
           <span>素材包</span>
           <select id="pack-select"></select>
         </label>
-        <label>
-          <span>关卡</span>
-          <select id="level-select"></select>
-        </label>
         <div class="launch-buttons">
           <button id="start-selected-game" class="primary-button" type="button">开始完整游戏</button>
+          <button id="reset-game-data" class="secondary-button" type="button" data-reset-game-data>重置游戏存档</button>
         </div>
       </section>
 
@@ -60,6 +57,7 @@
         <div class="frame-toolbar">
           <span id="frame-status">正在加载 Godot 游戏…</span>
           <button id="reload-game" type="button">重载</button>
+          <button type="button" data-reset-game-data>重置存档</button>
           <button id="fullscreen-game" type="button">横屏全屏</button>
         </div>
 
