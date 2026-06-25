@@ -12,9 +12,14 @@ const adminTokenKey = "cloudflare-modular-site.admin-token";
 let manifest = null;
 let selectedPackId = "";
 let fullscreenOrientationLocked = false;
+const inputResetHandlers = new Set();
 const joystick = document.querySelector("[data-joystick]");
 const joystickKnob = document.querySelector(".joystick-knob");
 const keyLabels = {
+  KeyA: { key: "a", code: "KeyA", keyCode: 65 },
+  KeyD: { key: "d", code: "KeyD", keyCode: 68 },
+  KeyS: { key: "s", code: "KeyS", keyCode: 83 },
+  KeyW: { key: "w", code: "KeyW", keyCode: 87 },
   ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
   ArrowUp: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
   ArrowDown: { key: "ArrowDown", code: "ArrowDown", keyCode: 40 },
@@ -23,6 +28,12 @@ const keyLabels = {
   KeyX: { key: "x", code: "KeyX", keyCode: 88 },
   KeyZ: { key: "z", code: "KeyZ", keyCode: 90 },
   Space: { key: " ", code: "Space", keyCode: 32 }
+};
+const movementKeyAliases = {
+  ArrowLeft: ["ArrowLeft", "KeyA"],
+  ArrowRight: ["ArrowRight", "KeyD"],
+  ArrowUp: ["ArrowUp", "KeyW"],
+  ArrowDown: ["ArrowDown", "KeyS"]
 };
 
 async function loadManifestStatus() {
@@ -135,13 +146,14 @@ function focusGame() {
   frame?.focus();
   try {
     const canvas = frame?.contentDocument?.querySelector("canvas");
+    if (canvas && canvas.tabIndex < 0) canvas.tabIndex = 0;
     canvas?.focus();
   } catch {
     // The frame is same-origin in production; ignore if a browser blocks access.
   }
 }
 
-function emitKey(code, type) {
+function emitKey(code, type, options = {}) {
   const target = frame?.contentWindow;
   const details = keyLabels[code];
   if (!target || !details) return;
@@ -149,7 +161,8 @@ function emitKey(code, type) {
     key: details.key,
     code: details.code,
     bubbles: true,
-    cancelable: true
+    cancelable: true,
+    repeat: Boolean(options.repeat)
   };
   const event = new KeyboardEvent(type, base);
   Object.defineProperty(event, "keyCode", { get: () => details.keyCode });
@@ -166,6 +179,40 @@ function emitKey(code, type) {
     frame.contentDocument?.querySelector("canvas")?.dispatchEvent(canvasEvent);
   } catch {
     // Same-origin focus fallback above is best-effort.
+  }
+}
+
+function emitMovementKey(code, type, options = {}) {
+  for (const mappedCode of movementKeyAliases[code] || [code]) {
+    emitKey(mappedCode, type, options);
+  }
+}
+
+function resetVirtualInputs() {
+  for (const handler of inputResetHandlers) handler();
+  document.querySelectorAll(".virtual-controls button.is-pressed").forEach((button) => {
+    button.classList.remove("is-pressed");
+    if (button.dataset.key) emitKey(button.dataset.key, "keyup");
+  });
+}
+
+function attachGodotCanvasRecovery() {
+  try {
+    const canvas = frame?.contentDocument?.querySelector("canvas");
+    if (!canvas || canvas.dataset.recoveryBound === "true") return;
+    canvas.dataset.recoveryBound = "true";
+    if (canvas.tabIndex < 0) canvas.tabIndex = 0;
+    canvas.addEventListener("webglcontextlost", (event) => {
+      event.preventDefault();
+      resetVirtualInputs();
+      statusText.textContent = "WebGL 场景上下文丢失，正在等待浏览器恢复；若持续黑屏请点重载或重置存档。";
+    });
+    canvas.addEventListener("webglcontextrestored", () => {
+      statusText.textContent = "WebGL 场景已恢复，请重新操作摇杆。";
+      focusGame();
+    });
+  } catch {
+    // Ignore cross-origin or early-load access failures.
   }
 }
 
@@ -204,19 +251,41 @@ function bindVirtualControls() {
 function bindVirtualJoystick() {
   if (!joystick || !joystickKnob) return;
   const activeKeys = new Set();
+  let heartbeatId = 0;
+  const stopHeartbeat = () => {
+    window.clearInterval(heartbeatId);
+    heartbeatId = 0;
+  };
+  const startHeartbeat = () => {
+    if (heartbeatId) return;
+    heartbeatId = window.setInterval(() => {
+      if (!activeKeys.size || !document.body.classList.contains("game-has-launched")) {
+        stopHeartbeat();
+        return;
+      }
+      focusGame();
+      for (const code of activeKeys) {
+        emitMovementKey(code, "keydown", { repeat: true });
+      }
+    }, 140);
+  };
   const releaseAll = () => {
-    for (const code of activeKeys) emitKey(code, "keyup");
+    for (const code of activeKeys) emitMovementKey(code, "keyup");
     activeKeys.clear();
+    stopHeartbeat();
     joystickKnob.style.transform = "translate(-50%, -50%)";
     joystick.classList.remove("is-active");
   };
+  inputResetHandlers.add(releaseAll);
   const setKey = (code, enabled) => {
     if (enabled && !activeKeys.has(code)) {
       activeKeys.add(code);
-      emitKey(code, "keydown");
+      emitMovementKey(code, "keydown");
+      startHeartbeat();
     } else if (!enabled && activeKeys.has(code)) {
       activeKeys.delete(code);
-      emitKey(code, "keyup");
+      emitMovementKey(code, "keyup");
+      if (!activeKeys.size) stopHeartbeat();
     }
   };
   const update = (event) => {
@@ -284,7 +353,12 @@ packSelect?.addEventListener("change", () => {
 startSelectedButton?.addEventListener("click", startSelectedGame);
 resetGameDataButtons.forEach((button) => button.addEventListener("click", resetGameData));
 frame?.addEventListener("load", () => {
+  resetVirtualInputs();
   focusGame();
+  window.setTimeout(() => {
+    attachGodotCanvasRecovery();
+    focusGame();
+  }, 250);
   loadManifestStatus();
 });
 reloadButton?.addEventListener("click", () => {
@@ -301,6 +375,10 @@ document.addEventListener("fullscreenchange", () => {
     fullscreenOrientationLocked = false;
     screen.orientation?.unlock?.();
   }
+});
+window.addEventListener("blur", resetVirtualInputs);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) resetVirtualInputs();
 });
 
 bindVirtualControls();

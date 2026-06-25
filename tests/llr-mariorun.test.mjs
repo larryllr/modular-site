@@ -126,6 +126,17 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function startSelectedGame/);
   assert.match(launcher, /document\.body\.classList\.add\("game-has-launched"\)/);
   assert.match(launcher, /function bindVirtualJoystick/);
+  assert.match(launcher, /const movementKeyAliases/);
+  assert.match(launcher, /KeyA/);
+  assert.match(launcher, /KeyW/);
+  assert.match(launcher, /function emitMovementKey/);
+  assert.match(launcher, /window\.setInterval\(\(\) => \{/);
+  assert.match(launcher, /emitMovementKey\(code, "keydown", \{ repeat: true \}\)/);
+  assert.match(launcher, /function resetVirtualInputs/);
+  assert.match(launcher, /function attachGodotCanvasRecovery/);
+  assert.match(launcher, /webglcontextlost/);
+  assert.match(launcher, /webglcontextrestored/);
+  assert.match(launcher, /window\.addEventListener\("blur", resetVirtualInputs\)/);
   assert.match(launcher, /screen\.orientation\?\.lock\?\.\("landscape-primary"\)/);
   assert.doesNotMatch(launcher, /\/llr-mariorun\/custom\.html/);
   assert.match(launcher, /searchParams\.set\("pack", selectedPackId\)/);
