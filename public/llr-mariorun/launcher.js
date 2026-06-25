@@ -7,10 +7,12 @@ const shell = document.querySelector(".game-frame-shell");
 const packSelect = document.querySelector("#pack-select");
 const levelSelect = document.querySelector("#level-select");
 const startSelectedButton = document.querySelector("#start-selected-game");
-const startCustomLevelButton = document.querySelector("#start-custom-level");
 let manifest = null;
 let selectedPackId = "";
 let selectedLevelId = "";
+let fullscreenOrientationLocked = false;
+const joystick = document.querySelector("[data-joystick]");
+const joystickKnob = document.querySelector(".joystick-knob");
 const keyLabels = {
   ArrowLeft: { key: "ArrowLeft", code: "ArrowLeft", keyCode: 37 },
   ArrowUp: { key: "ArrowUp", code: "ArrowUp", keyCode: 38 },
@@ -53,25 +55,22 @@ function renderPrelaunchChoices() {
   levelSelect.replaceChildren(...levels.map((level) => new Option(`${level.name || level.id} · ${level.difficulty || "默认"}`, level.id, false, level.id === selectedLevelId)));
 }
 
-function selectedGameUrl(mode = "godot") {
-  const base = mode === "custom"
-    ? "/llr-mariorun/custom.html"
-    : frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
+function selectedGameUrl() {
+  const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
   const url = new URL(base, window.location.origin);
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
   if (selectedLevelId) url.searchParams.set("level", selectedLevelId);
   url.searchParams.set("locale", "zh_CN");
-  if (mode === "custom") url.searchParams.set("autostart", "1");
   return `${url.pathname}${url.search}`;
 }
 
-function startSelectedGame(mode = "godot") {
+function startSelectedGame() {
   if (!frame) return;
   selectedPackId = packSelect?.value || selectedPackId;
   selectedLevelId = levelSelect?.value || selectedLevelId;
-  frame.src = selectedGameUrl(mode);
+  frame.src = selectedGameUrl();
   document.body.classList.add("game-has-launched");
-  statusText.textContent = mode === "custom" ? "正在载入后台关卡试玩模式…" : "正在载入完整 Godot 游戏…";
+  statusText.textContent = "正在载入完整 Godot 游戏…";
   loadManifestStatus();
   focusGame();
 }
@@ -115,6 +114,7 @@ function emitKey(code, type) {
 }
 
 function bindVirtualControls() {
+  bindVirtualJoystick();
   document.querySelectorAll(".virtual-controls button[data-key]").forEach((button) => {
     const code = button.dataset.key;
     const press = (event) => {
@@ -145,14 +145,78 @@ function bindVirtualControls() {
   });
 }
 
+function bindVirtualJoystick() {
+  if (!joystick || !joystickKnob) return;
+  const activeKeys = new Set();
+  const releaseAll = () => {
+    for (const code of activeKeys) emitKey(code, "keyup");
+    activeKeys.clear();
+    joystickKnob.style.transform = "translate(-50%, -50%)";
+    joystick.classList.remove("is-active");
+  };
+  const setKey = (code, enabled) => {
+    if (enabled && !activeKeys.has(code)) {
+      activeKeys.add(code);
+      emitKey(code, "keydown");
+    } else if (!enabled && activeKeys.has(code)) {
+      activeKeys.delete(code);
+      emitKey(code, "keyup");
+    }
+  };
+  const update = (event) => {
+    const rect = joystick.getBoundingClientRect();
+    const radius = Math.min(rect.width, rect.height) / 2;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const rawX = event.clientX - centerX;
+    const rawY = event.clientY - centerY;
+    const distance = Math.min(radius, Math.hypot(rawX, rawY));
+    const angle = Math.atan2(rawY, rawX);
+    const x = Math.cos(angle) * distance;
+    const y = Math.sin(angle) * distance;
+    const threshold = radius * 0.28;
+    joystickKnob.style.transform = "translate(calc(-50% + " + x + "px), calc(-50% + " + y + "px))";
+    joystick.classList.add("is-active");
+    setKey("ArrowLeft", x < -threshold);
+    setKey("ArrowRight", x > threshold);
+    setKey("ArrowUp", y < -threshold);
+    setKey("ArrowDown", y > threshold);
+  };
+  joystick.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    joystick.setPointerCapture?.(event.pointerId);
+    focusGame();
+    update(event);
+  });
+  joystick.addEventListener("pointermove", (event) => {
+    if (!joystick.classList.contains("is-active")) return;
+    event.preventDefault();
+    update(event);
+  });
+  joystick.addEventListener("pointerup", releaseAll);
+  joystick.addEventListener("pointercancel", releaseAll);
+  joystick.addEventListener("lostpointercapture", releaseAll);
+  joystick.addEventListener("contextmenu", (event) => event.preventDefault());
+  joystick.addEventListener("selectstart", (event) => event.preventDefault());
+}
+
 async function requestLandscapeFullscreen() {
-  document.body.classList.add("is-forced-landscape");
-  await (document.documentElement.requestFullscreen?.() || shell?.requestFullscreen?.());
+  document.body.classList.add("is-landscape-fullscreen");
+  fullscreenOrientationLocked = false;
+  await (shell?.requestFullscreen?.() || document.documentElement.requestFullscreen?.());
   try {
-    await screen.orientation?.lock?.("landscape");
+    await screen.orientation?.lock?.("landscape-primary");
+    fullscreenOrientationLocked = true;
   } catch {
-    statusText.textContent = "浏览器不允许锁定横屏，已启用横屏兼容显示。";
+    try {
+      await screen.orientation?.lock?.("landscape");
+      fullscreenOrientationLocked = true;
+    } catch {
+      statusText.textContent = "浏览器不允许锁定横屏，已启用横屏兼容显示。";
+    }
   }
+  document.body.classList.toggle("is-forced-landscape", !fullscreenOrientationLocked && window.innerHeight > window.innerWidth);
   focusGame();
 }
 
@@ -165,8 +229,7 @@ levelSelect?.addEventListener("change", () => {
   selectedLevelId = levelSelect.value;
   loadManifestStatus();
 });
-startSelectedButton?.addEventListener("click", () => startSelectedGame("godot"));
-startCustomLevelButton?.addEventListener("click", () => startSelectedGame("custom"));
+startSelectedButton?.addEventListener("click", startSelectedGame);
 frame?.addEventListener("load", () => {
   focusGame();
   loadManifestStatus();
@@ -180,7 +243,9 @@ fullscreenButton?.addEventListener("click", async () => {
 });
 document.addEventListener("fullscreenchange", () => {
   if (!document.fullscreenElement) {
+    document.body.classList.remove("is-landscape-fullscreen");
     document.body.classList.remove("is-forced-landscape");
+    fullscreenOrientationLocked = false;
     screen.orientation?.unlock?.();
   }
 });

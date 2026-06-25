@@ -31,13 +31,15 @@ test("worker proxies and caches a validated Bing daily image", () => {
   assert.match(workerSource, /caches\.default\.put\(request, response\.clone\(\)\)/);
 });
 
-test("daily backgrounds decode before the boot gate reveals the page", () => {
+test("daily backgrounds decode asynchronously after the boot gate can reveal the page", () => {
   assert.match(indexSource, /<html[^>]*class="app-booting"/);
   assert.match(stylesSource, /html\.app-booting[\s\S]*?background: #[0-9a-f]{6}/i);
   assert.match(stylesSource, /html\.app-booting #app[\s\S]*?visibility: hidden/);
   assert.match(appSource, /async function prepareDailyBackground\(page\)/);
   assert.match(appSource, /image\.decode\(\)/);
-  assert.match(appSource, /5000/);
+  assert.match(appSource, /prepareDailyBackground\(page\)\.then/);
+  assert.doesNotMatch(appSource, /await prepareDailyBackground\(page\)/);
+  assert.match(appSource, /Daily background timed out[\s\S]*?1200/);
   assert.match(appSource, /preparedPageBackground: new Map\(\)/);
   assert.match(appSource, /document\.documentElement\.classList\.remove\("app-booting"\)/);
 });

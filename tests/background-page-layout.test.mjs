@@ -18,3 +18,10 @@ test("background page modules form an equal and compact grid", () => {
   assert.match(stylesSource, /\.workspace\.has-page-background \.page-module-grid > \.module-card[\s\S]*?height: clamp\(220px, 24vw, 280px\)/);
   assert.match(stylesSource, /@media \(max-width: 520px\)[\s\S]*?\.workspace\.has-page-background \.page-module-grid > \.module-card\s*{[^}]*height: 220px/);
 });
+
+
+test("daily backgrounds do not block first render", () => {
+  assert.match(appSource, /prepareDailyBackground\(page\)\.then/);
+  assert.doesNotMatch(appSource, /await prepareDailyBackground\(page\)/);
+  assert.match(appSource, /Daily background timed out[\s\S]*?1200/);
+});

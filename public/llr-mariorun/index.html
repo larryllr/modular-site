@@ -43,7 +43,6 @@
         </label>
         <div class="launch-buttons">
           <button id="start-selected-game" class="primary-button" type="button">开始完整游戏</button>
-          <button id="start-custom-level" class="secondary-button" type="button">试玩编辑关卡</button>
         </div>
       </section>
 
@@ -65,10 +64,8 @@
         </div>
 
         <div class="virtual-controls" aria-label="手机虚拟按键">
-          <div class="virtual-pad">
-            <button data-key="ArrowLeft" type="button">←</button>
-            <button data-key="ArrowDown" type="button">↓</button>
-            <button data-key="ArrowRight" type="button">→</button>
+          <div class="virtual-joystick" data-joystick aria-label="移动摇杆">
+            <span class="joystick-knob" aria-hidden="true"></span>
           </div>
           <div class="virtual-actions">
             <button data-key="ArrowUp" type="button">跳跃</button>

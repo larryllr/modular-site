@@ -65,7 +65,7 @@ test("default game content includes asset slots and ten fair long levels", () =>
 
 test("static llr-mariorun game page embeds Godot runtime with touch controls and mobile rotation", () => {
   assert.equal(existsSync(new URL("public/llr-mariorun/index.html", root)), true);
-  assert.equal(existsSync(new URL("public/llr-mariorun/custom.html", root)), true);
+  assert.equal(existsSync(new URL("public/llr-mariorun/custom.html", root)), false);
   assert.equal(existsSync(new URL("public/llr-mariorun/game.css", root)), true);
   assert.equal(existsSync(new URL("public/llr-mariorun/launcher.js", root)), true);
   for (const file of ["index.html", "index.js", "index.wasm.gz", "index.pck"]) {
@@ -74,10 +74,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.equal(existsSync(new URL("public/llr-mariorun/godot/index.wasm", root)), false);
 
   const html = source("public/llr-mariorun/index.html");
-  const custom = source("public/llr-mariorun/custom.html");
   const css = source("public/llr-mariorun/game.css");
   const launcher = source("public/llr-mariorun/launcher.js");
-  const customGame = source("public/llr-mariorun/game.js");
   const godotLoader = source("public/llr-mariorun/godot/index.js");
 
   assert.match(html, /老师大冒险/);
@@ -87,8 +85,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(html, /id="pack-select"/);
   assert.match(html, /id="level-select"/);
   assert.match(html, /id="start-selected-game"/);
-  assert.match(html, /id="start-custom-level"/);
-  assert.match(html, /试玩编辑关卡/);
+  assert.doesNotMatch(html, /id="start-custom-level"/);
+  assert.doesNotMatch(html, /试玩编辑关卡/);
   assert.match(html, /src="about:blank"/);
   assert.match(html, /横屏全屏/);
   assert.match(html, /data-key="KeyX"/);
@@ -104,10 +102,9 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(css, /\.prelaunch-panel/);
   assert.match(css, /\.launch-buttons/);
   assert.match(css, /body\.game-has-launched \.prelaunch-panel/);
-  assert.match(css, /\.custom-runner/);
-  assert.match(css, /\.custom-menu\[hidden\]/);
-  assert.match(css, /\.keyboard-hints/);
-  assert.match(css, /\.choice-grid/);
+  assert.match(css, /\.virtual-joystick/);
+  assert.match(css, /\.joystick-knob/);
+  assert.match(css, /body\.game-has-launched:not\(\.is-landscape-fullscreen\) \.game-frame-shell/);
   assert.match(css, /\.is-pressed/);
   assert.match(css, /-webkit-touch-callout:\s*none/);
   assert.match(css, /body\.is-forced-landscape/);
@@ -118,9 +115,9 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function selectedGameUrl/);
   assert.match(launcher, /function startSelectedGame/);
   assert.match(launcher, /document\.body\.classList\.add\("game-has-launched"\)/);
-  assert.match(launcher, /mode === "custom"/);
-  assert.match(launcher, /\/llr-mariorun\/custom\.html/);
-  assert.match(launcher, /searchParams\.set\("autostart", "1"\)/);
+  assert.match(launcher, /function bindVirtualJoystick/);
+  assert.match(launcher, /screen\.orientation\?\.lock\?\.\("landscape-primary"\)/);
+  assert.doesNotMatch(launcher, /\/llr-mariorun\/custom\.html/);
   assert.match(launcher, /searchParams\.set\("pack", selectedPackId\)/);
   assert.match(launcher, /searchParams\.set\("level", selectedLevelId\)/);
   assert.match(launcher, /ArrowUp/);
@@ -132,14 +129,6 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /new KeyboardEvent\(type/);
   assert.match(launcher, /function requestLandscapeFullscreen/);
   assert.match(launcher, /screen\.orientation\?\.lock\?\.\("landscape"\)/);
-  assert.match(custom, /自定义关卡试玩/);
-  assert.match(custom, /id="game-canvas"/);
-  assert.match(custom, /data-action="jump"/);
-  assert.match(custom, /\/llr-mariorun\/game\.js/);
-  assert.match(customGame, /new URLSearchParams\(window\.location\.search\)/);
-  assert.match(customGame, /launchParams\.get\("pack"\)/);
-  assert.match(customGame, /launchParams\.get\("level"\)/);
-  assert.match(customGame, /launchParams\.get\("autostart"\) === "1"/);
   assert.match(godotLoader, /new DecompressionStream\('gzip'\)/);
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });
@@ -160,10 +149,10 @@ test("admin app exposes llr-mariorun entry and online editors", () => {
   assert.match(app, /下载当前素材/);
   assert.match(app, /素材在线编辑/);
   assert.match(app, /\.pck,application\/octet-stream/);
-  assert.match(app, /function renderGameLevelEditor/);
-  assert.match(app, /game-level-designer/);
-  assert.match(app, /在线关卡设计/);
-  assert.match(app, /trap\.hidden-block/);
+  assert.match(app, /function renderGameDataEditor/);
+  assert.match(app, /游戏数据保存/);
+  assert.doesNotMatch(app, /game-level-designer/);
+  assert.doesNotMatch(app, /在线关卡设计/);
   assert.match(app, /\/api\/admin\/game/);
   assert.match(app, /\/api\/admin\/game\/assets/);
   assert.match(app, /老师大冒险/);
@@ -171,8 +160,8 @@ test("admin app exposes llr-mariorun entry and online editors", () => {
   assert.match(styles, /\.game-editor-tools/);
   assert.match(styles, /\.game-import-button/);
   assert.match(styles, /\.game-asset-slot-grid/);
-  assert.match(styles, /\.game-level-designer/);
-  assert.match(styles, /\.game-level-preview/);
-  assert.match(styles, /\.game-level-object/);
+  assert.doesNotMatch(styles, /\.game-level-designer/);
+  assert.doesNotMatch(styles, /\.game-level-preview/);
+  assert.doesNotMatch(styles, /\.game-level-object/);
   assert.match(styles, /\.game-level-editor/);
 });

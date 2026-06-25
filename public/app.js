@@ -185,7 +185,11 @@ async function init() {
     const pageSlug = getRouteSlug().split("/")[0];
     const page = state.config.pages.find((item) => item.visible && item.slug === pageSlug);
     if (page?.dailyBackgroundEnabled) {
-      await prepareDailyBackground(page);
+      prepareDailyBackground(page).then(() => {
+        if (getRouteSlug().split("/")[0] === page.slug) {
+          renderPublicSite();
+        }
+      });
     }
     renderPublicSite();
   } finally {
@@ -212,7 +216,7 @@ async function prepareDailyBackground(page) {
         image.addEventListener("error", reject, { once: true });
       });
     const timeout = new Promise((_, reject) => {
-      timeoutId = window.setTimeout(() => reject(new Error("Daily background timed out")), 5000);
+      timeoutId = window.setTimeout(() => reject(new Error("Daily background timed out")), 1200);
     });
     await Promise.race([decoded, timeout]);
     state.preparedPageBackground.set(page.slug, url);
@@ -636,8 +640,8 @@ function renderHomeSettings() {
 function renderAdminGameEditor() {
   const section = element("section", "announcement-settings game-admin-panel");
   section.dataset.gameEditor = "root";
-  section.append(element("h3", "", "老师大冒险：素材包与关卡"));
-  section.append(element("p", "form-hint", "完整管理员可在线编辑 /llr-mariorun 的素材包、PCK 和关卡。素材文件暂存 KV，素材包/关卡元数据走 D1。"));
+  section.append(element("h3", "", "老师大冒险：素材包与游戏数据"));
+  section.append(element("p", "form-hint", "完整管理员可在线编辑 /llr-mariorun 的素材包、PCK 和游戏数据。关卡设计已放到游戏内，网站后台只负责保存数据。素材文件暂存 KV，素材包/游戏数据元数据走 D1。"));
 
   const status = element("p", "form-hint", "正在加载游戏配置…");
   const content = element("div", "game-admin-content");
@@ -645,7 +649,7 @@ function renderAdminGameEditor() {
 
   loadAdminGameConfig().then((config) => {
     status.textContent = "";
-    content.replaceChildren(renderGameAssetPackEditor(config), renderGameLevelEditor(config));
+    content.replaceChildren(renderGameAssetPackEditor(config), renderGameDataEditor(config));
   }).catch((error) => {
     status.textContent = `加载失败：${error.message}`;
   });
@@ -909,196 +913,49 @@ function downloadJson(filename, value) {
   URL.revokeObjectURL(url);
 }
 
-function renderGameLevelEditor(config) {
+function renderGameDataEditor(config) {
   const panel = element("div", "game-editor-card game-level-editor");
   panel.dataset.gameEditor = "levels";
   let levels = structuredClone(config.levels || []);
-  let selectedLevelIndex = 0;
-  let selectedObjectId = "";
   const textarea = document.createElement("textarea");
   textarea.className = "input game-json-editor";
   textarea.value = JSON.stringify(levels, null, 2);
-  const save = button("保存关卡", "button primary", "button");
-  const add = button("复制第一关", "button", "button");
-  const syncFromJson = button("从 JSON 刷新画布", "button", "button");
+  const save = button("保存游戏数据", "button primary", "button");
+  const exportButton = button("导出游戏数据", "button", "button");
+  const importLabel = element("label", "button game-import-button", "导入游戏数据");
+  const importInput = document.createElement("input");
+  importInput.type = "file";
+  importInput.accept = "application/json,.json";
+  importLabel.append(importInput);
   const feedback = element("p", "form-hint", "");
-  const designer = element("div", "game-level-designer");
-  const levelSelect = document.createElement("select");
-  levelSelect.className = "input";
-  const objectType = document.createElement("select");
-  objectType.className = "input";
-  const objectOptions = [
-    ["tile.ground", "地面"],
-    ["tile.brick", "砖块"],
-    ["tile.question", "问号块"],
-    ["tile.pipe", "管道"],
-    ["enemy.goomba", "普通怪"],
-    ["enemy.turtle", "乌龟怪"],
-    ["powerup.mushroom", "蘑菇"],
-    ["item.coin", "金币"],
-    ["boss.main", "Boss"],
-    ["princess.idle", "救出目标"],
-    ["trap.spike", "猫里奥陷阱：刺"],
-    ["trap.hidden-block", "猫里奥陷阱：隐藏块"]
-  ];
-  for (const [value, label] of objectOptions) {
-    objectType.append(new Option(label, value));
-  }
-  const deleteObject = button("删除选中物件", "button danger", "button");
-  const duplicateLevel = button("复制当前关", "button", "button");
-  const preview = element("div", "game-level-preview");
-  const objectList = element("div", "game-level-object-list");
 
   function readLevelsFromTextarea() {
     levels = JSON.parse(textarea.value || "[]");
-    selectedLevelIndex = Math.min(selectedLevelIndex, Math.max(levels.length - 1, 0));
-    selectedObjectId = "";
   }
 
-  function writeLevelsToTextarea() {
-    textarea.value = JSON.stringify(levels, null, 2);
-  }
-
-  function currentLevel() {
-    return levels[selectedLevelIndex] || null;
-  }
-
-  function refreshLevelSelect() {
-    levelSelect.replaceChildren();
-    levels.forEach((level, index) => {
-      levelSelect.append(new Option(`${String(index + 1).padStart(2, "0")} · ${level.name || level.id}`, String(index)));
-    });
-    levelSelect.value = String(selectedLevelIndex);
-  }
-
-  function defaultObjectSize(type) {
-    if (type.startsWith("tile.") || type === "trap.hidden-block") return { width: 96, height: 32 };
-    if (type === "tile.pipe") return { width: 64, height: 96 };
-    if (type === "boss.main") return { width: 96, height: 96 };
-    return { width: 32, height: 32 };
-  }
-
-  function renderDesigner() {
-    const level = currentLevel();
-    refreshLevelSelect();
-    preview.replaceChildren();
-    objectList.replaceChildren();
-    if (!level) {
-      preview.append(element("span", "form-hint", "暂无关卡。"));
-      return;
-    }
-    preview.style.setProperty("--level-width", String(level.width || 4800));
-    preview.style.setProperty("--level-height", String(level.height || 540));
-    const objects = Array.isArray(level.objects) ? level.objects : [];
-    for (const object of objects.slice(0, 260)) {
-      const node = element("button", `game-level-object type-${String(object.type || "object").replace(/[^a-z0-9_-]/gi, "-")}${object.id === selectedObjectId ? " is-selected" : ""}`, object.type?.startsWith("trap.") ? "!" : "");
-      node.type = "button";
-      node.title = `${object.type} · x:${object.x} y:${object.y}`;
-      node.style.left = `${((object.x || 0) / (level.width || 4800)) * 100}%`;
-      node.style.top = `${((object.y || 0) / (level.height || 540)) * 100}%`;
-      node.style.width = `${Math.max(10, ((object.width || 32) / (level.width || 4800)) * 100)}%`;
-      node.style.height = `${Math.max(10, ((object.height || 32) / (level.height || 540)) * 100)}%`;
-      node.addEventListener("click", (event) => {
-        event.stopPropagation();
-        selectedObjectId = object.id;
-        renderDesigner();
-      });
-      preview.append(node);
-    }
-    for (const object of objects.slice(0, 120)) {
-      const item = button(`${object.id} · ${object.type} · ${object.x},${object.y}`, object.id === selectedObjectId ? "button small is-selected" : "button small", "button");
-      item.addEventListener("click", () => {
-        selectedObjectId = object.id;
-        renderDesigner();
-      });
-      objectList.append(item);
-    }
-    if (objects.length > 120) {
-      objectList.append(element("small", "form-hint", `还有 ${objects.length - 120} 个物件未在列表中展开。`));
-    }
-  }
-
-  preview.addEventListener("click", (event) => {
-    const level = currentLevel();
-    if (!level) return;
-    const rect = preview.getBoundingClientRect();
-    const type = objectType.value;
-    const size = defaultObjectSize(type);
-    const x = Math.max(0, Math.round((((event.clientX - rect.left) / rect.width) * (level.width || 4800)) / 32) * 32);
-    const y = Math.max(0, Math.round((((event.clientY - rect.top) / rect.height) * (level.height || 540)) / 32) * 32);
-    level.objects = Array.isArray(level.objects) ? level.objects : [];
-    const object = {
-      id: `${type.replace(/[^a-z0-9]+/gi, "-")}-${Date.now()}`,
-      type,
-      x,
-      y,
-      ...size
-    };
-    level.objects.push(object);
-    level.updatedAt = new Date().toISOString();
-    selectedObjectId = object.id;
-    writeLevelsToTextarea();
-    renderDesigner();
-  });
-
-  levelSelect.addEventListener("change", () => {
-    selectedLevelIndex = Number(levelSelect.value) || 0;
-    selectedObjectId = "";
-    renderDesigner();
-  });
-
-  deleteObject.addEventListener("click", () => {
-    const level = currentLevel();
-    if (!level || !selectedObjectId) return;
-    level.objects = (level.objects || []).filter((object) => object.id !== selectedObjectId);
-    selectedObjectId = "";
-    level.updatedAt = new Date().toISOString();
-    writeLevelsToTextarea();
-    renderDesigner();
-  });
-
-  duplicateLevel.addEventListener("click", () => {
-    const source = currentLevel();
-    if (!source) return;
-    const copy = {
-      ...structuredClone(source),
-      id: `custom-level-${Date.now()}`,
-      name: `${source.name || "关卡"} 副本`,
-      builtin: false,
-      default: false,
-      updatedAt: new Date().toISOString()
-    };
-    levels.splice(selectedLevelIndex + 1, 0, copy);
-    selectedLevelIndex += 1;
-    selectedObjectId = "";
-    writeLevelsToTextarea();
-    renderDesigner();
-  });
-
-  add.addEventListener("click", () => {
-    const source = levels[0];
-    if (!source) return;
-    levels.push({
-      ...structuredClone(source),
-      id: `custom-level-${Date.now()}`,
-      name: `${source.name} 副本`,
-      builtin: false,
-      default: false,
-      updatedAt: new Date().toISOString()
-    });
-    selectedLevelIndex = levels.length - 1;
-    selectedObjectId = "";
-    writeLevelsToTextarea();
-    renderDesigner();
-  });
-
-  syncFromJson.addEventListener("click", () => {
+  exportButton.addEventListener("click", () => {
     try {
       readLevelsFromTextarea();
-      renderDesigner();
-      feedback.textContent = "已从 JSON 刷新画布。";
+      downloadJson("llr-mariorun-game-data-" + Date.now() + ".json", { version: 1, exportedAt: new Date().toISOString(), levels });
+      feedback.textContent = "已导出游戏数据 JSON。";
     } catch (error) {
-      feedback.textContent = `JSON 解析失败：${error.message}`;
+      feedback.textContent = "导出失败：" + error.message;
+    }
+  });
+
+  importInput.addEventListener("change", async () => {
+    const file = importInput.files?.[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      levels = Array.isArray(payload) ? payload : Array.isArray(payload.levels) ? payload.levels : [];
+      if (!levels.length) throw new Error("文件里没有 levels 数组。");
+      textarea.value = JSON.stringify(levels, null, 2);
+      feedback.textContent = "已导入 " + levels.length + " 条游戏数据，确认后点“保存游戏数据”。";
+    } catch (error) {
+      feedback.textContent = "导入失败：" + error.message;
+    } finally {
+      importInput.value = "";
     }
   });
 
@@ -1106,21 +963,17 @@ function renderGameLevelEditor(config) {
     try {
       readLevelsFromTextarea();
       await adminGameRequest("/api/admin/game/levels", { method: "PUT", body: JSON.stringify({ levels }) });
-      feedback.textContent = "关卡已保存。";
-      renderDesigner();
+      feedback.textContent = "游戏数据已保存。";
     } catch (error) {
-      feedback.textContent = `保存失败：${error.message}`;
+      feedback.textContent = "保存失败：" + error.message;
     }
   });
 
-  const designerTools = element("div", "game-editor-tools");
-  designerTools.append(levelSelect, objectType, deleteObject, duplicateLevel);
-  designer.append(designerTools, preview, element("h5", "", "物件列表"), objectList);
-  renderDesigner();
-  panel.append(element("h4", "", "在线关卡设计"), element("p", "form-hint", "选择关卡和物件类型，点击画布即可添加；点物件可选中，删除选中物件。默认关卡不含猫里奥陷阱，陷阱类物件在下拉框里可选添加。下方 JSON 是高级编辑区。"), designer, textarea, add, syncFromJson, save, feedback);
+  const tools = element("div", "game-editor-tools");
+  tools.append(importLabel, exportButton);
+  panel.append(element("h4", "", "游戏数据保存"), element("p", "form-hint", "关卡和存档编辑已放到游戏内完成；这里仅保存或导入/导出游戏内产生的 JSON 数据，不再提供网页外关卡设计器。"), tools, textarea, save, feedback);
   return panel;
 }
-
 async function adminGameRequest(path, options = {}) {
   const response = await fetch(path, {
     ...options,
