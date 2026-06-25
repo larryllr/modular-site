@@ -184,22 +184,32 @@ async function init() {
 
     const pageSlug = getRouteSlug().split("/")[0];
     const page = state.config.pages.find((item) => item.visible && item.slug === pageSlug);
-    if (page?.dailyBackgroundEnabled) {
-      prepareDailyBackground(page).then(() => {
-        if (getRouteSlug().split("/")[0] === page.slug) {
-          renderPublicSite();
-        }
-      });
-    }
     renderPublicSite();
+    if (page?.dailyBackgroundEnabled) {
+      scheduleDailyBackground(page);
+    }
   } finally {
     document.documentElement.classList.remove("app-booting");
   }
 }
 
+function scheduleDailyBackground(page) {
+  const run = () => {
+    prepareDailyBackground(page).then((prepared) => {
+      if (!prepared || getRouteSlug().split("/")[0] !== page.slug) return;
+      applyPreparedDailyBackground(page);
+    });
+  };
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 800 });
+    return;
+  }
+  window.setTimeout(run, 0);
+}
+
 async function prepareDailyBackground(page) {
   if (!page?.dailyBackgroundEnabled || state.preparedPageBackground.has(page.slug)) {
-    return;
+    return state.preparedPageBackground.has(page?.slug);
   }
 
   const day = new Date().toISOString().slice(0, 10);
@@ -220,11 +230,19 @@ async function prepareDailyBackground(page) {
     });
     await Promise.race([decoded, timeout]);
     state.preparedPageBackground.set(page.slug, url);
+    return true;
   } catch {
     state.preparedPageBackground.delete(page.slug);
+    return false;
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+function applyPreparedDailyBackground(page) {
+  const workspace = app.querySelector(".workspace");
+  if (!workspace) return;
+  applyPageBackground(workspace, resolvePageBackground(page));
 }
 
 function requestOptions(method, body, useAuth) {
@@ -2905,8 +2923,8 @@ function renderPagePasswordGate(page) {
       const fullPage = hydratePage(payload.page);
       rememberUnlockedPage(fullPage);
       replaceConfigPage(fullPage);
-      await prepareDailyBackground(fullPage);
       renderPublicSite();
+      if (fullPage.dailyBackgroundEnabled) scheduleDailyBackground(fullPage);
     } catch (error) {
       feedback.textContent = error.message;
       submit.disabled = false;

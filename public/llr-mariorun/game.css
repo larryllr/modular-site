@@ -254,12 +254,15 @@ h1 {
   right: max(12px, env(safe-area-inset-right));
   z-index: 4;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  align-content: flex-start;
   pointer-events: none;
 }
 
 .frame-toolbar span {
+  flex: 1 1 min(58vw, 620px);
   min-width: 0;
   max-width: min(58vw, 620px);
   overflow: hidden;
@@ -419,8 +422,20 @@ h1 {
     gap: 10px;
   }
 
+  .frame-toolbar {
+    gap: 6px;
+  }
+
   .frame-toolbar span {
-    max-width: 52vw;
+    flex-basis: 42vw;
+    max-width: 46vw;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+
+  .frame-toolbar button {
+    min-height: 32px;
+    padding: 0 9px;
     font-size: 12px;
   }
 }

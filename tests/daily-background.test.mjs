@@ -36,9 +36,13 @@ test("daily backgrounds decode asynchronously after the boot gate can reveal the
   assert.match(stylesSource, /html\.app-booting[\s\S]*?background: #[0-9a-f]{6}/i);
   assert.match(stylesSource, /html\.app-booting #app[\s\S]*?visibility: hidden/);
   assert.match(appSource, /async function prepareDailyBackground\(page\)/);
+  assert.match(appSource, /function scheduleDailyBackground\(page\)/);
+  assert.match(appSource, /requestIdleCallback/);
+  assert.match(appSource, /function applyPreparedDailyBackground\(page\)/);
   assert.match(appSource, /image\.decode\(\)/);
   assert.match(appSource, /prepareDailyBackground\(page\)\.then/);
   assert.doesNotMatch(appSource, /await prepareDailyBackground\(page\)/);
+  assert.doesNotMatch(appSource, /prepareDailyBackground\(page\)\.then\(\(\) => \{[\s\S]*?renderPublicSite\(\)/);
   assert.match(appSource, /Daily background timed out[\s\S]*?1200/);
   assert.match(appSource, /preparedPageBackground: new Map\(\)/);
   assert.match(appSource, /document\.documentElement\.classList\.remove\("app-booting"\)/);

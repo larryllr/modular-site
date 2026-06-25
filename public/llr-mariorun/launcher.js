@@ -12,6 +12,7 @@ const adminTokenKey = "cloudflare-modular-site.admin-token";
 let manifest = null;
 let selectedPackId = "";
 let fullscreenOrientationLocked = false;
+let runtimeReloadTimer = 0;
 const inputResetHandlers = new Set();
 const joystick = document.querySelector("[data-joystick]");
 const joystickKnob = document.querySelector(".joystick-knob");
@@ -47,8 +48,8 @@ async function loadManifestStatus() {
       || (manifest.assetPacks || []).find((pack) => pack.enabled);
     const customPck = activePack?.assets?.["game.bundle.pck"];
     statusText.textContent = customPck
-      ? `已选择后台 PCK：${activePack.name || "素材包"}。Story Mode 使用游戏内自带关卡。`
-      : `已选择：${activePack?.name || "内置素材包"}。可在后台上传 game.bundle.pck 覆盖，Story Mode 使用游戏内自带关卡。`;
+      ? `PCK：${activePack.name || "素材包"}`
+      : `素材：${activePack?.name || "内置素材包"}`;
   } catch {
     statusText.textContent = "Godot 游戏已嵌入，后台素材状态读取失败。";
   }
@@ -80,22 +81,52 @@ function renderPrelaunchChoices() {
   packSelect.replaceChildren(...packs.map((pack) => new Option(pack.name || pack.id, pack.id, false, pack.id === selectedPackId)));
 }
 
-function selectedGameUrl() {
+function selectedGameUrl(options = {}) {
   const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
   const url = new URL(base, window.location.origin);
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
   url.searchParams.set("locale", "zh_CN");
+  if (options.cacheBust) url.searchParams.set("run", String(Date.now()));
   return `${url.pathname}${url.search}`;
 }
 
-function startSelectedGame() {
+function setGameStatus(message) {
+  if (statusText) statusText.textContent = message;
+}
+
+function isFrameBlank() {
+  if (!frame) return true;
+  const rawSrc = frame.getAttribute("src") || "";
+  return rawSrc === "" || rawSrc === "about:blank" || frame.src === "about:blank";
+}
+
+function loadGameRuntime(options = {}) {
   if (!frame) return;
   selectedPackId = packSelect?.value || selectedPackId;
-  frame.src = selectedGameUrl();
+  frame.src = selectedGameUrl(options);
   document.body.classList.add("game-has-launched");
-  statusText.textContent = "正在载入完整 Godot 游戏…";
+  setGameStatus(options.status || "正在载入完整 Godot 游戏…");
   loadManifestStatus();
   focusGame();
+}
+
+function startSelectedGame() {
+  loadGameRuntime();
+}
+
+function recoverGameRuntime(message = "正在重建游戏运行时…") {
+  if (!frame) return;
+  resetVirtualInputs();
+  window.clearTimeout(runtimeReloadTimer);
+  document.body.classList.add("game-has-launched");
+  setGameStatus(message);
+  frame.src = "about:blank";
+  runtimeReloadTimer = window.setTimeout(() => {
+    loadGameRuntime({
+      cacheBust: true,
+      status: "正在重新载入 Godot 游戏…"
+    });
+  }, 120);
 }
 
 function deleteDatabase(name) {
@@ -205,10 +236,15 @@ function attachGodotCanvasRecovery() {
     canvas.addEventListener("webglcontextlost", (event) => {
       event.preventDefault();
       resetVirtualInputs();
-      statusText.textContent = "WebGL 场景上下文丢失，正在等待浏览器恢复；若持续黑屏请点重载或重置存档。";
+      setGameStatus("WebGL 已丢失，正在重建游戏运行时…");
+      window.setTimeout(() => {
+        if (document.body.classList.contains("game-has-launched")) {
+          recoverGameRuntime("WebGL 已丢失，正在重建游戏运行时…");
+        }
+      }, 700);
     });
     canvas.addEventListener("webglcontextrestored", () => {
-      statusText.textContent = "WebGL 场景已恢复，请重新操作摇杆。";
+      setGameStatus("WebGL 场景已恢复。");
       focusGame();
     });
   } catch {
@@ -354,6 +390,7 @@ packSelect?.addEventListener("change", () => {
 startSelectedButton?.addEventListener("click", startSelectedGame);
 resetGameDataButtons.forEach((button) => button.addEventListener("click", resetGameData));
 frame?.addEventListener("load", () => {
+  if (isFrameBlank()) return;
   resetVirtualInputs();
   focusGame();
   window.setTimeout(() => {
@@ -363,18 +400,30 @@ frame?.addEventListener("load", () => {
   loadManifestStatus();
 });
 reloadButton?.addEventListener("click", () => {
-  if (frame) frame.src = frame.src === "about:blank" ? selectedGameUrl() : frame.src;
+  if (isFrameBlank()) {
+    startSelectedGame();
+  } else {
+    recoverGameRuntime("正在重建游戏运行时…");
+  }
 });
 fullscreenButton?.addEventListener("click", async () => {
-  if (frame?.src === "about:blank") startSelectedGame();
+  if (isFrameBlank()) startSelectedGame();
   await requestLandscapeFullscreen();
 });
 document.addEventListener("fullscreenchange", () => {
   if (!document.fullscreenElement) {
+    const wasInGame = document.body.classList.contains("game-has-launched");
     document.body.classList.remove("is-landscape-fullscreen");
     document.body.classList.remove("is-forced-landscape");
     fullscreenOrientationLocked = false;
     screen.orientation?.unlock?.();
+    if (wasInGame) {
+      window.setTimeout(() => {
+        if (document.body.classList.contains("game-has-launched")) {
+          recoverGameRuntime("已退出全屏，正在恢复游戏运行时…");
+        }
+      }, 180);
+    }
   }
 });
 window.addEventListener("blur", resetVirtualInputs);

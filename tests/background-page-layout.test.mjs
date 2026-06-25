@@ -21,7 +21,10 @@ test("background page modules form an equal and compact grid", () => {
 
 
 test("daily backgrounds do not block first render", () => {
+  assert.match(appSource, /renderPublicSite\(\);\s*if \(page\?\.dailyBackgroundEnabled\) \{\s*scheduleDailyBackground\(page\);/);
+  assert.match(appSource, /function applyPreparedDailyBackground\(page\)/);
   assert.match(appSource, /prepareDailyBackground\(page\)\.then/);
   assert.doesNotMatch(appSource, /await prepareDailyBackground\(page\)/);
+  assert.doesNotMatch(appSource, /prepareDailyBackground\(page\)\.then\(\(\) => \{[\s\S]*?renderPublicSite\(\)/);
   assert.match(appSource, /Daily background timed out[\s\S]*?1200/);
 });

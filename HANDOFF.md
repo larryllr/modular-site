@@ -16,7 +16,7 @@
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`6aef53d8-38be-40b2-ba78-68206330689a`
+- 最新 Cloudflare Version ID：`cf8f17a4-348c-452f-846e-61baf4bf2c28`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -87,7 +87,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 带背景图的入口卡片在管理员预览编辑时，标题和说明输入框强制使用浅底深色字，避免白底白字看不清。
 - 已登录管理员在前台普通页面的评论区也可以直接编辑或删除评论，无需进入管理后台；访客不会看到这些操作。
 - 带背景图的多模块分页面会柔化背景，模块使用半透明卡片并统一等宽等高紧凑排列；桌面端高度随视口在 220-280px 间调整，手机端统一 220px，超出内容在卡片内部滚动。
-- 每个分页面可开启“每日自动背景”：Worker 从 Bing 首页图片接口获取当天图片，优先 UHD、失败回退 1920，并通过本站同源端点缓存返回；前端不再阻塞首屏，先显示页面，再异步加载和解码每日背景；失败或 1.2 秒超时则使用手动背景。
+- 每个分页面可开启“每日自动背景”：Worker 从 Bing 首页图片接口获取当天图片，优先 UHD、失败回退 1920，并通过本站同源端点缓存返回；前端不再阻塞首屏，先显示页面，再通过 `requestIdleCallback`/`setTimeout` 后加载和解码每日背景，成功后只替换 `.workspace` 背景 CSS，不再重新渲染整站；失败或 1.2 秒超时则使用手动背景。
 - 每日自动背景只在 KV 中保存开关，不保存图片数据；Bing 接口不是正式公开 API，且图片可能存在仅限桌面壁纸的授权提示。
 - 普通多模块分页面的模块卡片支持点击三态循环：第一次展开为整行，第二次全屏覆盖视口，第三次恢复默认；滑动/拖动超过 10px、页面或卡片滚动、按钮/输入框/链接/音视频等交互控件不会触发状态切换，`Enter`/空格可键盘切换，`Escape` 恢复默认。
 - 2026-06-25 修复博客文章更新后需要清除网站数据才显示的问题：所有 API fetch 显式 `cache: "no-store"`；管理员保存配置成功后会清理 `sessionStorage` 中的分页面解锁缓存，避免受密码保护的博客页继续渲染旧文章数据。
@@ -95,6 +95,7 @@ Cloudflare 部署成功后记录 Version ID。GitHub 必须使用本机 `10808` 
 - 2026-06-25 调整 `/llr-mariorun` 素材在线编辑入口：游戏页只在检测到完整管理员 token 且 `/api/admin/game` 校验成功后显示“素材在线编辑”；普通 `/admin` 不再默认显示老师大冒险素材编辑器，只有从游戏页进入 `/admin?game=llr-mariorun` 时才显示该编辑器。
 - 2026-06-25 针对 Story Mode 第四场景偶发黑屏/摇杆失效增强外层容错：虚拟摇杆方向同时发送方向键和 WASD；按住摇杆时每 140ms 重发 keydown 并重新聚焦 Godot canvas，降低 iframe/Godot 场景切换后输入状态丢失概率；iframe load、页面失焦和隐藏时释放虚拟输入；Godot canvas 监听 `webglcontextlost`/`webglcontextrestored` 并提示重载或重置存档。
 - 2026-06-25 调低 `/llr-mariorun` 摇杆上下方向灵敏度：左右触发阈值保持 `0.28 * 半径`，上下触发阈值提高到 `0.48 * 半径`，减少误触跳跃/下蹲。
+- 2026-06-25 针对用户截图中的 `/llr-mariorun` 黑屏卡死继续修复：不再把根因归到摇杆，改为外层运行时恢复。工具栏按钮改为“恢复/重载”，点击后先把 iframe 置为 `about:blank`，再带 `run=Date.now()` 重建 Godot iframe；`webglcontextlost` 和退出全屏后也会自动走同一套恢复流程。顶部状态文案缩短，移动端工具栏允许换行并缩小按钮，避免覆盖游戏 HUD。
 
 “传输模块”已经从网页模块新增入口和配置清洗中移除。不要重新加入，除非用户明确要求。本地 Electron 客户端代码暂时保留。
 
@@ -151,4 +152,4 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 
 ## 当前工作区状态
 
-每日自动背景与清晰浅青背景样式已部署到 Cloudflare；完成提交和推送后工作区除本地浏览器 QA 目录外应保持干净。
+`/llr-mariorun` 黑屏恢复、退出全屏自动重建 iframe、移动端工具栏压缩，以及每日自动背景真正后加载已部署到 Cloudflare；完成提交和推送后工作区除本地浏览器 QA 目录外应保持干净。

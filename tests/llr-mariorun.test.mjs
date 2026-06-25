@@ -94,6 +94,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.doesNotMatch(html, /试玩编辑关卡/);
   assert.doesNotMatch(html, /选择素材包和关卡/);
   assert.match(html, /src="about:blank"/);
+  assert.match(html, /恢复\/重载/);
   assert.match(html, /横屏全屏/);
   assert.match(html, /data-key="KeyX"/);
   assert.match(html, /data-key="KeyC"/);
@@ -124,6 +125,10 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function renderPrelaunchChoices/);
   assert.match(launcher, /function selectedGameUrl/);
   assert.match(launcher, /function startSelectedGame/);
+  assert.match(launcher, /function recoverGameRuntime/);
+  assert.match(launcher, /frame\.src = "about:blank"/);
+  assert.match(launcher, /cacheBust: true/);
+  assert.match(launcher, /searchParams\.set\("run", String\(Date\.now\(\)\)\)/);
   assert.match(launcher, /document\.body\.classList\.add\("game-has-launched"\)/);
   assert.match(launcher, /function bindVirtualJoystick/);
   assert.match(launcher, /const movementKeyAliases/);
@@ -139,6 +144,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function resetVirtualInputs/);
   assert.match(launcher, /function attachGodotCanvasRecovery/);
   assert.match(launcher, /webglcontextlost/);
+  assert.match(launcher, /recoverGameRuntime\("WebGL 已丢失，正在重建游戏运行时…"\)/);
   assert.match(launcher, /webglcontextrestored/);
   assert.match(launcher, /window\.addEventListener\("blur", resetVirtualInputs\)/);
   assert.match(launcher, /screen\.orientation\?\.lock\?\.\("landscape-primary"\)/);
@@ -159,6 +165,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /button\.classList\.add\("is-pressed"\)/);
   assert.match(launcher, /new KeyboardEvent\(type/);
   assert.match(launcher, /function requestLandscapeFullscreen/);
+  assert.match(launcher, /recoverGameRuntime\("已退出全屏，正在恢复游戏运行时…"\)/);
   assert.match(launcher, /screen\.orientation\?\.lock\?\.\("landscape"\)/);
   assert.match(godotLoader, /new DecompressionStream\('gzip'\)/);
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
