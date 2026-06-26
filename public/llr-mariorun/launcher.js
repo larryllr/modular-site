@@ -9,6 +9,8 @@ const designerLevelSelect = document.querySelector("#designer-level-select");
 const startSelectedButton = document.querySelector("#start-selected-game");
 const resetGameDataButtons = document.querySelectorAll("[data-reset-game-data]");
 const deleteLocalDesignerLevelsButton = document.querySelector("#delete-local-designer-levels");
+const importDesignerLevelInput = document.querySelector("#import-designer-level");
+const deleteSelectedDesignerLevelButton = document.querySelector("#delete-selected-designer-level");
 const adminAssetEditorLink = document.querySelector("[data-admin-asset-editor]");
 const designerLevelStatus = document.querySelector("[data-designer-level-status]");
 const adminTokenKey = "cloudflare-modular-site.admin-token";
@@ -137,6 +139,7 @@ function renderDesignerLevelChoices() {
     options.push(new Option(`${prefix} · ${level.name || level.id}`, level.id, false, level.id === selectedDesignerLevelId));
   }
   designerLevelSelect.replaceChildren(...options);
+  updateDesignerLevelDeleteButton();
   updateDesignerLevelStatus();
 }
 
@@ -148,8 +151,14 @@ function updateDesignerLevelStatus(message = "") {
   if (!designerLevelStatus) return;
   const selected = selectedDesignerLevel();
   designerLevelStatus.textContent = message || (selected
-    ? `已选择「${selected.name}」。进入主菜单后选择 Level Designer 会自动载入。`
-    : "未选择设计器关卡；进入 Level Designer 会打开空白编辑器。保存文件或测试游玩时会自动同步。");
+    ? `已选择「${selected.name}」。点击“开始完整游戏”，进入主菜单后选择 Level Designer，会自动载入这个关卡。`
+    : "未选择设计器关卡；点击“开始完整游戏”，主菜单选择 Level Designer 会打开空白编辑器。也可以先导入关卡文件。");
+}
+
+function updateDesignerLevelDeleteButton() {
+  if (!deleteSelectedDesignerLevelButton) return;
+  const selected = selectedDesignerLevel();
+  deleteSelectedDesignerLevelButton.hidden = !(selected?.scope === "public" && localStorage.getItem(adminTokenKey));
 }
 
 function selectedGameUrl(options = {}) {
@@ -257,9 +266,93 @@ function deleteLocalDesignerLevels() {
   updateDesignerLevelStatus("我的本机设计器关卡已删除。");
 }
 
+async function importDesignerLevelFile() {
+  const file = importDesignerLevelInput?.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = parseDesignerLevelImport(text, file.name);
+    const localLevels = readLocalDesignerLevels().filter((level) => level.id !== parsed.id);
+    localLevels.unshift(parsed);
+    writeLocalDesignerLevels(localLevels);
+    selectedDesignerLevelId = parsed.id;
+    renderDesignerLevelChoices();
+    updateDesignerLevelStatus(`已导入「${parsed.name}」。点击“开始完整游戏”，主菜单选择 Level Designer 即可编辑。`);
+  } catch (error) {
+    updateDesignerLevelStatus(`导入失败：${error.message}`);
+  } finally {
+    if (importDesignerLevelInput) importDesignerLevelInput.value = "";
+  }
+}
+
+function parseDesignerLevelImport(text, filename = "导入关卡") {
+  const trimmed = String(text || "").trim();
+  let payload = null;
+  try {
+    payload = JSON.parse(trimmed);
+  } catch {
+    payload = null;
+  }
+  const code = normalizeDesignerLevelCode(
+    typeof payload === "string"
+      ? payload
+      : payload?.designerCode || payload?.code || trimmed
+  );
+  if (!code) {
+    throw new Error("文件里没有可识别的 SM63 Redux Level Designer 关卡数据。");
+  }
+  const name = String(payload?.name || filename.replace(/\.[^.]+$/, "") || "导入关卡").slice(0, 80);
+  return {
+    id: payload?.id || `local-import-${hashString(code).slice(0, 16)}`,
+    name,
+    description: payload?.description || "从本地文件导入的 Level Designer 关卡。",
+    difficulty: payload?.difficulty || "导入",
+    theme: payload?.theme || "grass",
+    enabled: true,
+    builtin: false,
+    default: false,
+    width: payload?.width || 6400,
+    height: payload?.height || 560,
+    checkpoints: payload?.checkpoints || [{ x: 600, y: 416 }],
+    segments: payload?.segments || ["Imported Level Designer"],
+    objects: payload?.objects || [],
+    designerSource: "sm63-redux",
+    designerCode: code,
+    visibility: "local",
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function normalizeDesignerLevelCode(value) {
+  const code = String(value || "").trim();
+  return /^[A-Za-z0-9+/=_-]{16,500000}$/.test(code) ? code : "";
+}
+
+async function deleteSelectedDesignerLevel() {
+  const selected = selectedDesignerLevel();
+  const token = localStorage.getItem(adminTokenKey);
+  if (!selected || selected.scope !== "public" || !token) return;
+  if (!confirm(`确定删除公开关卡「${selected.name}」？所有人刷新后都看不到它。`)) return;
+  try {
+    const response = await fetch(`/api/admin/game/designer-levels?id=${encodeURIComponent(selected.id)}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || `删除失败：${response.status}`);
+    }
+    selectedDesignerLevelId = "";
+    await loadManifestStatus();
+    updateDesignerLevelStatus("公开关卡已删除。");
+  } catch (error) {
+    updateDesignerLevelStatus(`删除失败：${error.message}`);
+  }
+}
+
 function normalizeDesignerSavePayload(payload) {
-  const code = String(payload?.code || "").trim();
-  if (!/^[A-Za-z0-9+/=_-]{16,500000}$/.test(code)) return null;
+  const code = normalizeDesignerLevelCode(payload?.code);
+  if (!code) return null;
   const now = new Date().toISOString();
   const name = String(payload?.name || "我的关卡").trim().slice(0, 80) || "我的关卡";
   return {
@@ -570,11 +663,14 @@ packSelect?.addEventListener("change", () => {
 });
 designerLevelSelect?.addEventListener("change", () => {
   selectedDesignerLevelId = designerLevelSelect.value;
+  updateDesignerLevelDeleteButton();
   updateDesignerLevelStatus();
 });
 startSelectedButton?.addEventListener("click", startSelectedGame);
 resetGameDataButtons.forEach((button) => button.addEventListener("click", resetGameData));
 deleteLocalDesignerLevelsButton?.addEventListener("click", deleteLocalDesignerLevels);
+importDesignerLevelInput?.addEventListener("change", importDesignerLevelFile);
+deleteSelectedDesignerLevelButton?.addEventListener("click", deleteSelectedDesignerLevel);
 frame?.addEventListener("load", () => {
   if (isFrameBlank()) return;
   resetVirtualInputs();

@@ -544,6 +544,63 @@ h1 {
   color: var(--muted);
 }
 
+.pck-entry-list {
+  display: grid;
+  max-height: 360px;
+  margin-top: 14px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.pck-entry {
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pck-entry:last-child {
+  border-bottom: 0;
+}
+
+.pck-entry:hover,
+.pck-entry.is-active {
+  background: rgba(75, 111, 255, 0.12);
+}
+
+.pck-entry-preview {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.pck-entry-preview img {
+  max-width: min(100%, 520px);
+  max-height: 320px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.pck-entry-preview pre {
+  max-height: 280px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #e5e7eb;
+  white-space: pre-wrap;
+}
+
 .game-json-editor {
   min-height: 260px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

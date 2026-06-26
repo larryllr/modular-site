@@ -1949,12 +1949,28 @@ async function handleAdminDesignerLevels(request: Request, env: AppEnv): Promise
     return auth;
   }
 
-  if (request.method !== "POST") {
-    return json({ error: "Method Not Allowed" }, 405);
-  }
-
   if (!env.GAME_DB && !env.SITE_CONFIG) {
     return json({ error: "Game metadata storage is missing" }, 503);
+  }
+
+  if (request.method === "DELETE") {
+    const id = normalizeId(new URL(request.url).searchParams.get("id") || "", 80);
+    const levels = await readGameLevels(env);
+    const target = levels.find((level) => level.id === id);
+    const isSm63DesignerLevel = target?.designerSource === "sm63-redux";
+
+    if (!target || !isSm63DesignerLevel || target.builtin) {
+      return json({ error: "只能删除管理员发布的设计器关卡" }, 404);
+    }
+
+    const nextLevels = levels.filter((level) => level.id !== id);
+    await writeGameLevels(env, normalizeGameLevels(nextLevels).slice(0, 120));
+
+    return json({ ok: true, deletedId: id });
+  }
+
+  if (request.method !== "POST") {
+    return json({ error: "Method Not Allowed" }, 405);
   }
 
   const body = asRecord(await readJson(request));

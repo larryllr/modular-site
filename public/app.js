@@ -690,7 +690,7 @@ function renderAdminGameEditor() {
 
   loadAdminGameConfig().then((config) => {
     status.textContent = "";
-    content.replaceChildren(renderGameAssetPackEditor(config), renderGameDataEditor(config));
+    content.replaceChildren(renderGameAssetPackEditor(config), renderPckArchiveEditor(config), renderGameDataEditor(config));
   }).catch((error) => {
     status.textContent = `加载失败：${error.message}`;
   });
@@ -846,6 +846,318 @@ function renderGameAssetPackEditor(config) {
   tools.append(importLabel, exportButton, templateButton);
   panel.append(element("h4", "", "素材在线编辑"), element("p", "form-hint", "素材就在这里在线编辑：每个槽位可直接上传图片/音频/PCK，也可下载当前素材。上传槽位默认写入第一个素材包；JSON 只管理素材包清单和引用，不建议塞完整 pck。"), tools, slotGrid, textarea, add, save, feedback);
   return panel;
+}
+
+function renderPckArchiveEditor(config) {
+  const panel = element("div", "game-editor-card pck-editor-card");
+  const packs = structuredClone(config.assetPacks || []).filter((pack) => pack.assets?.["game.bundle.pck"]?.url);
+  const packSelect = document.createElement("select");
+  packSelect.className = "input";
+  const inspect = button("查看 PCK 内容", "button", "button");
+  const download = button("下载整理后的 PCK", "button", "button");
+  const saveAsPack = button("保存成新素材包", "button primary", "button");
+  const addFileLabel = element("label", "button game-import-button", "导入文件到 PCK");
+  const addFileInput = document.createElement("input");
+  addFileInput.type = "file";
+  addFileLabel.append(addFileInput);
+  const list = element("div", "pck-entry-list");
+  const preview = element("div", "pck-entry-preview", "选择一个文件后预览。");
+  const feedback = element("p", "form-hint", "");
+  let archive = null;
+  let selectedPath = "";
+
+  packSelect.replaceChildren(...packs.map((pack) => new Option(pack.name || pack.id, pack.id)));
+
+  const selectedPack = () => packs.find((pack) => pack.id === packSelect.value) || packs[0];
+  const selectedEntry = () => archive?.entries.find((entry) => entry.path === selectedPath);
+
+  const renderEntries = () => {
+    if (!archive) {
+      list.replaceChildren(element("p", "form-hint", "还没有载入 PCK。"));
+      return;
+    }
+    const rows = archive.entries.map((entry) => {
+      const row = element("button", `pck-entry${entry.path === selectedPath ? " is-active" : ""}`, "button");
+      row.textContent = `${entry.path} · ${formatBytes(entry.size)}`;
+      row.addEventListener("click", () => {
+        selectedPath = entry.path;
+        renderEntries();
+        renderPckPreview(archive, entry, preview);
+      });
+      return row;
+    });
+    list.replaceChildren(...rows);
+  };
+
+  inspect.addEventListener("click", async () => {
+    const pack = selectedPack();
+    const asset = pack?.assets?.["game.bundle.pck"];
+    if (!asset?.url) {
+      feedback.textContent = "这个素材包没有 game.bundle.pck。";
+      return;
+    }
+    feedback.textContent = `正在读取 ${pack.name || pack.id}…`;
+    try {
+      const response = await fetch(asset.url, { cache: "no-store" });
+      if (!response.ok) throw new Error(`下载失败：${response.status}`);
+      archive = parseGodotPck(await response.arrayBuffer());
+      selectedPath = archive.entries[0]?.path || "";
+      renderEntries();
+      if (selectedPath) renderPckPreview(archive, selectedEntry(), preview);
+      feedback.textContent = `已载入 ${archive.entries.length} 个文件。可替换、删除、导入文件后重新保存。`;
+    } catch (error) {
+      feedback.textContent = `读取失败：${error.message}`;
+    }
+  });
+
+  download.addEventListener("click", () => {
+    if (!archive) {
+      feedback.textContent = "请先查看一个 PCK。";
+      return;
+    }
+    downloadBlob(new Blob([buildGodotPck(archive)], { type: "application/octet-stream" }), `edited-${Date.now()}.pck`);
+    feedback.textContent = "已生成并下载新的 PCK。";
+  });
+
+  saveAsPack.addEventListener("click", async () => {
+    if (!archive) {
+      feedback.textContent = "请先查看一个 PCK。";
+      return;
+    }
+    const basePack = selectedPack();
+    const name = prompt("新素材包名称", `${basePack?.name || "素材包"} 编辑版`);
+    if (!name) return;
+    try {
+      feedback.textContent = "正在上传新 PCK…";
+      const pckFile = new File([buildGodotPck(archive)], "game.bundle.pck", { type: "application/octet-stream" });
+      const form = new FormData();
+      form.append("slotId", "game.bundle.pck");
+      form.append("file", pckFile);
+      const payload = await adminGameUpload("/api/admin/game/assets", form);
+      const nextPack = {
+        ...(basePack || {}),
+        id: `pck-edited-${Date.now()}`,
+        name,
+        description: `由 PCK 在线编辑器整理生成：${new Date().toLocaleString()}`,
+        builtin: false,
+        default: false,
+        enabled: true,
+        assets: {
+          ...(basePack?.assets || {}),
+          "game.bundle.pck": payload.asset
+        },
+        updatedAt: new Date().toISOString()
+      };
+      const assetPacks = [...(config.assetPacks || []), nextPack];
+      await adminGameRequest("/api/admin/game/asset-packs", { method: "PUT", body: JSON.stringify({ assetPacks }) });
+      feedback.textContent = `新素材包「${name}」已保存。刷新游戏页即可选择。`;
+    } catch (error) {
+      feedback.textContent = `保存失败：${error.message}`;
+    }
+  });
+
+  addFileInput.addEventListener("change", async () => {
+    const file = addFileInput.files?.[0];
+    if (!file || !archive) {
+      addFileInput.value = "";
+      return;
+    }
+    const path = prompt("写入 PCK 的路径，例如 res://classes/player/mario_sheet.png", `res://${file.name}`);
+    if (!path) {
+      addFileInput.value = "";
+      return;
+    }
+    const data = new Uint8Array(await file.arrayBuffer());
+    upsertPckEntry(archive, normalizePckPath(path), data);
+    selectedPath = normalizePckPath(path);
+    renderEntries();
+    renderPckPreview(archive, selectedEntry(), preview);
+    feedback.textContent = `已导入 ${selectedPath}，记得下载或保存成新素材包。`;
+    addFileInput.value = "";
+  });
+
+  const replaceCurrent = button("替换选中文件", "button", "button");
+  const replaceInput = document.createElement("input");
+  replaceInput.type = "file";
+  replaceInput.hidden = true;
+  replaceCurrent.addEventListener("click", () => replaceInput.click());
+  replaceInput.addEventListener("change", async () => {
+    const file = replaceInput.files?.[0];
+    const entry = selectedEntry();
+    if (!file || !archive || !entry) {
+      replaceInput.value = "";
+      return;
+    }
+    upsertPckEntry(archive, entry.path, new Uint8Array(await file.arrayBuffer()));
+    renderEntries();
+    renderPckPreview(archive, selectedEntry(), preview);
+    feedback.textContent = `已替换 ${entry.path}。`;
+    replaceInput.value = "";
+  });
+  const deleteCurrent = button("删除选中文件", "button danger", "button");
+  deleteCurrent.addEventListener("click", () => {
+    const entry = selectedEntry();
+    if (!archive || !entry) return;
+    if (!confirm(`确定从 PCK 删除 ${entry.path}？`)) return;
+    archive.entries = archive.entries.filter((item) => item.path !== entry.path);
+    selectedPath = archive.entries[0]?.path || "";
+    renderEntries();
+    preview.textContent = selectedPath ? "已删除，选择文件预览。" : "PCK 已没有文件。";
+  });
+
+  const tools = element("div", "game-editor-tools");
+  tools.append(packSelect, inspect, addFileLabel, replaceCurrent, replaceInput, deleteCurrent, download, saveAsPack);
+  panel.append(element("h4", "", "PCK 在线编辑器"), element("p", "form-hint", "选择已经上传的 game.bundle.pck，在线查看 PCK 内容。第一版支持文件级编辑：预览常见图片/音频/文本，替换或删除文件，最后整理并保存成新的 PCK 素材包。Godot 内部 .ctex/.scn/.res 会按二进制文件处理。"), tools, list, preview, feedback);
+  return panel;
+}
+
+function parseGodotPck(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  const view = new DataView(arrayBuffer);
+  const decoder = new TextDecoder();
+  const magic = decoder.decode(bytes.slice(0, 4));
+  if (magic !== "GDPC") throw new Error("不是 Godot PCK 文件。");
+  const headerSize = 100;
+  const packFlags = view.getUint32(20, true);
+  const fileBase = Number(view.getBigUint64(24, true));
+  const fileCount = view.getUint32(96, true);
+  let cursor = headerSize;
+  const entries = [];
+  for (let index = 0; index < fileCount; index += 1) {
+    const pathLength = view.getUint32(cursor, true);
+    cursor += 4;
+    const rawPath = bytes.slice(cursor, cursor + pathLength);
+    cursor += pathLength;
+    const zero = rawPath.indexOf(0);
+    const path = decoder.decode(zero >= 0 ? rawPath.slice(0, zero) : rawPath);
+    const offset = Number(view.getBigUint64(cursor, true));
+    cursor += 8;
+    const size = Number(view.getBigUint64(cursor, true));
+    cursor += 8;
+    const md5 = bytes.slice(cursor, cursor + 16);
+    cursor += 16;
+    const flags = view.getUint32(cursor, true);
+    cursor += 4;
+    const dataOffset = fileBase + offset;
+    entries.push({ path, offset, size, md5, flags, data: bytes.slice(dataOffset, dataOffset + size) });
+  }
+  return {
+    header: bytes.slice(0, headerSize),
+    packFlags,
+    fileBase,
+    entries
+  };
+}
+
+function buildGodotPck(archive) {
+  const encoder = new TextEncoder();
+  const header = new Uint8Array(archive.header);
+  const records = archive.entries.map((entry) => {
+    const pathBytes = encoder.encode(entry.path);
+    const paddedLength = align4(pathBytes.length + 1);
+    const pathBuffer = new Uint8Array(paddedLength);
+    pathBuffer.set(pathBytes);
+    const data = entry.data instanceof Uint8Array ? entry.data : new Uint8Array(entry.data || []);
+    return { ...entry, pathBuffer, data };
+  });
+  const indexSize = records.reduce((sum, record) => sum + 4 + record.pathBuffer.length + 8 + 8 + 16 + 4, 0);
+  const fileBase = header.length + indexSize;
+  const totalSize = fileBase + records.reduce((sum, record) => sum + record.data.length, 0);
+  const output = new Uint8Array(totalSize);
+  const view = new DataView(output.buffer);
+  output.set(header, 0);
+  view.setUint32(20, archive.packFlags || 0, true);
+  view.setBigUint64(24, BigInt(fileBase), true);
+  view.setUint32(96, records.length, true);
+  let cursor = header.length;
+  let dataOffset = 0;
+  for (const record of records) {
+    view.setUint32(cursor, record.pathBuffer.length, true);
+    cursor += 4;
+    output.set(record.pathBuffer, cursor);
+    cursor += record.pathBuffer.length;
+    view.setBigUint64(cursor, BigInt(dataOffset), true);
+    cursor += 8;
+    view.setBigUint64(cursor, BigInt(record.data.length), true);
+    cursor += 8;
+    output.set(record.md5 || new Uint8Array(16), cursor);
+    cursor += 16;
+    view.setUint32(cursor, record.flags || 0, true);
+    cursor += 4;
+    output.set(record.data, fileBase + dataOffset);
+    dataOffset += record.data.length;
+  }
+  return output;
+}
+
+function upsertPckEntry(archive, path, data) {
+  const existing = archive.entries.find((entry) => entry.path === path);
+  const next = { path, offset: 0, size: data.length, md5: new Uint8Array(16), flags: 0, data };
+  if (existing) {
+    Object.assign(existing, next);
+  } else {
+    archive.entries.push(next);
+    archive.entries.sort((left, right) => left.path.localeCompare(right.path));
+  }
+}
+
+function normalizePckPath(path) {
+  const value = String(path || "").replaceAll("\\", "/").trim();
+  return value.startsWith("res://") ? value : `res://${value.replace(/^\/+/, "")}`;
+}
+
+function guessPckEntryType(path) {
+  const lower = String(path || "").toLowerCase();
+  if (/\.(png|jpg|jpeg|webp|gif)$/.test(lower)) return "image";
+  if (/\.(mp3|ogg|wav)$/.test(lower)) return "audio";
+  if (/\.(json|txt|cfg|gd|import|xml|tres|tscn|md)$/.test(lower)) return "text";
+  return "binary";
+}
+
+function renderPckPreview(archive, entry, preview) {
+  preview.replaceChildren();
+  if (!archive || !entry) {
+    preview.textContent = "选择一个文件后预览。";
+    return;
+  }
+  const type = guessPckEntryType(entry.path);
+  const blob = new Blob([entry.data], { type: type === "image" ? "image/png" : type === "audio" ? "audio/ogg" : "application/octet-stream" });
+  preview.append(element("strong", "", entry.path), element("small", "", `${formatBytes(entry.size)} · ${type}`));
+  if (type === "image") {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(blob);
+    img.alt = entry.path;
+    preview.append(img);
+  } else if (type === "audio") {
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.src = URL.createObjectURL(blob);
+    preview.append(audio);
+  } else if (type === "text" && entry.size <= 256 * 1024) {
+    preview.append(element("pre", "", new TextDecoder().decode(entry.data)));
+  } else {
+    preview.append(element("p", "form-hint", "二进制文件可替换、删除或随 PCK 重新打包。"));
+  }
+}
+
+function align4(value) {
+  return (value + 3) & ~3;
+}
+
+function formatBytes(value) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function downloadBlob(blob, filename) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 async function importLocalGameAssetPacks(file, slots, feedback) {

@@ -47,7 +47,12 @@
         </div>
         <div class="designer-level-panel" data-designer-level-panel>
           <strong>Level Designer 同步</strong>
-          <span data-designer-level-status>进入游戏主菜单后选择 Level Designer；保存文件或测试游玩时会自动同步。</span>
+          <span data-designer-level-status>进入游戏主菜单后选择 Level Designer；导入或选择关卡后会自动载入，保存文件或测试游玩时会自动同步。</span>
+          <label class="secondary-button designer-level-import">
+            导入关卡
+            <input id="import-designer-level" type="file" accept=".json,.txt,.level,application/json,text/plain" />
+          </label>
+          <button id="delete-selected-designer-level" class="secondary-button" type="button" hidden>删除选中公开关卡</button>
           <button id="delete-local-designer-levels" class="secondary-button" type="button">删除我的本机关卡</button>
         </div>
       </section>
