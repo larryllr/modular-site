@@ -2175,11 +2175,192 @@ async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Respon
   headers.set("x-llr-pack-id", activePack?.id || requestedPackId || "default");
   headers.append("vary", "Referer");
 
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers
+  if (!response.ok) {
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    });
+  }
+
+  const targetPackBuffer = await response.arrayBuffer();
+  const defaultPackResponse = await env.ASSETS.fetch(new Request(new URL(`${llrMarioRunPath}/godot/index.pck`, request.url), request));
+
+  if (!defaultPackResponse.ok) {
+    headers.set("x-llr-extra-patch", "default-pack-missing");
+    return new Response(targetPackBuffer, { headers });
+  }
+
+  try {
+    const patchedPack = patchSm63ExtrasIntoPck(
+      targetPackBuffer,
+      await defaultPackResponse.arrayBuffer()
+    );
+    headers.set("content-length", String(patchedPack.byteLength));
+    headers.set("x-llr-extra-patch", "applied");
+    return new Response(patchedPack, { headers });
+  } catch {
+    headers.set("x-llr-extra-patch", "failed");
+    return new Response(targetPackBuffer, { headers });
+  }
+}
+
+type GodotPckEntry = {
+  name: string;
+  offset: number;
+  size: number;
+  md5: Uint8Array;
+  flags: number;
+};
+
+type GodotPckArchive = {
+  bytes: Uint8Array;
+  format: number;
+  major: number;
+  minor: number;
+  patch: number;
+  flags: number;
+  fileBase: number;
+  reserved: Uint8Array;
+  entries: GodotPckEntry[];
+};
+
+const sm63ExtrasPckEntries = [
+  "res://scenes/menus/title/main_menu/main_menu.gdc",
+  "res://scenes/levels/extra/smb_1_1/smb_1_1.tscn.remap"
+];
+
+function patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer): Uint8Array {
+  const target = parseGodotPck(targetBuffer);
+  const source = parseGodotPck(sourceBuffer);
+  const sourceEntries = new Map(source.entries.map((entry) => [entry.name, entry]));
+  const extraScene = source.entries.find((entry) => entry.name.endsWith("-smb_1_1.scn"));
+  const replacementNames = extraScene ? [...sm63ExtrasPckEntries, extraScene.name] : [...sm63ExtrasPckEntries];
+
+  for (const name of replacementNames) {
+    if (!sourceEntries.has(name)) {
+      throw new Error(`Missing SM63 extra PCK entry: ${name}`);
+    }
+  }
+
+  const seen = new Set<string>();
+  const nextEntries = target.entries.map((entry) => {
+    seen.add(entry.name);
+    const replacement = replacementNames.includes(entry.name) ? sourceEntries.get(entry.name) : null;
+    return {
+      name: entry.name,
+      data: replacement ? sliceGodotPckEntry(source, replacement) : sliceGodotPckEntry(target, entry),
+      md5: replacement ? replacement.md5 : entry.md5,
+      flags: replacement ? replacement.flags : entry.flags
+    };
   });
+
+  for (const name of replacementNames) {
+    if (!seen.has(name)) {
+      const replacement = sourceEntries.get(name);
+
+      if (!replacement) {
+        continue;
+      }
+
+      nextEntries.push({
+        name,
+        data: sliceGodotPckEntry(source, replacement),
+        md5: replacement.md5,
+        flags: replacement.flags
+      });
+    }
+  }
+
+  return buildGodotPck(target, nextEntries);
+}
+
+function parseGodotPck(buffer: ArrayBuffer): GodotPckArchive {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+
+  if (String.fromCharCode(...bytes.slice(0, 4)) !== "GDPC") {
+    throw new Error("Invalid Godot PCK magic");
+  }
+
+  let offset = 4;
+  const format = view.getUint32(offset, true); offset += 4;
+  const major = view.getUint32(offset, true); offset += 4;
+  const minor = view.getUint32(offset, true); offset += 4;
+  const patch = view.getUint32(offset, true); offset += 4;
+  const flags = view.getUint32(offset, true); offset += 4;
+  const fileBase = Number(view.getBigUint64(offset, true)); offset += 8;
+  const reserved = bytes.slice(offset, offset + 16 * 4); offset += 16 * 4;
+  const count = view.getUint32(offset, true); offset += 4;
+  const decoder = new TextDecoder();
+  const entries: GodotPckEntry[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const nameLength = view.getUint32(offset, true); offset += 4;
+    const nameBytes = bytes.slice(offset, offset + nameLength); offset += nameLength;
+    const name = decoder.decode(nameBytes).replace(/\0+$/, "");
+    const entryOffset = Number(view.getBigUint64(offset, true)); offset += 8;
+    const size = Number(view.getBigUint64(offset, true)); offset += 8;
+    const md5 = bytes.slice(offset, offset + 16); offset += 16;
+    const entryFlags = view.getUint32(offset, true); offset += 4;
+    entries.push({ name, offset: entryOffset, size, md5, flags: entryFlags });
+  }
+
+  return { bytes, format, major, minor, patch, flags, fileBase, reserved, entries };
+}
+
+function sliceGodotPckEntry(archive: GodotPckArchive, entry: GodotPckEntry): Uint8Array {
+  const start = archive.fileBase + entry.offset;
+  return archive.bytes.slice(start, start + entry.size);
+}
+
+function buildGodotPck(
+  template: GodotPckArchive,
+  entries: Array<{ name: string; data: Uint8Array; md5: Uint8Array; flags: number }>
+): Uint8Array {
+  const encoder = new TextEncoder();
+  const align = (value: number) => Math.ceil(value / 16) * 16;
+  let headerSize = 4 + 4 + 4 + 4 + 4 + 4 + 8 + 16 * 4 + 4;
+  const encodedNames = entries.map((entry) => encoder.encode(`${entry.name}\0`));
+
+  for (const name of encodedNames) {
+    headerSize += 4 + name.byteLength + 8 + 8 + 16 + 4;
+  }
+
+  const fileBase = align(headerSize);
+  let dataOffset = 0;
+  const offsets: number[] = [];
+
+  for (const entry of entries) {
+    offsets.push(dataOffset);
+    dataOffset = align(dataOffset + entry.data.byteLength);
+  }
+
+  const output = new Uint8Array(fileBase + dataOffset);
+  const view = new DataView(output.buffer);
+  let offset = 0;
+  output.set(encoder.encode("GDPC"), offset); offset += 4;
+  view.setUint32(offset, template.format, true); offset += 4;
+  view.setUint32(offset, template.major, true); offset += 4;
+  view.setUint32(offset, template.minor, true); offset += 4;
+  view.setUint32(offset, template.patch, true); offset += 4;
+  view.setUint32(offset, template.flags, true); offset += 4;
+  view.setBigUint64(offset, BigInt(fileBase), true); offset += 8;
+  output.set(template.reserved, offset); offset += 16 * 4;
+  view.setUint32(offset, entries.length, true); offset += 4;
+
+  entries.forEach((entry, index) => {
+    const name = encodedNames[index];
+    view.setUint32(offset, name.byteLength, true); offset += 4;
+    output.set(name, offset); offset += name.byteLength;
+    view.setBigUint64(offset, BigInt(offsets[index]), true); offset += 8;
+    view.setBigUint64(offset, BigInt(entry.data.byteLength), true); offset += 8;
+    output.set(entry.md5.slice(0, 16), offset); offset += 16;
+    view.setUint32(offset, entry.flags, true); offset += 4;
+    output.set(entry.data, fileBase + offsets[index]);
+  });
+
+  return output;
 }
 
 function safeUrlSearchParam(value: string, name: string): string {

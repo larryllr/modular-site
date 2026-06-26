@@ -50,6 +50,11 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(worker, /async function handleGameAssetUpload\(request: Request, env: AppEnv\)/);
   assert.match(worker, /async function fetchGameAsset\(request: Request, env: AppEnv, key: string\)/);
   assert.match(worker, /async function fetchGodotGamePack\(request: Request, env: AppEnv\)/);
+  assert.match(worker, /function patchSm63ExtrasIntoPck\(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer\)/);
+  assert.match(worker, /const sm63ExtrasPckEntries = \[/);
+  assert.match(worker, /res:\/\/scenes\/levels\/extra\/smb_1_1\/smb_1_1\.tscn\.remap/);
+  assert.match(worker, /entry\.name\.endsWith\("-smb_1_1\.scn"\)/);
+  assert.match(worker, /headers\.set\("x-llr-extra-patch", "applied"\)/);
   assert.match(worker, /safeUrlSearchParam\(referer, "pack"\)/);
   assert.match(worker, /pack\.id === requestedPackId/);
   assert.match(worker, /async function fetchCompressedGodotWasm\(request: Request, env: AppEnv, origin: string\)/);
