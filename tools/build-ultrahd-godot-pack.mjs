@@ -2,17 +2,30 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { dirname, join } from "node:path";
 
 const args = new Map();
-for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
+for (let i = 2; i < process.argv.length; i += 1) {
+  const key = process.argv[i];
+  if (!key?.startsWith("--")) continue;
+  const next = process.argv[i + 1];
+  if (next && !next.startsWith("--")) {
+    args.set(key, next);
+    i += 1;
+  } else {
+    args.set(key, true);
+  }
+}
 
 const project = args.get("--project");
 const sheet = args.get("--sheet");
 const outDir = args.get("--out-dir");
 const scale = Number(args.get("--scale") ?? "10");
+const targetCell = args.has("--target-cell") ? Number(args.get("--target-cell")) : null;
 const displayScale = Number(args.get("--display-scale") ?? "0.125");
 const teacherActionMap = args.has("--teacher-action-map");
 const poundFrames = (args.get("--pound-frames") ?? "")
   .split(",")
-  .map((value) => Number(value.trim()))
+  .map((value) => value.trim())
+  .filter(Boolean)
+  .map((value) => Number(value))
   .filter(Number.isFinite);
 
 if (!project || !sheet || !outDir) {
@@ -23,6 +36,7 @@ const playerScenePath = join(project, "classes/player/player.tscn");
 const playerSheetPath = join(project, "classes/player/mario_sheet.png");
 const backupScenePath = join(outDir, "player.tscn.original");
 const backupSheetPath = join(outDir, "mario_sheet.original.png");
+const patchedScenePath = join(outDir, "player.tscn.patched");
 
 mkdirSync(outDir, { recursive: true });
 if (!existsSync(backupScenePath)) copyFileSync(playerScenePath, backupScenePath);
@@ -30,8 +44,9 @@ if (!existsSync(backupSheetPath)) copyFileSync(playerSheetPath, backupSheetPath)
 copyFileSync(sheet, playerSheetPath);
 
 const originalScene = readFileSync(backupScenePath, "utf8");
-const patchedScene = patchPlayerScene(originalScene, scale, displayScale, poundFrames);
+const patchedScene = patchPlayerScene(originalScene, scale, targetCell, displayScale, poundFrames);
 writeFileSync(playerScenePath, patchedScene);
+writeFileSync(patchedScenePath, patchedScene);
 
 console.log(JSON.stringify({
   playerScenePath,
@@ -39,17 +54,19 @@ console.log(JSON.stringify({
   sheet,
   outDir,
   scale,
+  targetCell,
   displayScale,
   fluddScale: 1 / displayScale,
   poundFrames,
   teacherActionMap
 }, null, 2));
 
-function patchPlayerScene(scene, regionScale, spriteScale, poundFrameIds) {
+function patchPlayerScene(scene, regionScale, explicitTargetCell, spriteScale, poundFrameIds) {
   const lines = scene.split(/\r?\n/);
   let inAtlas8 = false;
   let currentSubResourceId = "";
   let regionCount = 0;
+  const cellSize = Number.isFinite(explicitTargetCell) ? explicitTargetCell : 48 * regionScale;
   const resourceTargetFrames = teacherActionMap
     ? teacherResourceTargetFrames()
     : new Map([
@@ -73,9 +90,11 @@ function patchPlayerScene(scene, regionScale, spriteScale, poundFrameIds) {
         if (Number.isFinite(remapFrame)) {
           const col = remapFrame % 10;
           const row = Math.floor(remapFrame / 10);
-          return `region = Rect2(${col * 48 * regionScale}, ${row * 48 * regionScale}, ${48 * regionScale}, ${48 * regionScale})`;
+          return `region = Rect2(${col * cellSize}, ${row * cellSize}, ${cellSize}, ${cellSize})`;
         }
-        return `region = Rect2(${Number(x) * regionScale}, ${Number(y) * regionScale}, ${48 * regionScale}, ${48 * regionScale})`;
+        const col = Number(x) / 48;
+        const row = Number(y) / 48;
+        return `region = Rect2(${col * cellSize}, ${row * cellSize}, ${cellSize}, ${cellSize})`;
       });
     }
     out.push(line);
