@@ -129,6 +129,9 @@ body {
 		<script src="index.js"></script>
 		<script>
 const GODOT_CONFIG = {"args":["--locale","zh_CN"],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":9327984,"index.wasm":35376909},"focusCanvas":true,"gdextensionLibs":[],"locale":"zh_CN"};
+if (new URL(window.location.href).searchParams.get('perf') === 'desktop') {
+	GODOT_CONFIG.canvasResizePolicy = 1;
+}
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 

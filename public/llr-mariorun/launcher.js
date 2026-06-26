@@ -21,6 +21,7 @@ let runtimeReloadTimer = 0;
 const inputResetHandlers = new Set();
 const joystick = document.querySelector("[data-joystick]");
 const joystickKnob = document.querySelector(".joystick-knob");
+const touchControlsQuery = window.matchMedia?.("(hover: none), (pointer: coarse)");
 const keyLabels = {
   KeyA: { key: "a", code: "KeyA", keyCode: 65 },
   KeyD: { key: "d", code: "KeyD", keyCode: 68 },
@@ -41,6 +42,15 @@ const movementKeyAliases = {
   ArrowUp: ["ArrowUp", "KeyW"],
   ArrowDown: ["ArrowDown", "KeyS"]
 };
+
+function shouldShowTouchControls() {
+  return Boolean(touchControlsQuery?.matches || navigator.maxTouchPoints > 0 || window.innerWidth <= 900);
+}
+
+function syncInputMode() {
+  document.body.classList.toggle("has-touch-controls", shouldShowTouchControls());
+  document.body.classList.toggle("has-desktop-controls", !shouldShowTouchControls());
+}
 
 async function loadManifestStatus() {
   try {
@@ -148,6 +158,7 @@ function selectedGameUrl(options = {}) {
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
   if (selectedDesignerLevelId) url.searchParams.set("designerLevel", selectedDesignerLevelId);
   url.searchParams.set("locale", "zh_CN");
+  if (!shouldShowTouchControls()) url.searchParams.set("perf", "desktop");
   if (options.cacheBust) url.searchParams.set("run", String(Date.now()));
   return `${url.pathname}${url.search}`;
 }
@@ -527,7 +538,16 @@ function bindVirtualJoystick() {
 async function requestLandscapeFullscreen() {
   document.body.classList.add("is-landscape-fullscreen");
   fullscreenOrientationLocked = false;
-  await (shell?.requestFullscreen?.() || document.documentElement.requestFullscreen?.());
+  const fullscreenTarget = shell || document.documentElement;
+  try {
+    if (document.fullscreenElement === fullscreenTarget) {
+      await document.exitFullscreen?.();
+      return;
+    }
+    await fullscreenTarget.requestFullscreen?.({ navigationUI: "hide" });
+  } catch {
+    await document.documentElement.requestFullscreen?.({ navigationUI: "hide" });
+  }
   try {
     await screen.orientation?.lock?.("landscape-primary");
     fullscreenOrientationLocked = true;
@@ -593,10 +613,13 @@ document.addEventListener("fullscreenchange", () => {
   }
 });
 window.addEventListener("blur", resetVirtualInputs);
+window.addEventListener("resize", syncInputMode);
+touchControlsQuery?.addEventListener?.("change", syncInputMode);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) resetVirtualInputs();
 });
 
+syncInputMode();
 bindVirtualControls();
 loadManifestStatus();
 revealAdminAssetEditorLink();
