@@ -184,7 +184,7 @@ h1 {
 
 .prelaunch-panel {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(180px, 260px) minmax(180px, 280px) auto;
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px) minmax(180px, 260px) auto;
   gap: 14px;
   align-items: end;
   margin-bottom: 18px;
@@ -227,6 +227,34 @@ h1 {
   padding: 0 12px;
   font: inherit;
   font-weight: 800;
+}
+
+.designer-level-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  border: 1px dashed rgba(91, 231, 255, 0.32);
+  border-radius: 18px;
+  background: rgba(91, 231, 255, 0.08);
+  padding: 12px 14px;
+  color: var(--muted);
+}
+
+.designer-level-panel strong {
+  color: var(--accent-2);
+}
+
+.designer-level-panel span {
+  flex: 1 1 360px;
+}
+
+.designer-level-panel .secondary-button {
+  min-height: 38px;
+  padding: 0 14px;
 }
 
 .game-frame-shell {

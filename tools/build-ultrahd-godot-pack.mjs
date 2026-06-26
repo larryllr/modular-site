@@ -232,19 +232,20 @@ function teacherResourceTargetFrames() {
     "101": 38,
 
     // Walking. Frame 0 is also used when the player is stopped, so keep it as
-    // the front-facing idle pose; moving frames use the multi-frame side run.
-    "57": 10,
-    "58": 11,
-    "59": 12,
-    "60": 13,
-    "61": 14,
-    "62": 15,
+    // the front-facing idle pose; moving frames use the wider-stride run row so
+    // custom teacher sheets show an obvious foot cycle instead of sliding.
+    "57": 20,
+    "58": 21,
+    "59": 22,
+    "60": 23,
+    "61": 24,
+    "62": 25,
     "63": 0,
-    "64": 10,
-    "65": 11,
-    "66": 12,
-    "67": 13,
-    "68": 14,
-    "69": 15
+    "64": 20,
+    "65": 21,
+    "66": 22,
+    "67": 23,
+    "68": 24,
+    "69": 25
   }).map(([key, value]) => [key, value]));
 }

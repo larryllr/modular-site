@@ -31,15 +31,24 @@
         <div>
           <p class="eyebrow">开始前选择</p>
           <h2>选择素材包</h2>
-          <p>素材包会决定后台上传的 PCK 是否覆盖默认游戏包；关卡和 Story Mode 进度使用游戏内自带流程。</p>
+          <p>素材包决定人物与游戏包；关卡库会在进入 Level Designer 时自动载入，管理员保存的关卡所有人可见，普通用户保存的关卡只保存在本机。</p>
         </div>
         <label>
           <span>素材包</span>
           <select id="pack-select"></select>
         </label>
+        <label>
+          <span>设计器关卡</span>
+          <select id="designer-level-select"></select>
+        </label>
         <div class="launch-buttons">
           <button id="start-selected-game" class="primary-button" type="button">开始完整游戏</button>
           <button id="reset-game-data" class="secondary-button" type="button" data-reset-game-data>重置游戏存档</button>
+        </div>
+        <div class="designer-level-panel" data-designer-level-panel>
+          <strong>Level Designer 同步</strong>
+          <span data-designer-level-status>进入游戏主菜单后选择 Level Designer；保存文件或测试游玩时会自动同步。</span>
+          <button id="delete-local-designer-levels" class="secondary-button" type="button">删除我的本机关卡</button>
         </div>
       </section>
 

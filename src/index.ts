@@ -230,6 +230,9 @@ type GameLevel = {
   checkpoints: { x: number; y: number }[];
   segments: string[];
   objects: GameLevelObject[];
+  designerCode?: string;
+  designerSource?: "sm63-redux";
+  visibility?: "public";
   updatedAt: string;
 };
 
@@ -716,6 +719,7 @@ const apiRoutes: Record<string, ApiRoute> = {
 
   "/api/game/manifest": fetchGameManifest,
   "/api/admin/game": handleAdminGame,
+  "/api/admin/game/designer-levels": handleAdminDesignerLevels,
 
   "/api/daily-background": fetchDailyBackground,
 
@@ -1938,6 +1942,67 @@ async function handleAdminGameLevels(request: Request, env: AppEnv): Promise<Res
   return json({ ok: true, levels });
 }
 
+async function handleAdminDesignerLevels(request: Request, env: AppEnv): Promise<Response> {
+  const auth = await requireFullAdmin(request, env);
+
+  if (auth) {
+    return auth;
+  }
+
+  if (request.method !== "POST") {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+
+  if (!env.GAME_DB && !env.SITE_CONFIG) {
+    return json({ error: "Game metadata storage is missing" }, 503);
+  }
+
+  const body = asRecord(await readJson(request));
+  const code = normalizeDesignerLevelCode(asString(body.code));
+
+  if (!code) {
+    return json({ error: "设计器关卡数据为空或格式不正确" }, 400);
+  }
+
+  const now = new Date().toISOString();
+  const id = normalizeId(asString(body.id), 80) || `designer-${await shortHash(code)}`;
+  const levels = await readGameLevels(env);
+  const existingIndex = levels.findIndex((level) => level.id === id);
+  const fallback = existingIndex >= 0 ? levels[existingIndex] : defaultGameLevels[0];
+  const nextLevel: GameLevel = {
+    id,
+    name: limitText(asString(body.name) || fallback.name || "自定义关卡", 80),
+    description: limitText(asString(body.description) || "管理员在游戏内 Level Designer 保存的公开关卡。", 260),
+    difficulty: limitText(asString(body.difficulty) || fallback.difficulty || "自定义", 40),
+    theme: normalizeGameTheme(asString(body.theme), fallback.theme || "grass"),
+    enabled: true,
+    builtin: false,
+    default: false,
+    width: clampNumber(body.width, 1600, 20000, fallback.width || 6400),
+    height: clampNumber(body.height, 320, 1600, fallback.height || 560),
+    checkpoints: normalizeGameCheckpoints(body.checkpoints, fallback.checkpoints || [{ x: 600, y: 416 }]),
+    segments: normalizeStringList(body.segments, 12, 40).length ? normalizeStringList(body.segments, 12, 40) : ["Level Designer"],
+    objects: Array.isArray(body.objects)
+      ? body.objects.map((object, objectIndex) => normalizeGameLevelObject(object, objectIndex)).filter((object): object is GameLevelObject => Boolean(object)).slice(0, 1200)
+      : [],
+    designerCode: code,
+    designerSource: "sm63-redux",
+    visibility: "public",
+    updatedAt: now
+  };
+  const nextLevels = [...levels];
+
+  if (existingIndex >= 0) {
+    nextLevels[existingIndex] = nextLevel;
+  } else {
+    nextLevels.push(nextLevel);
+  }
+
+  await writeGameLevels(env, normalizeGameLevels(nextLevels).slice(0, 120));
+
+  return json({ ok: true, level: nextLevel });
+}
+
 async function handleGameAssetUpload(request: Request, env: AppEnv): Promise<Response> {
   const auth = await requireFullAdmin(request, env);
 
@@ -2298,9 +2363,17 @@ function normalizeGameLevels(value: unknown): GameLevel[] {
       checkpoints: normalizeGameCheckpoints(record.checkpoints, fallback.checkpoints),
       segments: normalizeStringList(record.segments, 12, 40).length ? normalizeStringList(record.segments, 12, 40) : fallback.segments,
       objects: objects.slice(0, 1200),
+      designerCode: normalizeDesignerLevelCode(asString(record.designerCode)) || undefined,
+      designerSource: asString(record.designerSource) === "sm63-redux" ? "sm63-redux" : undefined,
+      visibility: asString(record.visibility) === "public" ? "public" : undefined,
       updatedAt: limitText(asString(record.updatedAt), 40) || new Date().toISOString()
     };
   });
+}
+
+function normalizeDesignerLevelCode(value: string): string {
+  const trimmed = value.trim();
+  return /^[A-Za-z0-9+/=_-]{16,500000}$/.test(trimmed) ? trimmed : "";
 }
 
 function normalizeGameLevelObject(value: unknown, index: number): GameLevelObject | null {
@@ -2834,6 +2907,11 @@ async function sha256(value: string): Promise<Uint8Array> {
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
 
   return new Uint8Array(hash);
+}
+
+async function shortHash(value: string): Promise<string> {
+  const hash = await sha256(value);
+  return [...hash].slice(0, 8).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function timingSafeEqual(left: Uint8Array, right: Uint8Array): boolean {

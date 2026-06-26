@@ -5,12 +5,17 @@ const fullscreenButton = document.querySelector("#fullscreen-game");
 const statusText = document.querySelector("#frame-status");
 const shell = document.querySelector(".game-frame-shell");
 const packSelect = document.querySelector("#pack-select");
+const designerLevelSelect = document.querySelector("#designer-level-select");
 const startSelectedButton = document.querySelector("#start-selected-game");
 const resetGameDataButtons = document.querySelectorAll("[data-reset-game-data]");
+const deleteLocalDesignerLevelsButton = document.querySelector("#delete-local-designer-levels");
 const adminAssetEditorLink = document.querySelector("[data-admin-asset-editor]");
+const designerLevelStatus = document.querySelector("[data-designer-level-status]");
 const adminTokenKey = "cloudflare-modular-site.admin-token";
+const localDesignerLevelsKey = "llr-mariorun.local-designer-levels.v1";
 let manifest = null;
 let selectedPackId = "";
+let selectedDesignerLevelId = "";
 let fullscreenOrientationLocked = false;
 let runtimeReloadTimer = 0;
 const inputResetHandlers = new Set();
@@ -43,6 +48,7 @@ async function loadManifestStatus() {
     if (!response.ok) throw new Error("manifest unavailable");
     manifest = await response.json();
     renderPrelaunchChoices();
+    renderDesignerLevelChoices();
     const activePack = (manifest.assetPacks || []).find((pack) => pack.id === selectedPackId)
       || (manifest.assetPacks || []).find((pack) => pack.enabled && pack.default)
       || (manifest.assetPacks || []).find((pack) => pack.enabled);
@@ -81,10 +87,66 @@ function renderPrelaunchChoices() {
   packSelect.replaceChildren(...packs.map((pack) => new Option(pack.name || pack.id, pack.id, false, pack.id === selectedPackId)));
 }
 
+function readLocalDesignerLevels() {
+  try {
+    const levels = JSON.parse(localStorage.getItem(localDesignerLevelsKey) || "[]");
+    return Array.isArray(levels)
+      ? levels.filter((level) => level?.id && level?.designerCode && level?.name)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalDesignerLevels(levels) {
+  localStorage.setItem(localDesignerLevelsKey, JSON.stringify(levels.slice(0, 60)));
+}
+
+function publicDesignerLevels() {
+  return (manifest?.levels || []).filter((level) => level?.designerSource === "sm63-redux" && level?.designerCode);
+}
+
+function allDesignerLevels() {
+  return [
+    ...publicDesignerLevels().map((level) => ({ ...level, scope: "public" })),
+    ...readLocalDesignerLevels().map((level) => ({ ...level, scope: "local" }))
+  ];
+}
+
+function renderDesignerLevelChoices() {
+  if (!designerLevelSelect) return;
+  const levels = allDesignerLevels();
+  selectedDesignerLevelId = selectedDesignerLevelId && levels.some((level) => level.id === selectedDesignerLevelId)
+    ? selectedDesignerLevelId
+    : "";
+  const options = [
+    new Option("空白设计器关卡", "", false, selectedDesignerLevelId === "")
+  ];
+  for (const level of levels) {
+    const prefix = level.scope === "public" ? "公开" : "我的";
+    options.push(new Option(`${prefix} · ${level.name || level.id}`, level.id, false, level.id === selectedDesignerLevelId));
+  }
+  designerLevelSelect.replaceChildren(...options);
+  updateDesignerLevelStatus();
+}
+
+function selectedDesignerLevel() {
+  return allDesignerLevels().find((level) => level.id === selectedDesignerLevelId) || null;
+}
+
+function updateDesignerLevelStatus(message = "") {
+  if (!designerLevelStatus) return;
+  const selected = selectedDesignerLevel();
+  designerLevelStatus.textContent = message || (selected
+    ? `已选择「${selected.name}」。进入主菜单后选择 Level Designer 会自动载入。`
+    : "未选择设计器关卡；进入 Level Designer 会打开空白编辑器。保存文件或测试游玩时会自动同步。");
+}
+
 function selectedGameUrl(options = {}) {
   const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
   const url = new URL(base, window.location.origin);
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
+  if (selectedDesignerLevelId) url.searchParams.set("designerLevel", selectedDesignerLevelId);
   url.searchParams.set("locale", "zh_CN");
   if (options.cacheBust) url.searchParams.set("run", String(Date.now()));
   return `${url.pathname}${url.search}`;
@@ -143,7 +205,7 @@ function deleteDatabase(name) {
 }
 
 async function resetGameData() {
-  if (!confirm("确定重置游戏存档？这会清除当前浏览器里的 Story Mode 进度和 Godot 本地存档。")) {
+  if (!confirm("确定重置游戏存档？这会清除当前浏览器里的 Story Mode 进度、Godot 本地存档和你的本机设计器关卡。管理员公开关卡不会删除。")) {
     return;
   }
 
@@ -167,11 +229,99 @@ async function resetGameData() {
   for (const name of databaseNames) {
     if (await deleteDatabase(name)) deletedCount += 1;
   }
+  localStorage.removeItem(localDesignerLevelsKey);
+  selectedDesignerLevelId = "";
+  renderDesignerLevelChoices();
 
   statusText.textContent = deletedCount
-    ? "游戏存档已重置，可以重新开始 Story Mode。"
-    : "已尝试重置存档；如果仍黑屏，请刷新页面后再进入 Story Mode。";
+    ? "游戏存档和本机设计器关卡已重置，可以重新开始。"
+    : "已尝试重置存档和本机设计器关卡；如果仍黑屏，请刷新页面后再进入。";
 }
+
+function deleteLocalDesignerLevels() {
+  if (!confirm("确定删除你这个浏览器里保存的自定义关卡？管理员公开关卡不会删除。")) return;
+  localStorage.removeItem(localDesignerLevelsKey);
+  selectedDesignerLevelId = "";
+  renderDesignerLevelChoices();
+  updateDesignerLevelStatus("我的本机设计器关卡已删除。");
+}
+
+function normalizeDesignerSavePayload(payload) {
+  const code = String(payload?.code || "").trim();
+  if (!/^[A-Za-z0-9+/=_-]{16,500000}$/.test(code)) return null;
+  const now = new Date().toISOString();
+  const name = String(payload?.name || "我的关卡").trim().slice(0, 80) || "我的关卡";
+  return {
+    id: `designer-${hashString(code).slice(0, 16)}`,
+    name,
+    description: "游戏内 Level Designer 保存的关卡。",
+    difficulty: "自定义",
+    theme: "grass",
+    enabled: true,
+    builtin: false,
+    default: false,
+    width: 6400,
+    height: 560,
+    checkpoints: [{ x: 600, y: 416 }],
+    segments: ["Level Designer"],
+    objects: [],
+    designerSource: "sm63-redux",
+    designerCode: code,
+    visibility: "public",
+    updatedAt: now
+  };
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0") + String(value.length.toString(16)).padStart(8, "0");
+}
+
+async function saveDesignerLevel(payload) {
+  const level = normalizeDesignerSavePayload(payload);
+  if (!level) {
+    updateDesignerLevelStatus("设计器关卡同步失败：关卡数据无效。");
+    return;
+  }
+  const name = prompt("保存这个 Level Designer 关卡的名字：", level.name) || level.name;
+  level.name = name.trim().slice(0, 80) || level.name;
+  const token = localStorage.getItem(adminTokenKey);
+  if (token) {
+    try {
+      const response = await fetch("/api/admin/game/designer-levels", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(level)
+      });
+      if (response.ok) {
+        const result = await response.json();
+        selectedDesignerLevelId = result.level?.id || level.id;
+        await loadManifestStatus();
+        updateDesignerLevelStatus(`管理员公开关卡「${level.name}」已保存，所有人刷新后可见。`);
+        return;
+      }
+    } catch {
+      // Fall back to local save below.
+    }
+  }
+  const localLevels = readLocalDesignerLevels().filter((item) => item.id !== level.id);
+  localLevels.unshift({ ...level, visibility: "local" });
+  writeLocalDesignerLevels(localLevels);
+  selectedDesignerLevelId = level.id;
+  renderDesignerLevelChoices();
+  updateDesignerLevelStatus(`本机关卡「${level.name}」已保存，刷新后仍可见；只有这个浏览器能看到。`);
+}
+
+window.__llrSaveDesignerLevel = saveDesignerLevel;
+window.__llrGetDesignerLevelBase64 = () => selectedDesignerLevel()?.designerCode || "";
+window.__llrShowGameNotice = (message) => updateDesignerLevelStatus(String(message || ""));
 
 function focusGame() {
   frame?.focus();
@@ -398,8 +548,13 @@ packSelect?.addEventListener("change", () => {
   selectedPackId = packSelect.value;
   loadManifestStatus();
 });
+designerLevelSelect?.addEventListener("change", () => {
+  selectedDesignerLevelId = designerLevelSelect.value;
+  updateDesignerLevelStatus();
+});
 startSelectedButton?.addEventListener("click", startSelectedGame);
 resetGameDataButtons.forEach((button) => button.addEventListener("click", resetGameData));
+deleteLocalDesignerLevelsButton?.addEventListener("click", deleteLocalDesignerLevels);
 frame?.addEventListener("load", () => {
   if (isFrameBlank()) return;
   resetVirtualInputs();
