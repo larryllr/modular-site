@@ -34,19 +34,29 @@ if (!project || !sheet || !outDir) {
 
 const playerScenePath = join(project, "classes/player/player.tscn");
 const playerSheetPath = join(project, "classes/player/mario_sheet.png");
+const characterSpriteScriptPath = join(project, "classes/player/character_sprite.gd");
 const backupScenePath = join(outDir, "player.tscn.original");
 const backupSheetPath = join(outDir, "mario_sheet.original.png");
+const backupCharacterSpriteScriptPath = join(outDir, "character_sprite.gd.original");
+const patchedCharacterSpriteScriptPath = join(outDir, "character_sprite.gd.patched");
 const patchedScenePath = join(outDir, "player.tscn.patched");
 
 mkdirSync(outDir, { recursive: true });
 if (!existsSync(backupScenePath)) copyFileSync(playerScenePath, backupScenePath);
 if (!existsSync(backupSheetPath)) copyFileSync(playerSheetPath, backupSheetPath);
+if (!existsSync(backupCharacterSpriteScriptPath)) copyFileSync(characterSpriteScriptPath, backupCharacterSpriteScriptPath);
 copyFileSync(sheet, playerSheetPath);
 
 const originalScene = readFileSync(backupScenePath, "utf8");
 const patchedScene = patchPlayerScene(originalScene, scale, targetCell, displayScale, poundFrames);
 writeFileSync(playerScenePath, patchedScene);
 writeFileSync(patchedScenePath, patchedScene);
+if (teacherActionMap) {
+  const originalCharacterSpriteScript = readFileSync(backupCharacterSpriteScriptPath, "utf8");
+  const patchedCharacterSpriteScript = patchCharacterSpriteScript(originalCharacterSpriteScript);
+  writeFileSync(characterSpriteScriptPath, patchedCharacterSpriteScript);
+  writeFileSync(patchedCharacterSpriteScriptPath, patchedCharacterSpriteScript);
+}
 
 console.log(JSON.stringify({
   playerScenePath,
@@ -60,6 +70,14 @@ console.log(JSON.stringify({
   poundFrames,
   teacherActionMap
 }, null, 2));
+
+function patchCharacterSpriteScript(script) {
+  if (script.includes("llr teacher spray pose")) return script;
+  const marker = `\t# Save this frame's state to check against next time.`;
+  const insertion = `\t# llr teacher spray pose: show a back-facing character pose while the virtual/keyboard FLUDD button is held.\n\tif parent.fludd_spraying(true) and !parent.swimming and parent.state == parent.S.NEUTRAL:\n\t\ttrigger_anim(\"back\")\n\n`;
+  if (!script.includes(marker)) throw new Error("Unable to find character_sprite.gd state-save marker");
+  return script.replace(marker, insertion + marker);
+}
 
 function patchPlayerScene(scene, regionScale, explicitTargetCell, spriteScale, poundFrameIds) {
   const lines = scene.split(/\r?\n/);
@@ -213,19 +231,20 @@ function teacherResourceTargetFrames() {
     "100": 37,
     "101": 38,
 
-    // Walking. Only side-walk frames, no front/turn/spin frames.
+    // Walking. Frame 0 is also used when the player is stopped, so keep it as
+    // the front-facing idle pose; moving frames use the multi-frame side run.
     "57": 10,
     "58": 11,
     "59": 12,
     "60": 13,
     "61": 14,
     "62": 15,
-    "63": 10,
-    "64": 11,
-    "65": 12,
-    "66": 13,
-    "67": 14,
-    "68": 15,
-    "69": 16
+    "63": 0,
+    "64": 10,
+    "65": 11,
+    "66": 12,
+    "67": 13,
+    "68": 14,
+    "69": 15
   }).map(([key, value]) => [key, value]));
 }

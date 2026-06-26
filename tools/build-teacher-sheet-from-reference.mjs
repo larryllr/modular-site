@@ -22,6 +22,7 @@ const normalizeSafe = args.has("--normalize-safe");
 const baseline = Number(args.get("--baseline") ?? Math.round(targetCell * 39 / 48));
 const topPadding = Number(args.get("--top-padding") ?? Math.round(targetCell * 2 / 48));
 const contentScale = Number(args.get("--content-scale") ?? "1");
+const minComponentArea = Number(args.get("--min-component-area") ?? "20");
 const cols = 10;
 const rows = 10;
 
@@ -62,7 +63,8 @@ for (let frame = 0; frame < cols * rows; frame += 1) {
   }
 
   eraseConnectedCheckerBackground(cell, w, h);
-  keepLargestAlphaComponent(cell, w, h);
+  eraseRemainingCheckerPixels(cell, w, h);
+  keepForegroundComponents(cell, w, h, minComponentArea);
   const bounds = alphaBounds(cell, w, h);
   cellMeta.push({ frame, bounds });
 
@@ -98,6 +100,7 @@ console.log(JSON.stringify({
   baseline,
   topPadding,
   contentScale,
+  minComponentArea,
   emptyFrames: cellMeta.filter((m) => !m.bounds).map((m) => m.frame)
 }, null, 2));
 
@@ -141,12 +144,32 @@ function isCheckerBackground(r, g, b) {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const avg = (r + g + b) / 3;
-  return avg >= 214 && max - min <= 34;
+  if (avg < 218 || max - min > 18) return false;
+  return !isLikelyWhiteClothing(r, g, b);
 }
 
-function keepLargestAlphaComponent(buffer, width, height) {
+function isLikelyWhiteClothing(r, g, b) {
+  return r >= 220 && g >= 220 && b >= 210 && Math.abs(r - g) <= 12 && r - b >= 8;
+}
+
+function eraseRemainingCheckerPixels(buffer, width, height) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
+      if (buffer[i + 3] < 12) continue;
+      if (isCheckerBackground(buffer[i], buffer[i + 1], buffer[i + 2])) {
+        buffer[i] = 0;
+        buffer[i + 1] = 0;
+        buffer[i + 2] = 0;
+        buffer[i + 3] = 0;
+      }
+    }
+  }
+}
+
+function keepForegroundComponents(buffer, width, height, minArea) {
   const visited = new Uint8Array(width * height);
-  let best = [];
+  const keep = new Uint8Array(width * height);
 
   const isSolid = (x, y) => buffer[(y * width + x) * 4 + 3] >= 12;
   for (let startY = 0; startY < height; startY += 1) {
@@ -154,11 +177,16 @@ function keepLargestAlphaComponent(buffer, width, height) {
       const start = startY * width + startX;
       if (visited[start] || !isSolid(startX, startY)) continue;
       const component = [];
+      const bounds = { minX: startX, minY: startY, maxX: startX, maxY: startY };
       const queue = [[startX, startY]];
       visited[start] = 1;
       for (let head = 0; head < queue.length; head += 1) {
         const [x, y] = queue[head];
         component.push(y * width + x);
+        bounds.minX = Math.min(bounds.minX, x);
+        bounds.minY = Math.min(bounds.minY, y);
+        bounds.maxX = Math.max(bounds.maxX, x);
+        bounds.maxY = Math.max(bounds.maxY, y);
         for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
           if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
           const p = ny * width + nx;
@@ -167,13 +195,16 @@ function keepLargestAlphaComponent(buffer, width, height) {
           queue.push([nx, ny]);
         }
       }
-      if (component.length > best.length) best = component;
+      const componentWidth = bounds.maxX - bounds.minX + 1;
+      const componentHeight = bounds.maxY - bounds.minY + 1;
+      const centeredEnough = bounds.maxX >= width * 0.12 && bounds.minX <= width * 0.88;
+      const largeEnough = component.length >= minArea || (componentWidth >= width * 0.08 && componentHeight >= height * 0.08);
+      if (largeEnough && centeredEnough) {
+        for (const pixel of component) keep[pixel] = 1;
+      }
     }
   }
 
-  if (best.length === 0) return;
-  const keep = new Uint8Array(width * height);
-  for (const pixel of best) keep[pixel] = 1;
   for (let p = 0; p < width * height; p += 1) {
     if (keep[p]) continue;
     buffer[p * 4 + 3] = 0;
