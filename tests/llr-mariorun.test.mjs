@@ -36,9 +36,10 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(worker, /async function fetchGodotGamePack\(request: Request, env: AppEnv\)/);
   assert.match(worker, /safeUrlSearchParam\(referer, "pack"\)/);
   assert.match(worker, /pack\.id === requestedPackId/);
-  assert.match(worker, /async function fetchCompressedGodotWasm\(request: Request, env: AppEnv, origin: string\)/);
+  assert.match(worker, /async function fetchCompressedGodotWasm\(request: Request, env: AppEnv, origin: string, gzPath =/);
   assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/godot\/index\.pck`/);
   assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/godot\/index\.wasm`/);
+  assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/extra\/smb-1-1\/index\.wasm`/);
   assert.match(worker, /new DecompressionStream\("gzip"\)/);
   assert.match(worker, /env\.SITE_CONFIG\.put\(key, await file\.arrayBuffer\(\)/);
   assert.match(worker, /env\.SITE_CONFIG\.getWithMetadata/);
@@ -72,7 +73,11 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   for (const file of ["index.html", "index.js", "index.wasm.gz", "index.pck"]) {
     assert.equal(existsSync(new URL(`public/llr-mariorun/godot/${file}`, root)), true);
   }
+  for (const file of ["index.html", "index.js", "index.wasm.gz", "index.pck"]) {
+    assert.equal(existsSync(new URL(`public/llr-mariorun/extra/smb-1-1/${file}`, root)), true);
+  }
   assert.equal(existsSync(new URL("public/llr-mariorun/godot/index.wasm", root)), false);
+  assert.equal(existsSync(new URL("public/llr-mariorun/extra/smb-1-1/index.wasm", root)), false);
 
   const html = source("public/llr-mariorun/index.html");
   const css = source("public/llr-mariorun/game.css");
@@ -91,6 +96,9 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.doesNotMatch(html, /id="level-select"/);
   assert.match(html, /id="start-selected-game"/);
   assert.match(html, /id="reset-game-data"/);
+  assert.match(html, /Extra：1-1 复刻/);
+  assert.match(html, /href="\/llr-mariorun\/extra\/smb-1-1\/index\.html"/);
+  assert.match(html, /打开 Extra 1-1/);
   assert.match(html, /id="import-designer-level"/);
   assert.match(html, /id="delete-selected-designer-level"/);
   assert.match(html, /data-reset-game-data/);
@@ -111,6 +119,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(css, /\.godot-frame/);
   assert.match(css, /\.virtual-controls/);
   assert.match(css, /\.prelaunch-panel/);
+  assert.match(css, /\.extra-panel/);
+  assert.match(css, /\.extra-card/);
   assert.match(css, /\.launch-buttons/);
   assert.match(css, /body\.game-has-launched \.prelaunch-panel/);
   assert.match(css, /\.virtual-joystick/);
