@@ -10,6 +10,22 @@ const worker = source("src/index.ts");
 const app = source("public/app.js");
 const styles = source("public/styles.css");
 
+function parseGodotPckEntryNames(path) {
+  const buffer = readFileSync(new URL(path, root));
+  assert.equal(buffer.toString("ascii", 0, 4), "GDPC");
+  let offset = 4 + 4 + 4 + 4 + 4 + 4 + 8 + 16 * 4;
+  const count = buffer.readUInt32LE(offset);
+  offset += 4;
+  const names = [];
+  for (let index = 0; index < count; index += 1) {
+    const nameLength = buffer.readUInt32LE(offset);
+    offset += 4;
+    names.push(buffer.toString("utf8", offset, offset + nameLength).replace(/\0+$/, ""));
+    offset += nameLength + 8 + 8 + 16 + 4;
+  }
+  return names;
+}
+
 test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.doesNotMatch(wrangler, /"r2_buckets"\s*:/);
   assert.match(wrangler, /"d1_databases"\s*:/);
@@ -187,6 +203,14 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /screen\.orientation\?\.lock\?\.\("landscape"\)/);
   assert.match(godotLoader, /new DecompressionStream\('gzip'\)/);
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
+});
+
+test("llr-mariorun Godot pack exposes SMB 1-1 through the internal Extras menu", () => {
+  const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");
+  assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));
+  assert.ok(entries.includes("res://scenes/levels/extra/smb_1_1/smb_1_1.tscn.remap"));
+  assert.ok(entries.some((entry) => entry.endsWith("-smb_1_1.scn")));
+  assert.equal(existsSync(new URL("public/llr-mariorun/extra/smb-1-1/index.html", root)), false);
 });
 
 test("admin app exposes llr-mariorun entry and online editors", () => {
