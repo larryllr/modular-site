@@ -223,8 +223,19 @@ function resetVirtualInputs() {
   for (const handler of inputResetHandlers) handler();
   document.querySelectorAll(".virtual-controls button.is-pressed").forEach((button) => {
     button.classList.remove("is-pressed");
-    if (button.dataset.key) emitKey(button.dataset.key, "keyup");
+    if (button.dataset.key) {
+      for (const code of buttonCodes(button)) {
+        emitKey(code, "keyup");
+      }
+    }
   });
+}
+
+function buttonCodes(button) {
+  return [button.dataset.key, button.dataset.extraKey]
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean);
 }
 
 function attachGodotCanvasRecovery() {
@@ -255,19 +266,19 @@ function attachGodotCanvasRecovery() {
 function bindVirtualControls() {
   bindVirtualJoystick();
   document.querySelectorAll(".virtual-controls button[data-key]").forEach((button) => {
-    const code = button.dataset.key;
+    const codes = buttonCodes(button);
     const press = (event) => {
       event.preventDefault();
       event.stopPropagation();
       button.classList.add("is-pressed");
       focusGame();
-      emitKey(code, "keydown");
+      for (const code of codes) emitKey(code, "keydown");
     };
     const release = (event) => {
       event.preventDefault();
       event.stopPropagation();
       button.classList.remove("is-pressed");
-      emitKey(code, "keyup");
+      for (const code of codes) emitKey(code, "keyup");
     };
     button.addEventListener("pointerdown", (event) => {
       button.setPointerCapture?.(event.pointerId);
@@ -277,7 +288,7 @@ function bindVirtualControls() {
     button.addEventListener("pointercancel", release);
     button.addEventListener("lostpointercapture", (event) => {
       button.classList.remove("is-pressed");
-      emitKey(code, "keyup");
+      for (const code of codes) emitKey(code, "keyup");
     });
     button.addEventListener("contextmenu", (event) => event.preventDefault());
     button.addEventListener("selectstart", (event) => event.preventDefault());

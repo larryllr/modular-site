@@ -3,11 +3,25 @@ import { join } from "node:path";
 import sharp from "sharp";
 
 const args = new Map();
-for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
+for (let i = 2; i < process.argv.length; i += 1) {
+  const key = process.argv[i];
+  if (!key?.startsWith("--")) continue;
+  const next = process.argv[i + 1];
+  if (next && !next.startsWith("--")) {
+    args.set(key, next);
+    i += 1;
+  } else {
+    args.set(key, true);
+  }
+}
 
 const input = args.get("--input");
 const outDir = args.get("--out-dir");
 const targetCell = Number(args.get("--target-cell") ?? "480");
+const normalizeSafe = args.has("--normalize-safe");
+const baseline = Number(args.get("--baseline") ?? Math.round(targetCell * 39 / 48));
+const topPadding = Number(args.get("--top-padding") ?? Math.round(targetCell * 2 / 48));
+const contentScale = Number(args.get("--content-scale") ?? "1");
 const cols = 10;
 const rows = 10;
 
@@ -48,13 +62,20 @@ for (let frame = 0; frame < cols * rows; frame += 1) {
   }
 
   eraseConnectedCheckerBackground(cell, w, h);
+  keepLargestAlphaComponent(cell, w, h);
   const bounds = alphaBounds(cell, w, h);
   cellMeta.push({ frame, bounds });
 
-  const resized = await sharp(cell, { raw: { width: w, height: h, channels: 4 } })
+  let resized = await sharp(cell, { raw: { width: w, height: h, channels: 4 } })
     .resize(targetCell, targetCell, { kernel: "nearest" })
     .raw()
     .toBuffer();
+  if (Number.isFinite(contentScale) && contentScale > 0 && contentScale < 1) {
+    resized = await scaleFrameContent(resized, targetCell, targetCell, contentScale);
+  }
+  if (normalizeSafe) {
+    resized = alignFrameToBaseline(resized, targetCell, targetCell, baseline, topPadding);
+  }
 
   const dx0 = col * targetCell;
   const dy0 = row * targetCell;
@@ -67,7 +88,18 @@ await sharp(out, { raw: { width: outW, height: outH, channels: 4 } })
   .png()
   .toFile(join(outDir, "mario_sheet.png"));
 await renderPreview(out, outW, outH, join(outDir, "preview.png"));
-console.log(JSON.stringify({ input, outDir, width: outW, height: outH, targetCell, emptyFrames: cellMeta.filter((m) => !m.bounds).map((m) => m.frame) }, null, 2));
+console.log(JSON.stringify({
+  input,
+  outDir,
+  width: outW,
+  height: outH,
+  targetCell,
+  normalizeSafe,
+  baseline,
+  topPadding,
+  contentScale,
+  emptyFrames: cellMeta.filter((m) => !m.bounds).map((m) => m.frame)
+}, null, 2));
 
 function eraseConnectedCheckerBackground(buffer, width, height) {
   const visited = new Uint8Array(width * height);
@@ -109,7 +141,87 @@ function isCheckerBackground(r, g, b) {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const avg = (r + g + b) / 3;
-  return avg >= 232 && max - min <= 10;
+  return avg >= 214 && max - min <= 34;
+}
+
+function keepLargestAlphaComponent(buffer, width, height) {
+  const visited = new Uint8Array(width * height);
+  let best = [];
+
+  const isSolid = (x, y) => buffer[(y * width + x) * 4 + 3] >= 12;
+  for (let startY = 0; startY < height; startY += 1) {
+    for (let startX = 0; startX < width; startX += 1) {
+      const start = startY * width + startX;
+      if (visited[start] || !isSolid(startX, startY)) continue;
+      const component = [];
+      const queue = [[startX, startY]];
+      visited[start] = 1;
+      for (let head = 0; head < queue.length; head += 1) {
+        const [x, y] = queue[head];
+        component.push(y * width + x);
+        for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+          const p = ny * width + nx;
+          if (visited[p] || !isSolid(nx, ny)) continue;
+          visited[p] = 1;
+          queue.push([nx, ny]);
+        }
+      }
+      if (component.length > best.length) best = component;
+    }
+  }
+
+  if (best.length === 0) return;
+  const keep = new Uint8Array(width * height);
+  for (const pixel of best) keep[pixel] = 1;
+  for (let p = 0; p < width * height; p += 1) {
+    if (keep[p]) continue;
+    buffer[p * 4 + 3] = 0;
+  }
+}
+
+function alignFrameToBaseline(buffer, width, height, targetBaseline, minTopPadding) {
+  const bounds = alphaBounds(buffer, width, height);
+  if (!bounds) return buffer;
+  const out = Buffer.alloc(buffer.length, 0);
+  const currentCenterX = (bounds.minX + bounds.maxX + 1) / 2;
+  let dx = Math.round(width / 2 - currentCenterX);
+  let dy = Math.round(targetBaseline - bounds.maxY);
+  if (bounds.minY + dy < minTopPadding) {
+    dy += minTopPadding - (bounds.minY + dy);
+  }
+  for (let y = 0; y < height; y += 1) {
+    const ny = y + dy;
+    if (ny < 0 || ny >= height) continue;
+    for (let x = 0; x < width; x += 1) {
+      const nx = x + dx;
+      if (nx < 0 || nx >= width) continue;
+      const si = (y * width + x) * 4;
+      if (buffer[si + 3] < 12) continue;
+      const di = (ny * width + nx) * 4;
+      out[di] = buffer[si];
+      out[di + 1] = buffer[si + 1];
+      out[di + 2] = buffer[si + 2];
+      out[di + 3] = buffer[si + 3];
+    }
+  }
+  return out;
+}
+
+async function scaleFrameContent(buffer, width, height, scale) {
+  const scaledW = Math.max(1, Math.round(width * scale));
+  const scaledH = Math.max(1, Math.round(height * scale));
+  const scaled = await sharp(buffer, { raw: { width, height, channels: 4 } })
+    .resize(scaledW, scaledH, { kernel: "nearest" })
+    .raw()
+    .toBuffer();
+  const out = Buffer.alloc(buffer.length, 0);
+  const dx = Math.floor((width - scaledW) / 2);
+  const dy = Math.floor((height - scaledH) / 2);
+  for (let y = 0; y < scaledH; y += 1) {
+    scaled.copy(out, ((dy + y) * width + dx) * 4, y * scaledW * 4, (y + 1) * scaledW * 4);
+  }
+  return out;
 }
 
 function alphaBounds(buffer, width, height) {
