@@ -2190,8 +2190,8 @@ function safeUrlSearchParam(value: string, name: string): string {
   }
 }
 
-async function fetchCompressedGodotWasm(request: Request, env: AppEnv, origin: string, gzPath = `${llrMarioRunPath}/godot/index.wasm.gz`): Promise<Response> {
-  const wasmUrl = new URL(gzPath, origin);
+async function fetchCompressedGodotWasm(request: Request, env: AppEnv, origin: string): Promise<Response> {
+  const wasmUrl = new URL(`${llrMarioRunPath}/godot/index.wasm.gz`, origin);
   const response = await env.ASSETS.fetch(new Request(wasmUrl, request));
   const headers = new Headers({
     "content-type": "application/wasm",
@@ -3056,10 +3056,6 @@ export default {
 
     if (url.pathname === `${llrMarioRunPath}/godot/index.wasm`) {
       return fetchCompressedGodotWasm(request, env as AppEnv, url.origin);
-    }
-
-    if (url.pathname === `${llrMarioRunPath}/extra/smb-1-1/index.wasm`) {
-      return fetchCompressedGodotWasm(request, env as AppEnv, url.origin, `${llrMarioRunPath}/extra/smb-1-1/index.wasm.gz`);
     }
 
     ctx.waitUntil(recordAccessLog(request, env as AppEnv));

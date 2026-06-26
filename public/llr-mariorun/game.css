@@ -268,41 +268,6 @@ h1 {
   display: none;
 }
 
-.extra-panel {
-  margin-bottom: 18px;
-}
-
-.extra-card {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid rgba(255, 207, 51, 0.28);
-  border-radius: 26px;
-  background:
-    linear-gradient(135deg, rgba(255, 207, 51, 0.14), rgba(91, 231, 255, 0.1)),
-    rgba(9, 14, 32, 0.74);
-  box-shadow: var(--shadow);
-  padding: 18px;
-  backdrop-filter: blur(18px);
-}
-
-.extra-card h2,
-.extra-card p {
-  margin: 0;
-}
-
-.extra-card h2 {
-  font-size: clamp(22px, 3vw, 34px);
-}
-
-.extra-card p:not(.eyebrow) {
-  max-width: 880px;
-  margin-top: 8px;
-  color: var(--muted);
-  line-height: 1.6;
-}
-
 .game-frame-shell {
   position: relative;
   overflow: hidden;
@@ -477,15 +442,6 @@ body.has-touch-controls .virtual-controls {
     background: rgba(8, 11, 33, 0.94);
   }
 
-  .extra-panel {
-    display: none;
-  }
-
-  .extra-card {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
   .game-frame-shell {
     width: 100svw;
     height: 100svh;
@@ -520,10 +476,6 @@ body.game-has-launched .prelaunch-panel {
   display: none;
 }
 
-body.game-has-launched .extra-panel {
-  display: none;
-}
-
 body.is-forced-landscape .redux-shell {
   width: 100svw;
   height: 100svh;
@@ -535,10 +487,6 @@ body.is-forced-landscape .redux-hero {
 }
 
 body.is-forced-landscape .prelaunch-panel {
-  display: none;
-}
-
-body.is-forced-landscape .extra-panel {
   display: none;
 }
 
@@ -562,8 +510,7 @@ body.is-landscape-fullscreen .redux-shell {
 }
 
 body.is-landscape-fullscreen .redux-hero,
-body.is-landscape-fullscreen .prelaunch-panel,
-body.is-landscape-fullscreen .extra-panel {
+body.is-landscape-fullscreen .prelaunch-panel {
   display: none;
 }
 
