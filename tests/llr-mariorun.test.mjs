@@ -159,6 +159,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function startSelectedGame/);
   assert.match(launcher, /loadGameRuntime\(\{ cacheBust: true \}\)/);
   assert.match(launcher, /function recoverGameRuntime/);
+  assert.match(launcher, /llr-godot-missing-features/);
+  assert.match(launcher, /Godot 运行环境缺少能力/);
   assert.match(launcher, /frame\.src = "about:blank"/);
   assert.match(launcher, /cacheBust: true/);
   assert.match(launcher, /searchParams\.set\("run", String\(Date\.now\(\)\)\)/);
@@ -184,6 +186,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.doesNotMatch(launcher, /\/llr-mariorun\/custom\.html/);
   assert.match(launcher, /searchParams\.set\("pack", selectedPackId\)/);
   assert.match(godotHtml, /window\.fetch = function/);
+  assert.match(godotHtml, /<script src="index\.js\?v=llr-secure-context-20260627"><\/script>/);
+  assert.match(godotHtml, /window\.parent\.postMessage\(\{ type: 'llr-godot-missing-features'/);
   assert.match(godotHtml, /\/\\\/index\\\.pck\$/);
   assert.match(godotHtml, /url\.searchParams\.set\('pack', selectedPack\)/);
   assert.match(godotHtml, /url\.searchParams\.set\('run', runId\)/);

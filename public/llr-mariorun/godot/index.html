@@ -126,7 +126,7 @@ body {
 	};
 }());
 		</script>
-		<script src="index.js"></script>
+		<script src="index.js?v=llr-secure-context-20260627"></script>
 		<script>
 const GODOT_CONFIG = {"args":["--locale","zh_CN"],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":9327984,"index.wasm":35376909},"focusCanvas":true,"gdextensionLibs":[],"locale":"zh_CN"};
 if (new URL(window.location.href).searchParams.get('perf') === 'desktop') {
@@ -187,6 +187,9 @@ const engine = new Engine(GODOT_CONFIG);
 	});
 
 	if (missing.length !== 0) {
+		if (window.parent && window.parent !== window) {
+			window.parent.postMessage({ type: 'llr-godot-missing-features', missing }, window.location.origin);
+		}
 		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
 			// There's a chance that installing the service worker would fix the issue
 			Promise.race([

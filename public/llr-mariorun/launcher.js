@@ -427,6 +427,13 @@ window.__llrSaveDesignerLevel = saveDesignerLevel;
 window.__llrGetDesignerLevelBase64 = () => selectedDesignerLevel()?.designerCode || "";
 window.__llrShowGameNotice = (message) => updateDesignerLevelStatus(String(message || ""));
 
+function handleGodotRuntimeMessage(event) {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type !== "llr-godot-missing-features") return;
+  const missing = Array.isArray(event.data.missing) ? event.data.missing.join("；") : "未知能力";
+  setGameStatus(`Godot 运行环境缺少能力：${missing}。请点“恢复/重载”，仍不行就换浏览器或升级系统 WebView。`);
+}
+
 function focusGame() {
   frame?.focus();
   try {
@@ -709,6 +716,7 @@ document.addEventListener("fullscreenchange", () => {
   }
 });
 window.addEventListener("blur", resetVirtualInputs);
+window.addEventListener("message", handleGodotRuntimeMessage);
 window.addEventListener("resize", syncInputMode);
 touchControlsQuery?.addEventListener?.("change", syncInputMode);
 document.addEventListener("visibilitychange", () => {
