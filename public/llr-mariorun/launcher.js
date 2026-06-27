@@ -176,6 +176,19 @@ function setGameStatus(message) {
   if (statusText) statusText.textContent = message;
 }
 
+function hasWebGL2Support() {
+  try {
+    const canvas = document.createElement("canvas");
+    return Boolean(canvas.getContext("webgl2"));
+  } catch {
+    return false;
+  }
+}
+
+function webGL2SupportMessage() {
+  return "这台设备或浏览器没有开启 WebGL2，当前完整 Godot 版无法运行。请尝试更新系统 WebView/浏览器、关闭浏览器省电/极速模式，或改用 Edge/Chrome；如果硬件本身不支持，就需要单独做 WebGL1 兼容版。";
+}
+
 function isFrameBlank() {
   if (!frame) return true;
   const rawSrc = frame.getAttribute("src") || "";
@@ -184,6 +197,12 @@ function isFrameBlank() {
 
 function loadGameRuntime(options = {}) {
   if (!frame) return;
+  if (!hasWebGL2Support()) {
+    document.body.classList.add("game-has-launched");
+    setGameStatus(webGL2SupportMessage());
+    frame.src = "about:blank";
+    return;
+  }
   selectedPackId = packSelect?.value || selectedPackId;
   frame.src = selectedGameUrl(options);
   document.body.classList.add("game-has-launched");
@@ -431,7 +450,10 @@ function handleGodotRuntimeMessage(event) {
   if (event.origin !== window.location.origin) return;
   if (event.data?.type !== "llr-godot-missing-features") return;
   const missing = Array.isArray(event.data.missing) ? event.data.missing.join("；") : "未知能力";
-  setGameStatus(`Godot 运行环境缺少能力：${missing}。请点“恢复/重载”，仍不行就换浏览器或升级系统 WebView。`);
+  const message = missing.includes("WebGL2")
+    ? webGL2SupportMessage()
+    : `Godot 运行环境缺少能力：${missing}。请点“恢复/重载”，仍不行就换浏览器或升级系统 WebView。`;
+  setGameStatus(message);
 }
 
 function focusGame() {
