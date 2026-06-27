@@ -125,7 +125,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(html, /data-key="KeyC"/);
   assert.match(html, /data-key="KeyZ"/);
   assert.match(html, /godot-frame/);
-  assert.match(html, /\/llr-mariorun\/godot\/index\.html/);
+  assert.doesNotMatch(html, /\/llr-mariorun\/godot\/index\.html/);
+  assert.match(html, /\/llr-mariorun\/godot\//);
   assert.match(html, /launcher\.js/);
   assert.match(css, /\.redux-hero/);
   assert.match(css, /\.game-frame-shell/);
@@ -152,7 +153,9 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /\/api\/admin\/game\/designer-levels/);
   assert.match(launcher, /method: "DELETE"/);
   assert.match(launcher, /function renderPrelaunchChoices/);
+  assert.match(html, /data-game-src="\/llr-mariorun\/godot\/"/);
   assert.match(launcher, /function selectedGameUrl/);
+  assert.match(launcher, /"\/llr-mariorun\/godot\/"/);
   assert.match(launcher, /function startSelectedGame/);
   assert.match(launcher, /loadGameRuntime\(\{ cacheBust: true \}\)/);
   assert.match(launcher, /function recoverGameRuntime/);
@@ -206,6 +209,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function requestLandscapeFullscreen/);
   assert.match(launcher, /recoverGameRuntime\("已退出全屏，正在恢复游戏运行时…"\)/);
   assert.match(launcher, /screen\.orientation\?\.lock\?\.\("landscape"\)/);
+  assert.match(godotLoader, /window\['isSecureContext'\] === true \|\|/);
+  assert.match(godotLoader, /window\.location\.protocol === 'https:'/);
   assert.match(godotLoader, /new DecompressionStream\('gzip'\)/);
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });

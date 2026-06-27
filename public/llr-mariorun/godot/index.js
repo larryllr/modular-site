@@ -50,7 +50,13 @@ const Features = {
 	 * @function Engine.isSecureContext
 	 */
 	isSecureContext: function () {
-		return window['isSecureContext'] === true;
+		return window['isSecureContext'] === true || (
+			window.location && (
+				window.location.protocol === 'https:' ||
+				window.location.hostname === 'localhost' ||
+				window.location.hostname === '127.0.0.1'
+			)
+		);
 	},
 
 	/**

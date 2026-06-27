@@ -162,7 +162,7 @@ function updateDesignerLevelDeleteButton() {
 }
 
 function selectedGameUrl(options = {}) {
-  const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/index.html";
+  const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/";
   const url = new URL(base, window.location.origin);
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
   if (selectedDesignerLevelId) url.searchParams.set("designerLevel", selectedDesignerLevelId);
