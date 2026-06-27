@@ -186,7 +186,7 @@ function hasWebGL2Support() {
 }
 
 function webGL2SupportMessage() {
-  return "这台设备或浏览器没有开启 WebGL2，当前完整 Godot 版无法运行。请尝试更新系统 WebView/浏览器、关闭浏览器省电/极速模式，或改用 Edge/Chrome；如果硬件本身不支持，就需要单独做 WebGL1 兼容版。";
+  return "这台设备或浏览器没有开启 WebGL2，当前完整 Godot 版无法运行。请尝试更新系统 WebView/浏览器、关闭浏览器省电/极速模式，或改用 Edge/Chrome；如果硬件本身不支持，就需要单独做 WebGL1 兼容版。建议更换 Edge 浏览器，网页游戏环境手机自带浏览器兼容性容易出问题。";
 }
 
 function isFrameBlank() {

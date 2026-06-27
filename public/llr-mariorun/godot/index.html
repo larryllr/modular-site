@@ -184,7 +184,7 @@ const engine = new Engine(GODOT_CONFIG);
 
 	function formatMissingFeatures(missing) {
 		if (missing.some((feature) => feature.indexOf('WebGL2') !== -1)) {
-			return '错误\n这台设备或浏览器没有开启 WebGL2，当前完整 Godot 版无法运行。\n\n可尝试：\n1. 更新系统 WebView / 浏览器；\n2. 关闭浏览器省电、极速、兼容模式；\n3. 改用 Edge 或 Chrome；\n4. 如果硬件本身不支持 WebGL2，需要单独制作 WebGL1 兼容版。';
+			return '错误\n这台设备或浏览器没有开启 WebGL2，当前完整 Godot 版无法运行。\n\n可尝试：\n1. 更新系统 WebView / 浏览器；\n2. 关闭浏览器省电、极速、兼容模式；\n3. 改用 Edge 或 Chrome；\n4. 如果硬件本身不支持 WebGL2，需要单独制作 WebGL1 兼容版。\n\n建议更换 Edge 浏览器，网页游戏环境手机自带浏览器兼容性容易出问题。';
 		}
 		return 'Error\nThe following features required to run Godot projects on the Web are missing:\n' + missing.join('\n');
 	}
