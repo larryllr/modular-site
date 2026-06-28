@@ -10,6 +10,12 @@
     "run_worker_first": ["/api/*", "/llrgamecubecity", "/llr-mariorun", "/llr-mariorun/*"],
     "not_found_handling": "single-page-application"
   },
+  "routes": [
+    {
+      "pattern": "neyc.de5.net/*",
+      "zone_name": "neyc.de5.net"
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "SITE_CONFIG",
