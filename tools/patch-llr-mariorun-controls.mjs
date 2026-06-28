@@ -1,0 +1,48 @@
+import { readFileSync, writeFileSync } from "node:fs";
+
+function read(path) { return readFileSync(path, "utf8"); }
+function write(path, text) { writeFileSync(path, text); }
+function replaceOnce(text, from, to, label) {
+  if (!text.includes(from)) throw new Error(`Missing block: ${label}`);
+  return text.replace(from, to);
+}
+
+let launcher = read("public/llr-mariorun/launcher.js");
+if (!launcher.includes("backToLauncherButton")) {
+  launcher = replaceOnce(launcher, `const reloadButton = document.querySelector("#reload-game");\nconst fullscreenButton = document.querySelector("#fullscreen-game");`, `const reloadButton = document.querySelector("#reload-game");\nconst backToLauncherButton = document.querySelector("#back-to-launcher");\nconst fullscreenButton = document.querySelector("#fullscreen-game");`, "back selector");
+}
+if (!launcher.includes("function returnToLauncher")) {
+  launcher = replaceOnce(launcher, `function recoverGameRuntime(message = "正在重建游戏运行时…") {\n  if (!frame) return;\n  resetVirtualInputs();\n  window.clearTimeout(runtimeReloadTimer);\n  document.body.classList.add("game-has-launched");\n  setGameStatus(message);\n  frame.src = "about:blank";\n  runtimeReloadTimer = window.setTimeout(() => {\n    loadGameRuntime({\n      cacheBust: true,\n      status: "正在重新载入 Godot 游戏…"\n    });\n  }, 120);\n}\n`, `function recoverGameRuntime(message = "正在重建游戏运行时…") {\n  if (!frame) return;\n  resetVirtualInputs();\n  window.clearTimeout(runtimeReloadTimer);\n  document.body.classList.add("game-has-launched");\n  setGameStatus(message);\n  frame.src = "about:blank";\n  runtimeReloadTimer = window.setTimeout(() => {\n    loadGameRuntime({\n      cacheBust: true,\n      status: "正在重新载入 Godot 游戏…"\n    });\n  }, 120);\n}\n\nfunction returnToLauncher(message = "已返回开始前选择。") {\n  resetVirtualInputs();\n  window.clearTimeout(runtimeReloadTimer);\n  if (frame) frame.src = "about:blank";\n  document.body.classList.remove("game-has-launched");\n  document.body.classList.remove("is-landscape-fullscreen");\n  document.body.classList.remove("is-forced-landscape");\n  fullscreenOrientationLocked = false;\n  try { screen.orientation?.unlock?.(); } catch {}\n  setGameStatus(message);\n  loadManifestStatus();\n}\n\nfunction rescueGameRuntime() {\n  if (isFrameBlank()) { startSelectedGame(); return; }\n  recoverGameRuntime("正在从天上回到场地…");\n}\n`, "return functions");
+}
+if (!launcher.includes("button[data-action]")) {
+  launcher = replaceOnce(launcher, `  document.querySelectorAll(".virtual-controls button[data-key]").forEach((button) => {\n    const codes = buttonCodes(button);\n    const press = (event) => {`, `  document.querySelectorAll(".virtual-controls button[data-action]").forEach((button) => {\n    const action = button.dataset.action;\n    const runAction = (event) => {\n      event.preventDefault();\n      event.stopPropagation();\n      button.classList.add("is-pressed");\n      window.setTimeout(() => button.classList.remove("is-pressed"), 120);\n      if (action === "back") returnToLauncher();\n      if (action === "rescue") rescueGameRuntime();\n    };\n    button.addEventListener("click", runAction);\n    button.addEventListener("pointerdown", (event) => {\n      event.preventDefault();\n      event.stopPropagation();\n      button.setPointerCapture?.(event.pointerId);\n    });\n    button.addEventListener("contextmenu", (event) => event.preventDefault());\n    button.addEventListener("selectstart", (event) => event.preventDefault());\n  });\n\n  document.querySelectorAll(".virtual-controls button[data-key]").forEach((button) => {\n    const codes = buttonCodes(button);\n    const press = (event) => {`, "virtual actions");
+}
+if (!launcher.includes("backToLauncherButton?.addEventListener")) {
+  launcher = replaceOnce(launcher, `reloadButton?.addEventListener("click", () => {\n  if (isFrameBlank()) {\n    startSelectedGame();\n  } else {\n    recoverGameRuntime("正在重建游戏运行时…");\n  }\n});\nfullscreenButton?.addEventListener("click", async () => {`, `reloadButton?.addEventListener("click", () => {\n  if (isFrameBlank()) {\n    startSelectedGame();\n  } else {\n    recoverGameRuntime("正在重建游戏运行时…");\n  }\n});\nbackToLauncherButton?.addEventListener("click", () => returnToLauncher());\nfullscreenButton?.addEventListener("click", async () => {`, "back event");
+}
+write("public/llr-mariorun/launcher.js", launcher);
+
+let worker = read("src/index.ts");
+if (worker.includes("res://scenes/levels/extra/smb_1_1/smb_1_1.tscn.remap")) {
+  worker = replaceOnce(worker, `const sm63ExtrasPckEntries = [\n  "res://scenes/menus/title/main_menu/main_menu.gdc",\n  "res://scenes/levels/extra/smb_1_1/smb_1_1.tscn.remap"\n];\n\nfunction patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer): Uint8Array {\n  const target = parseGodotPck(targetBuffer);\n  const source = parseGodotPck(sourceBuffer);\n  const sourceEntries = new Map(source.entries.map((entry) => [entry.name, entry]));\n  const extraScene = source.entries.find((entry) => entry.name.endsWith("-smb_1_1.scn"));\n  const replacementNames = extraScene ? [...sm63ExtrasPckEntries, extraScene.name] : [...sm63ExtrasPckEntries];\n`, `const sm63ExtrasPckEntries = [\n  "res://scenes/menus/title/main_menu/main_menu.gdc",\n  "res://classes/zone/trigger/death_plane/death_plane.gdc"\n];\n\nfunction patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer): Uint8Array {\n  const target = parseGodotPck(targetBuffer);\n  const source = parseGodotPck(sourceBuffer);\n  const sourceEntries = new Map(source.entries.map((entry) => [entry.name, entry]));\n  const replacementNames = [...sm63ExtrasPckEntries];\n`, "worker pck entries");
+  write("src/index.ts", worker);
+}
+
+let mainMenu = read("vendor/Legacy_SM63Redux/scenes/menus/title/main_menu/main_menu.gd");
+if (mainMenu.includes(`\t\t\t2:\n\t\t\t\t_show_extras_message()`)) {
+  mainMenu = replaceOnce(mainMenu, `\t\t\t2:\n\t\t\t\t_show_extras_message()`, `\t\t\t2:\n\t\t\t\t_menu_to_scene("res://scenes/levels/tutorial_1/tutorial_1_1.tscn")`, "extras route");
+}
+mainMenu = mainMenu.replace(`\tSingleton.log_msg("Extras 暂未开放；Story Mode、Level Designer 和 Options 已可用。")\n\tif OS.has_feature("web"):\n\t\tJavaScriptBridge.eval("window.parent.__llrShowGameNotice && window.parent.__llrShowGameNotice('Extras 暂未开放，后面可以继续补内容。')", true)`, `\tSingleton.log_msg("Extras 已改为稳定试玩关卡；避免加载不完整测试场景。")\n\tif OS.has_feature("web"):\n\t\tJavaScriptBridge.eval("window.parent.__llrShowGameNotice && window.parent.__llrShowGameNotice('Extras 已改为稳定试玩关卡。')", true)`);
+write("vendor/Legacy_SM63Redux/scenes/menus/title/main_menu/main_menu.gd", mainMenu);
+
+write("vendor/Legacy_SM63Redux/classes/zone/trigger/death_plane/death_plane.gd", `extends Polygon2D\n\n\nconst SKY_RESPAWN_OFFSET := Vector2(0, -360)\nconst MIN_RESPAWN_Y := -280.0\n\n\nfunc _ready():\n\t$Area2D/CollisionPolygon2D.polygon = polygon\n\n\nfunc _on_Area2D_body_entered(body):\n\tvar player = body if body and body.name == "Player" else get_node_or_null("/root/Main/Player")\n\tif player == null:\n\t\treturn\n\t_rescue_player_from_void(player)\n\n\nfunc _rescue_player_from_void(player):\n\tvar respawn_position = player.position + SKY_RESPAWN_OFFSET\n\trespawn_position.y = min(respawn_position.y, MIN_RESPAWN_Y)\n\tplayer.position = respawn_position\n\tif player.get("vel") != null:\n\t\tplayer.vel = Vector2.ZERO\n\tif player.has_method("take_damage"):\n\t\tplayer.take_damage(1)\n\tSingleton.log_msg("掉出场地，已从上方拉回。")\n`);
+
+let tests = read("tests/llr-mariorun.test.mjs");
+tests = tests.replace(`  assert.match(worker, /res:\\/\\/scenes\\/levels\\/extra\\/smb_1_1\\/smb_1_1\\.tscn\\.remap/);\n  assert.match(worker, /entry\\.name\\.endsWith\\("-smb_1_1\\.scn"\\)/);`, `  assert.match(worker, /res:\\/\\/classes\\/zone\\/trigger\\/death_plane\\/death_plane\\.gdc/);`);
+if (!tests.includes("/返回选择/")) tests = tests.replace(`  assert.match(html, /恢复\\/重载/);\n  assert.match(html, /横屏全屏/);`, `  assert.match(html, /恢复\\/重载/);\n  assert.match(html, /返回选择/);\n  assert.match(html, /横屏全屏/);`);
+if (!tests.includes("data-action=\"rescue\"")) tests = tests.replace(`  assert.match(html, /data-key="KeyZ"/);`, `  assert.match(html, /data-key="KeyZ"/);\n  assert.match(html, /data-action="rescue"/);\n  assert.match(html, /data-action="back"/);`);
+if (!tests.includes("function returnToLauncher")) tests = tests.replace(`  assert.match(launcher, /function recoverGameRuntime/);`, `  assert.match(launcher, /function recoverGameRuntime/);\n  assert.match(launcher, /function returnToLauncher/);\n  assert.match(launcher, /function rescueGameRuntime/);`);
+tests = tests.replace(`test("llr-mariorun Godot pack exposes SMB 1-1 through the internal Extras menu", () => {\n  const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");\n  assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));\n  assert.ok(entries.includes("res://scenes/levels/extra/smb_1_1/smb_1_1.tscn.remap"));\n  assert.ok(entries.some((entry) => entry.endsWith("-smb_1_1.scn")));\n  assert.equal(existsSync(new URL("public/llr-mariorun/extra/smb-1-1/index.html", root)), false);\n});`, `test("llr-mariorun Godot pack keeps Extras on a stable level and rescues void falls", () => {\n  const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");\n  assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));\n  assert.ok(entries.includes("res://classes/zone/trigger/death_plane/death_plane.gdc"));\n  assert.equal(existsSync(new URL("public/llr-mariorun/extra/smb-1-1/index.html", root)), false);\n});`);
+write("tests/llr-mariorun.test.mjs", tests);
+
+console.log("llr-mariorun controls patch complete");

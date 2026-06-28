@@ -2227,15 +2227,15 @@ type GodotPckArchive = {
 
 const sm63ExtrasPckEntries = [
   "res://scenes/menus/title/main_menu/main_menu.gdc",
-  "res://scenes/levels/extra/smb_1_1/smb_1_1.tscn.remap"
+  "res://classes/zone/trigger/death_plane/death_plane.gdc",
+  "res://classes/global/singleton/singleton.gdc"
 ];
 
 function patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer): Uint8Array {
   const target = parseGodotPck(targetBuffer);
   const source = parseGodotPck(sourceBuffer);
   const sourceEntries = new Map(source.entries.map((entry) => [entry.name, entry]));
-  const extraScene = source.entries.find((entry) => entry.name.endsWith("-smb_1_1.scn"));
-  const replacementNames = extraScene ? [...sm63ExtrasPckEntries, extraScene.name] : [...sm63ExtrasPckEntries];
+  const replacementNames = [...sm63ExtrasPckEntries];
 
   for (const name of replacementNames) {
     if (!sourceEntries.has(name)) {

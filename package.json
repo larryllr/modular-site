@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node ./node_modules/wrangler/bin/wrangler.js dev",
     "build:cubecity": "npm --prefix vendor/cubecity run build -- --outDir ../../public/llrgamecubecity --emptyOutDir",
+    "predeploy": "node tools/patch-llr-mariorun-controls.mjs && node tools/patch-llr-mariorun-game-actions.mjs && node tools/patch-llr-mariorun-pck-sync.mjs && node tools/export-llr-godot-pck.mjs",
     "deploy": "npm run build:cubecity && node ./node_modules/wrangler/bin/wrangler.js deploy",
     "check": "node ./node_modules/typescript/bin/tsc --noEmit",
     "test": "node --test tests/*.test.mjs",

@@ -1,6 +1,7 @@
 const frame = document.querySelector("#godot-frame");
 const focusButton = document.querySelector("#focus-game");
 const reloadButton = document.querySelector("#reload-game");
+const backToLauncherButton = document.querySelector("#back-to-launcher");
 const fullscreenButton = document.querySelector("#fullscreen-game");
 const statusText = document.querySelector("#frame-status");
 const shell = document.querySelector(".game-frame-shell");
@@ -228,6 +229,35 @@ function recoverGameRuntime(message = "正在重建游戏运行时…") {
       status: "正在重新载入 Godot 游戏…"
     });
   }, 120);
+}
+
+function sendGameCommand(command, message = "正在通过游戏内部返回主菜单…") {
+  if (isFrameBlank()) {
+    setGameStatus("游戏尚未启动，请先开始游戏。");
+    return;
+  }
+  resetVirtualInputs();
+  focusGame();
+  try {
+    const target = frame?.contentWindow;
+    if (!target) return;
+    target.__llrPendingGameCommand = command;
+    if (typeof target.__llrReceiveGameCommand === "function") {
+      target.__llrReceiveGameCommand(command);
+    }
+    target.postMessage({ type: "llr-game-command", command }, window.location.origin);
+    setGameStatus(message);
+  } catch {
+    setGameStatus("无法连接游戏内部命令，请点暂停菜单返回主菜单。" );
+  }
+}
+
+function returnToLauncher(message = "正在通过游戏内部返回主菜单…") {
+  sendGameCommand("main_menu", message);
+}
+
+function rescueGameRuntime() {
+  sendGameCommand("main_menu", "正在通过游戏内部回到主菜单…");
 }
 
 function deleteDatabase(name) {
@@ -548,6 +578,26 @@ function attachGodotCanvasRecovery() {
 
 function bindVirtualControls() {
   bindVirtualJoystick();
+  document.querySelectorAll(".virtual-controls button[data-action]").forEach((button) => {
+    const action = button.dataset.action;
+    const runAction = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      button.classList.add("is-pressed");
+      window.setTimeout(() => button.classList.remove("is-pressed"), 120);
+      if (action === "back") returnToLauncher();
+      if (action === "rescue") rescueGameRuntime();
+    };
+    button.addEventListener("click", runAction);
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      button.setPointerCapture?.(event.pointerId);
+    });
+    button.addEventListener("contextmenu", (event) => event.preventDefault());
+    button.addEventListener("selectstart", (event) => event.preventDefault());
+  });
+
   document.querySelectorAll(".virtual-controls button[data-key]").forEach((button) => {
     const codes = buttonCodes(button);
     const press = (event) => {
@@ -717,6 +767,7 @@ reloadButton?.addEventListener("click", () => {
     recoverGameRuntime("正在重建游戏运行时…");
   }
 });
+backToLauncherButton?.addEventListener("click", () => returnToLauncher());
 fullscreenButton?.addEventListener("click", async () => {
   if (isFrameBlank()) startSelectedGame();
   await requestLandscapeFullscreen();

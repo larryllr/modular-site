@@ -21,8 +21,8 @@
         <aside class="redux-card" aria-label="操作提示">
           <strong>电脑键位</strong>
           <span>方向键 / WASD 移动</span>
-          <span>↑ 跳跃，X 旋转，Z 砸地 / 交互</span>
-          <span>C / 空格 使用喷水背包</span>
+          <span>↑ 跳跃，X 旋转，Z 砸地 / 交互，P 暂停</span>
+          <span>C / 空格 使用喷水背包；手机端“返回选择”可退出游戏。</span>
           <span>后台上传的 <code>game.bundle.pck</code> 会优先作为游戏包加载。</span>
         </aside>
       </section>
@@ -71,6 +71,7 @@
         <div class="frame-toolbar">
           <span id="frame-status">正在加载 Godot 游戏…</span>
           <button id="reload-game" type="button">恢复/重载</button>
+          <button id="back-to-launcher" type="button">返回选择</button>
           <button type="button" data-reset-game-data>重置存档</button>
           <button id="fullscreen-game" type="button">横屏全屏</button>
         </div>
@@ -84,6 +85,8 @@
             <button data-key="KeyX" type="button">旋转</button>
             <button data-key="KeyC" data-extra-key="Space" type="button">喷水</button>
             <button data-key="KeyZ" type="button">砸地</button>
+            <button data-action="rescue" type="button">回场</button>
+            <button data-action="back" type="button">返回</button>
           </div>
         </div>
       </section>

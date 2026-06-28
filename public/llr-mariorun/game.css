@@ -409,6 +409,27 @@ body.has-touch-controls .virtual-controls {
   background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.06) 42%), rgba(255, 87, 108, 0.84);
 }
 
+.virtual-actions button[data-action] {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 10;
+  width: auto;
+  min-width: 72px;
+  height: 42px;
+  padding: 0 16px;
+  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.06) 42%), rgba(91, 231, 255, 0.82);
+}
+
+.virtual-actions button[data-action="rescue"] {
+  top: max(14px, env(safe-area-inset-top));
+}
+
+.virtual-actions button[data-action="back"] {
+  top: calc(max(14px, env(safe-area-inset-top)) + 50px);
+  background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.06) 42%), rgba(255, 207, 51, 0.88);
+  color: #15101f;
+}
+
 .virtual-controls button.is-pressed {
   transform: translateY(4px) scale(0.96);
   box-shadow: inset 0 5px 14px rgba(0, 0, 0, 0.34), 0 5px 16px rgba(0, 0, 0, 0.25);

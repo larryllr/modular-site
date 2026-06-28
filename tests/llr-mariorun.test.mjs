@@ -52,8 +52,7 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(worker, /async function fetchGodotGamePack\(request: Request, env: AppEnv\)/);
   assert.match(worker, /function patchSm63ExtrasIntoPck\(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer\)/);
   assert.match(worker, /const sm63ExtrasPckEntries = \[/);
-  assert.match(worker, /res:\/\/scenes\/levels\/extra\/smb_1_1\/smb_1_1\.tscn\.remap/);
-  assert.match(worker, /entry\.name\.endsWith\("-smb_1_1\.scn"\)/);
+  assert.match(worker, /res:\/\/classes\/zone\/trigger\/death_plane\/death_plane\.gdc/);
   assert.match(worker, /headers\.set\("x-llr-extra-patch", "applied"\)/);
   assert.match(worker, /safeUrlSearchParam\(referer, "pack"\)/);
   assert.match(worker, /pack\.id === requestedPackId/);
@@ -124,6 +123,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(html, /data-key="KeyX"/);
   assert.match(html, /data-key="KeyC"/);
   assert.match(html, /data-key="KeyZ"/);
+  assert.match(html, /data-action="rescue"/);
+  assert.match(html, /data-action="back"/);
   assert.match(html, /godot-frame/);
   assert.doesNotMatch(html, /\/llr-mariorun\/godot\/index\.html/);
   assert.match(html, /\/llr-mariorun\/godot\//);
@@ -159,6 +160,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function startSelectedGame/);
   assert.match(launcher, /loadGameRuntime\(\{ cacheBust: true \}\)/);
   assert.match(launcher, /function recoverGameRuntime/);
+  assert.match(launcher, /function returnToLauncher/);
+  assert.match(launcher, /function rescueGameRuntime/);
   assert.match(launcher, /llr-godot-missing-features/);
   assert.match(launcher, /Godot 运行环境缺少能力/);
   assert.match(launcher, /这台设备或浏览器没有开启 WebGL2/);
@@ -223,11 +226,10 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });
 
-test("llr-mariorun Godot pack exposes SMB 1-1 through the internal Extras menu", () => {
+test("llr-mariorun Godot pack keeps Extras on a stable level and rescues void falls", () => {
   const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");
   assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));
-  assert.ok(entries.includes("res://scenes/levels/extra/smb_1_1/smb_1_1.tscn.remap"));
-  assert.ok(entries.some((entry) => entry.endsWith("-smb_1_1.scn")));
+  assert.ok(entries.includes("res://classes/zone/trigger/death_plane/death_plane.gdc"));
   assert.equal(existsSync(new URL("public/llr-mariorun/extra/smb-1-1/index.html", root)), false);
 });
 
