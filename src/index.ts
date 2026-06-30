@@ -2228,7 +2228,8 @@ type GodotPckArchive = {
 const sm63ExtrasPckEntries = [
   "res://scenes/menus/title/main_menu/main_menu.gdc",
   "res://classes/zone/trigger/death_plane/death_plane.gdc",
-  "res://classes/global/singleton/singleton.gdc"
+  "res://classes/global/singleton/singleton.gdc",
+  "res://scenes/levels/llr_complete/llr_complete_1.tscn"
 ];
 
 function patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer): Uint8Array {

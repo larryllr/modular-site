@@ -226,7 +226,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });
 
-test("llr-mariorun Godot pack keeps Extras on a stable level and rescues void falls", () => {
+test("llr-mariorun Godot pack keeps Extras on a complete built-in level and rescues void falls", () => {
   const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");
   assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));
   assert.ok(entries.includes("res://classes/zone/trigger/death_plane/death_plane.gdc"));
