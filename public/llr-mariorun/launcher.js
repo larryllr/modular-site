@@ -668,13 +668,33 @@ function bindVirtualJoystick() {
       if (!activeKeys.size) stopHeartbeat();
     }
   };
-  const update = (event) => {
+  const pointerDeltaInJoystickSpace = (event) => {
     const rect = joystick.getBoundingClientRect();
-    const radius = Math.min(rect.width, rect.height) / 2;
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
-    const rawX = event.clientX - centerX;
-    const rawY = event.clientY - centerY;
+    let x = event.clientX - centerX;
+    let y = event.clientY - centerY;
+    const host = joystick.closest(".game-frame-shell");
+    const transform = host ? getComputedStyle(host).transform : "none";
+    const MatrixCtor = window.DOMMatrixReadOnly || window.DOMMatrix || window.WebKitCSSMatrix;
+    if (transform && transform !== "none" && MatrixCtor) {
+      try {
+        const matrix = new MatrixCtor(transform);
+        const det = matrix.a * matrix.d - matrix.b * matrix.c;
+        if (Math.abs(det) > 0.0001) {
+          const localX = (matrix.d * x - matrix.c * y) / det;
+          const localY = (-matrix.b * x + matrix.a * y) / det;
+          x = localX;
+          y = localY;
+        }
+      } catch {
+        // Fall back to viewport deltas when a browser cannot parse the matrix.
+      }
+    }
+    return { x, y, radius: Math.min(rect.width, rect.height) / 2 };
+  };
+  const update = (event) => {
+    const { x: rawX, y: rawY, radius } = pointerDeltaInJoystickSpace(event);
     const distance = Math.min(radius, Math.hypot(rawX, rawY));
     const angle = Math.atan2(rawY, rawX);
     const x = Math.cos(angle) * distance;
