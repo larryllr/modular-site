@@ -22,7 +22,7 @@ const completeScene = `[gd_scene load_steps=16 format=3]
 [ext_resource type="PackedScene" path="res://classes/solid/log/log_fall.tscn" id="14"]
 [ext_resource type="PackedScene" path="res://classes/zone/trigger/warpzone/warp_zone.tscn" id="15"]
 
-[node name="LLRComplete1" type="Node2D"]
+[node name="Main" type="Node2D"]
 
 [node name="BGT1" parent="." instance=ExtResource("3")]
 
