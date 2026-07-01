@@ -89,15 +89,15 @@ polygon = PackedVector2Array(0, 0, 240, 0, 240, 34, 0, 34)
 [node name="Signs" type="Node2D" parent="Items"]
 
 [node name="StartSign" parent="Items/Signs" instance=ExtResource("5")]
-position = Vector2(190, 165)
+position = Vector2(190, 178)
 lines = Array[String](["[@n,LLR]这是新的完整关卡。一路向右，吃金币、躲敌人，跳过水坑和空中平台，到达终点光门。", "按跳跃、旋转、喷水和砸地都能用；手机摇杆现在也会按旋转后的画面坐标计算。"])
 
 [node name="MidSign" parent="Items/Signs" instance=ExtResource("5")]
-position = Vector2(1810, 128)
+position = Vector2(1810, 144)
 lines = Array[String](["[@n,LLR]中段开始会有水坑和断桥。用短跳上台阶，用旋转补一点滞空。"])
 
 [node name="EndSign" parent="Items/Signs" instance=ExtResource("5")]
-position = Vector2(3900, 132)
+position = Vector2(3900, 164)
 lines = Array[String](["[@n,LLR]终点到了。穿过右侧光门会回到主菜单。"])
 
 [node name="Decoration" type="Node2D" parent="Items"]

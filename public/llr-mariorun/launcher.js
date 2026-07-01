@@ -670,10 +670,19 @@ function bindVirtualJoystick() {
   };
   const pointerDeltaInJoystickSpace = (event) => {
     const rect = joystick.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    let x = event.clientX - centerX;
-    let y = event.clientY - centerY;
+    const scrollX = window.scrollX || window.pageXOffset || 0;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const viewport = window.visualViewport;
+    const viewportOffsetX = viewport && !document.fullscreenElement ? viewport.offsetLeft || 0 : 0;
+    const viewportOffsetY = viewport && !document.fullscreenElement ? viewport.offsetTop || 0 : 0;
+    const centerX = rect.left + scrollX + rect.width / 2;
+    const centerY = rect.top + scrollY + rect.height / 2;
+    let x = (event.pageX || event.clientX + scrollX + viewportOffsetX) - centerX;
+    let y = (event.pageY || event.clientY + scrollY + viewportOffsetY) - centerY;
+    if ((event.pageX == null || event.pageY == null) && (viewportOffsetX || viewportOffsetY)) {
+      x += viewportOffsetX;
+      y += viewportOffsetY;
+    }
     const host = joystick.closest(".game-frame-shell");
     const transform = host ? getComputedStyle(host).transform : "none";
     const MatrixCtor = window.DOMMatrixReadOnly || window.DOMMatrix || window.WebKitCSSMatrix;
