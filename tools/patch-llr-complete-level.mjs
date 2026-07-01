@@ -28,7 +28,7 @@ const completeScene = `[gd_scene load_steps=16 format=3]
 
 [node name="CameraArea" parent="." instance=ExtResource("4")]
 visible = false
-polygon = PackedVector2Array(-64, -352, 4400, -352, 4400, 560, -64, 560)
+polygon = PackedVector2Array(-64, -352, 6500, -352, 6500, 560, -64, 560)
 
 [node name="Player" parent="." instance=ExtResource("2")]
 position = Vector2(110, 153)
@@ -37,7 +37,7 @@ position = Vector2(110, 153)
 
 [node name="MainHills" parent="Terrain" instance=ExtResource("1")]
 z_index = 1
-polygon = PackedVector2Array(-320, 180, 0, 180, 260, 180, 430, 160, 670, 160, 820, 196, 1000, 212, 1160, 170, 1330, 158, 1510, 190, 1680, 190, 1830, 145, 2010, 145, 2160, 204, 2340, 218, 2530, 176, 2720, 156, 2920, 156, 3090, 206, 3270, 206, 3440, 146, 3620, 146, 3800, 176, 3980, 166, 4260, 166, 4560, 232, 4560, 720, -320, 720)
+polygon = PackedVector2Array(-320, 180, 0, 180, 260, 180, 430, 160, 670, 160, 820, 196, 1000, 212, 1160, 170, 1330, 158, 1510, 190, 1680, 190, 1830, 145, 2010, 145, 2160, 204, 2340, 218, 2530, 176, 2720, 156, 2920, 156, 3090, 206, 3270, 206, 3440, 146, 3620, 146, 3800, 176, 3980, 166, 4260, 166, 4560, 232, 4760, 218, 4960, 178, 5180, 168, 5400, 190, 5620, 190, 5840, 162, 6060, 162, 6280, 184, 6500, 184, 6500, 720, -320, 720)
 
 [node name="TrainingStep" parent="Terrain" instance=ExtResource("1")]
 z_index = 2
@@ -97,8 +97,8 @@ position = Vector2(1810, 144)
 lines = Array[String](["[@n,LLR]中段开始会有水坑和断桥。用短跳上台阶，用旋转补一点滞空。"])
 
 [node name="EndSign" parent="Items/Signs" instance=ExtResource("5")]
-position = Vector2(3900, 164)
-lines = Array[String](["[@n,LLR]终点到了。穿过右侧光门会回到主菜单。"])
+position = Vector2(6040, 160)
+lines = Array[String](["[@n,LLR]第一阶段长关卡骨架已经完成。继续向右穿过终点光门，后续会逐段加入更多金币、敌人和平台机关。"])
 
 [node name="Decoration" type="Node2D" parent="Items"]
 
@@ -119,6 +119,15 @@ position = Vector2(1620, 178)
 
 [node name="TreeLate" parent="Items/Decoration" instance=ExtResource("7")]
 position = Vector2(3370, 122)
+
+[node name="TreeRunout" parent="Items/Decoration" instance=ExtResource("6")]
+position = Vector2(4930, 138)
+
+[node name="FlowersRunout" parent="Items/Decoration" instance=ExtResource("8")]
+position = Vector2(5350, 178)
+
+[node name="TreeGoal" parent="Items/Decoration" instance=ExtResource("7")]
+position = Vector2(5920, 128)
 
 [node name="Coins" type="Node2D" parent="Items"]
 
@@ -176,6 +185,30 @@ position = Vector2(3340, 16)
 [node name="BlueCoinReward" parent="Items/Coins" instance=ExtResource("11")]
 position = Vector2(3770, 52)
 
+[node name="RunoutCoin1" parent="Items/Coins" instance=ExtResource("10")]
+position = Vector2(4780, 176)
+
+[node name="RunoutCoin2" parent="Items/Coins" instance=ExtResource("10")]
+position = Vector2(4920, 136)
+
+[node name="RunoutCoin3" parent="Items/Coins" instance=ExtResource("10")]
+position = Vector2(5060, 126)
+
+[node name="RunoutCoin4" parent="Items/Coins" instance=ExtResource("10")]
+position = Vector2(5220, 146)
+
+[node name="RunoutCoin5" parent="Items/Coins" instance=ExtResource("10")]
+position = Vector2(5420, 154)
+
+[node name="GoalCoin1" parent="Items/Coins" instance=ExtResource("10")]
+position = Vector2(5860, 126)
+
+[node name="GoalCoin2" parent="Items/Coins" instance=ExtResource("10")]
+position = Vector2(5920, 112)
+
+[node name="GoalBlueCoin" parent="Items/Coins" instance=ExtResource("11")]
+position = Vector2(6100, 108)
+
 [node name="Enemies" type="Node2D" parent="Items"]
 
 [node name="Goomba1" parent="Items/Enemies" instance=ExtResource("9")]
@@ -211,7 +244,7 @@ position = Vector2(2060, 206)
 polygon = PackedVector2Array(0, 0, 390, 0, 390, 80, 320, 118, 120, 126, 0, 82)
 
 [node name="WarpZone" parent="." instance=ExtResource("15")]
-position = Vector2(4312, -120)
+position = Vector2(6320, -120)
 sweep_direction = Vector2(-1, 0)
 spawn_location = Vector2(110, 153)
 scene_path = "res://scenes/menus/title/main_menu/main_menu.tscn"
