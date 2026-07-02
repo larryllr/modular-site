@@ -113,11 +113,26 @@ body {
 				if (runId) {
 					url.searchParams.set('run', runId);
 				}
-				return nativeFetch(url.toString(), {
+				const responsePromise = nativeFetch(url.toString(), {
 					...init,
 					cache: 'no-store',
 					credentials: init?.credentials || 'same-origin'
 				});
+				responsePromise.then((response) => {
+					try {
+						if (window.parent && window.parent !== window) {
+							window.parent.postMessage({
+								type: 'llr-godot-pack-status',
+								pack: selectedPack,
+								patch: response.headers.get('x-llr-extra-patch') || '',
+								packId: response.headers.get('x-llr-pack-id') || ''
+							}, window.location.origin);
+						}
+					} catch {
+						// Parent diagnostics are best-effort only.
+					}
+				});
+				return responsePromise;
 			}
 		} catch {
 			// Fall through to the native fetch below.

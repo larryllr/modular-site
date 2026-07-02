@@ -16,6 +16,7 @@ const adminAssetEditorLink = document.querySelector("[data-admin-asset-editor]")
 const designerLevelStatus = document.querySelector("[data-designer-level-status]");
 const adminTokenKey = "cloudflare-modular-site.admin-token";
 const localDesignerLevelsKey = "llr-mariorun.local-designer-levels.v1";
+const resumeSceneKey = "llr-mariorun.resume-scene.v1";
 let manifest = null;
 let selectedPackId = "";
 let selectedDesignerLevelId = "";
@@ -162,11 +163,42 @@ function updateDesignerLevelDeleteButton() {
   deleteSelectedDesignerLevelButton.hidden = !(selected?.scope === "public" && localStorage.getItem(adminTokenKey));
 }
 
+function readResumeScene() {
+  try {
+    const scene = localStorage.getItem(resumeSceneKey) || "";
+    return scene.startsWith("res://scenes/") ? scene : "";
+  } catch {
+    return "";
+  }
+}
+
+function writeResumeScene(scene) {
+  try {
+    if (String(scene || "").startsWith("res://scenes/")) {
+      localStorage.setItem(resumeSceneKey, String(scene));
+    }
+  } catch {
+    // Storage can be disabled in private or low-memory browsers.
+  }
+}
+
+function clearResumeScene() {
+  try {
+    localStorage.removeItem(resumeSceneKey);
+  } catch {
+    // Storage can be disabled in private or low-memory browsers.
+  }
+}
+
 function selectedGameUrl(options = {}) {
   const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/";
   const url = new URL(base, window.location.origin);
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
   if (selectedDesignerLevelId) url.searchParams.set("designerLevel", selectedDesignerLevelId);
+  if (options.resumeLast) {
+    const resumeScene = readResumeScene();
+    if (resumeScene) url.searchParams.set("resumeScene", resumeScene);
+  }
   url.searchParams.set("locale", "zh_CN");
   if (!shouldShowTouchControls()) url.searchParams.set("perf", "desktop");
   if (options.cacheBust) url.searchParams.set("run", String(Date.now()));
@@ -213,6 +245,7 @@ function loadGameRuntime(options = {}) {
 }
 
 function startSelectedGame() {
+  clearResumeScene();
   loadGameRuntime({ cacheBust: true });
 }
 
@@ -226,7 +259,8 @@ function recoverGameRuntime(message = "正在重建游戏运行时…") {
   runtimeReloadTimer = window.setTimeout(() => {
     loadGameRuntime({
       cacheBust: true,
-      status: "正在重新载入 Godot 游戏…"
+      resumeLast: true,
+      status: "正在重新载入 Godot 游戏，尽量恢复到上一次切换点…"
     });
   }, 120);
 }
@@ -478,12 +512,29 @@ window.__llrShowGameNotice = (message) => updateDesignerLevelStatus(String(messa
 
 function handleGodotRuntimeMessage(event) {
   if (event.origin !== window.location.origin) return;
-  if (event.data?.type !== "llr-godot-missing-features") return;
-  const missing = Array.isArray(event.data.missing) ? event.data.missing.join("；") : "未知能力";
-  const message = missing.includes("WebGL2")
-    ? webGL2SupportMessage()
-    : `Godot 运行环境缺少能力：${missing}。请点“恢复/重载”，仍不行就换浏览器或升级系统 WebView。`;
-  setGameStatus(message);
+  if (event.data?.type === "llr-godot-missing-features") {
+    const missing = Array.isArray(event.data.missing) ? event.data.missing.join("；") : "未知能力";
+    const message = missing.includes("WebGL2")
+      ? webGL2SupportMessage()
+      : `Godot 运行环境缺少能力：${missing}。请点“恢复/重载”，仍不行就换浏览器或升级系统 WebView。`;
+    setGameStatus(message);
+    return;
+  }
+  if (event.data?.type === "llr-godot-pack-status") {
+    const patch = String(event.data.patch || "");
+    const pack = String(event.data.pack || "");
+    if (pack && patch && patch !== "applied") {
+      setGameStatus(`自定义 PCK 已加载，但 ??? 必要场景补丁状态为 ${patch}。如果进不去 ???，请换回内置包或重新上传完整 PCK。`);
+    }
+    return;
+  }
+  if (event.data?.type === "llr-godot-scene-checkpoint") {
+    writeResumeScene(event.data.scene);
+    return;
+  }
+  if (event.data?.type === "llr-godot-clear-checkpoint") {
+    clearResumeScene();
+  }
 }
 
 function focusGame() {

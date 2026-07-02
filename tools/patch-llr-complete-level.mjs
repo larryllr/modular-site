@@ -4,6 +4,135 @@ import { dirname } from "node:path";
 const completeScenePath = "vendor/Legacy_SM63Redux/scenes/levels/llr_complete/llr_complete_1.tscn";
 const completeSceneResource = "res://scenes/levels/llr_complete/llr_complete_1.tscn";
 
+function nodeBlock(name, parent, instanceId, lines = []) {
+  return [`[node name="${name}" parent="${parent}" instance=ExtResource("${instanceId}")]`, ...lines, ""].join("\n");
+}
+
+function terrain(name, x, y, w, h = 30) {
+  return nodeBlock(name, "Terrain", "1", [
+    "z_index = 2",
+    `position = Vector2(${x}, ${y})`,
+    `polygon = PackedVector2Array(0, 0, ${w}, 0, ${w}, ${h}, 0, ${h})`
+  ]);
+}
+
+function sign(name, x, y, text) {
+  return nodeBlock(name, "Items/Signs", "5", [
+    `position = Vector2(${x}, ${y})`,
+    `lines = Array[String]([${text.map((line) => JSON.stringify(line)).join(", ")}])`
+  ]);
+}
+
+function deco(name, id, x, y) {
+  return nodeBlock(name, "Items/Decoration", id, [`position = Vector2(${x}, ${y})`]);
+}
+
+function coin(name, x, y, blue = false) {
+  return nodeBlock(name, "Items/Coins", blue ? "11" : "10", [`position = Vector2(${x}, ${y})`]);
+}
+
+function goomba(name, x, y) {
+  return nodeBlock(name, "Items/Enemies", "9", [`position = Vector2(${x}, ${y})`]);
+}
+
+function log(name, x, y, falling = false) {
+  return nodeBlock(name, "Items/Logs", falling ? "14" : "13", [`position = Vector2(${x}, ${y})`]);
+}
+
+const platforms = [
+  terrain("TrainingStep", 540, 115, 156, 30),
+  terrain("FloatingGrass1", 900, 86, 168, 32),
+  terrain("FloatingGrass2", 1210, 66, 180, 34),
+  terrain("WaterBridgeLeft", 1880, 110, 112, 28),
+  terrain("WaterBridgeMid", 2070, 84, 120, 28),
+  terrain("WaterBridgeRight", 2290, 112, 128, 30),
+  terrain("SkyIsland1", 2960, 82, 150, 30),
+  terrain("SkyIsland2", 3220, 48, 156, 30),
+  terrain("FinalLedge", 3660, 92, 240, 34),
+  terrain("SecondWaterLeft", 6900, 154, 142, 28),
+  terrain("SecondWaterMid", 7160, 116, 150, 30),
+  terrain("SecondWaterRight", 7440, 126, 160, 30),
+  terrain("HighClimb1", 7920, 130, 160, 30),
+  terrain("HighClimb2", 8180, 92, 170, 30),
+  terrain("HighClimb3", 8460, 58, 180, 32),
+  terrain("HighClimb4", 8780, 82, 190, 32),
+  terrain("GoalStep", 9280, 126, 260, 34)
+].join("\n");
+
+const signs = [
+  sign("StartSign", 190, 178, [
+    "[@n,LLR]这是新的完整关卡。一路向右，吃金币、躲敌人，跳过水坑和空中平台，到达终点光门。",
+    "按跳跃、旋转、喷水和砸地都能用；手机摇杆现在也会按旋转后的画面坐标计算。"
+  ]),
+  sign("MidSign", 1810, 144, [
+    "[@n,LLR]中段开始会有水坑和断桥。用短跳上台阶，用旋转补一点滞空。"
+  ]),
+  sign("RunoutSign", 6040, 160, [
+    "[@n,LLR]前半段结束。后面是第二段流程：更长的地面、第二个水坑、爬升平台和终点冲刺。"
+  ]),
+  sign("ClimbSign", 7850, 205, [
+    "[@n,LLR]这里开始向上爬。平台都比较宽，手机端不用极限跳，按金币路线走就行。"
+  ]),
+  sign("EndSign", 9460, 160, [
+    "[@n,LLR]完整第一关到这里结束。拿到终点蓝金币后继续向右，穿过光门返回主菜单。"
+  ])
+].join("\n");
+
+const decorations = [
+  deco("TreeStart", "6", 40, 118),
+  deco("TreeStart2", "7", 330, 138),
+  deco("FlowersStart", "8", 420, 150),
+  deco("TreeMid", "6", 1450, 128),
+  deco("FlowersMid", "8", 1620, 178),
+  deco("TreeLate", "7", 3370, 122),
+  deco("TreeRunout", "6", 4930, 138),
+  deco("FlowersRunout", "8", 5350, 178),
+  deco("TreeSecondLake", "7", 6760, 176),
+  deco("FlowersSecondLake", "8", 7620, 154),
+  deco("TreeClimb", "6", 8340, 128),
+  deco("TreeGoal", "7", 9340, 132)
+].join("\n");
+
+const coinPath = [
+  ["Coin1", 370, 132], ["Coin2", 410, 124], ["Coin3", 450, 120], ["Coin4", 590, 88],
+  ["Coin5", 940, 52], ["Coin6", 980, 44], ["Coin7", 1020, 52], ["Coin8", 1250, 32],
+  ["Coin9", 1290, 24], ["Coin10", 1330, 32], ["Coin11", 1960, 72], ["Coin12", 2120, 48],
+  ["Coin13", 2350, 74], ["Coin14", 3000, 48], ["Coin15", 3260, 16], ["Coin16", 3300, 8],
+  ["Coin17", 3340, 16], ["RunoutCoin1", 4780, 176], ["RunoutCoin2", 4920, 136], ["RunoutCoin3", 5060, 126],
+  ["RunoutCoin4", 5220, 146], ["RunoutCoin5", 5420, 154], ["SecondLakeCoin1", 6900, 112], ["SecondLakeCoin2", 7020, 92],
+  ["SecondLakeCoin3", 7160, 78], ["SecondLakeCoin4", 7310, 84], ["SecondLakeCoin5", 7460, 96], ["ClimbCoin1", 7950, 92],
+  ["ClimbCoin2", 8210, 54], ["ClimbCoin3", 8490, 22], ["ClimbCoin4", 8810, 48], ["DropCoin1", 9050, 122],
+  ["DropCoin2", 9160, 136], ["GoalCoin1", 9340, 90], ["GoalCoin2", 9440, 82]
+];
+const coins = [
+  ...coinPath.map(([name, x, y]) => coin(name, x, y)),
+  coin("BlueCoinReward", 3770, 52, true),
+  coin("SecondLakeBlueCoin", 7580, 82, true),
+  coin("GoalBlueCoin", 9560, 108, true)
+].join("\n");
+
+const enemies = [
+  goomba("Goomba1", 770, 152),
+  goomba("Goomba2", 1570, 182),
+  goomba("Goomba3", 2760, 150),
+  goomba("Goomba4", 3550, 138),
+  goomba("Goomba5", 5160, 158),
+  goomba("Goomba6", 5700, 180),
+  goomba("Goomba7", 6750, 202),
+  goomba("Goomba8", 8150, 202),
+  goomba("Goomba9", 9180, 180)
+].join("\n");
+
+const logs = [
+  log("Log1", 540, 145),
+  log("Log2", 570, 145),
+  log("Log3", 600, 145),
+  log("FallingLog", 2500, 120, true),
+  log("SecondLog1", 6820, 184),
+  log("SecondLog2", 7040, 180),
+  log("SecondFallingLog", 7350, 112, true)
+].join("\n");
+
 const completeScene = `[gd_scene load_steps=16 format=3]
 
 [ext_resource type="PackedScene" path="res://classes/solid/terrain/terrain_polygon.tscn" id="1"]
@@ -28,7 +157,7 @@ const completeScene = `[gd_scene load_steps=16 format=3]
 
 [node name="CameraArea" parent="." instance=ExtResource("4")]
 visible = false
-polygon = PackedVector2Array(-64, -352, 6500, -352, 6500, 560, -64, 560)
+polygon = PackedVector2Array(-64, -352, 9800, -352, 9800, 560, -64, 560)
 
 [node name="Player" parent="." instance=ExtResource("2")]
 position = Vector2(110, 153)
@@ -37,214 +166,38 @@ position = Vector2(110, 153)
 
 [node name="MainHills" parent="Terrain" instance=ExtResource("1")]
 z_index = 1
-polygon = PackedVector2Array(-320, 180, 0, 180, 260, 180, 430, 160, 670, 160, 820, 196, 1000, 212, 1160, 170, 1330, 158, 1510, 190, 1680, 190, 1830, 145, 2010, 145, 2160, 204, 2340, 218, 2530, 176, 2720, 156, 2920, 156, 3090, 206, 3270, 206, 3440, 146, 3620, 146, 3800, 176, 3980, 166, 4260, 166, 4560, 232, 4760, 218, 4960, 178, 5180, 168, 5400, 190, 5620, 190, 5840, 162, 6060, 162, 6280, 184, 6500, 184, 6500, 720, -320, 720)
+polygon = PackedVector2Array(-320, 180, 0, 180, 260, 180, 430, 160, 670, 160, 820, 196, 1000, 212, 1160, 170, 1330, 158, 1510, 190, 1680, 190, 1830, 145, 2010, 145, 2160, 204, 2340, 218, 2530, 176, 2720, 156, 2920, 156, 3090, 206, 3270, 206, 3440, 146, 3620, 146, 3800, 176, 3980, 166, 4260, 166, 4560, 232, 4760, 218, 4960, 178, 5180, 168, 5400, 190, 5620, 190, 5840, 162, 6060, 162, 6280, 184, 6500, 184, 6720, 210, 6960, 210, 7180, 176, 7420, 156, 7660, 168, 7900, 210, 8120, 210, 8360, 182, 8600, 150, 8840, 150, 9060, 188, 9300, 188, 9560, 164, 9800, 164, 9800, 720, -320, 720)
 
-[node name="TrainingStep" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(540, 115)
-polygon = PackedVector2Array(0, 0, 156, 0, 156, 30, 0, 30)
-
-[node name="FloatingGrass1" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(900, 86)
-polygon = PackedVector2Array(0, 0, 168, 0, 168, 32, 0, 32)
-
-[node name="FloatingGrass2" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(1210, 66)
-polygon = PackedVector2Array(0, 0, 180, 0, 180, 34, 0, 34)
-
-[node name="WaterBridgeLeft" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(1880, 110)
-polygon = PackedVector2Array(0, 0, 112, 0, 112, 28, 0, 28)
-
-[node name="WaterBridgeMid" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(2070, 84)
-polygon = PackedVector2Array(0, 0, 120, 0, 120, 28, 0, 28)
-
-[node name="WaterBridgeRight" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(2290, 112)
-polygon = PackedVector2Array(0, 0, 128, 0, 128, 30, 0, 30)
-
-[node name="SkyIsland1" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(2960, 82)
-polygon = PackedVector2Array(0, 0, 150, 0, 150, 30, 0, 30)
-
-[node name="SkyIsland2" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(3220, 48)
-polygon = PackedVector2Array(0, 0, 156, 0, 156, 30, 0, 30)
-
-[node name="FinalLedge" parent="Terrain" instance=ExtResource("1")]
-z_index = 2
-position = Vector2(3660, 92)
-polygon = PackedVector2Array(0, 0, 240, 0, 240, 34, 0, 34)
-
+${platforms}
 [node name="Items" type="Node2D" parent="."]
 
 [node name="Signs" type="Node2D" parent="Items"]
 
-[node name="StartSign" parent="Items/Signs" instance=ExtResource("5")]
-position = Vector2(190, 178)
-lines = Array[String](["[@n,LLR]这是新的完整关卡。一路向右，吃金币、躲敌人，跳过水坑和空中平台，到达终点光门。", "按跳跃、旋转、喷水和砸地都能用；手机摇杆现在也会按旋转后的画面坐标计算。"])
-
-[node name="MidSign" parent="Items/Signs" instance=ExtResource("5")]
-position = Vector2(1810, 144)
-lines = Array[String](["[@n,LLR]中段开始会有水坑和断桥。用短跳上台阶，用旋转补一点滞空。"])
-
-[node name="EndSign" parent="Items/Signs" instance=ExtResource("5")]
-position = Vector2(6040, 160)
-lines = Array[String](["[@n,LLR]第一阶段长关卡骨架已经完成。继续向右穿过终点光门，后续会逐段加入更多金币、敌人和平台机关。"])
-
+${signs}
 [node name="Decoration" type="Node2D" parent="Items"]
 
-[node name="TreeStart" parent="Items/Decoration" instance=ExtResource("6")]
-position = Vector2(40, 118)
-
-[node name="TreeStart2" parent="Items/Decoration" instance=ExtResource("7")]
-position = Vector2(330, 138)
-
-[node name="FlowersStart" parent="Items/Decoration" instance=ExtResource("8")]
-position = Vector2(420, 150)
-
-[node name="TreeMid" parent="Items/Decoration" instance=ExtResource("6")]
-position = Vector2(1450, 128)
-
-[node name="FlowersMid" parent="Items/Decoration" instance=ExtResource("8")]
-position = Vector2(1620, 178)
-
-[node name="TreeLate" parent="Items/Decoration" instance=ExtResource("7")]
-position = Vector2(3370, 122)
-
-[node name="TreeRunout" parent="Items/Decoration" instance=ExtResource("6")]
-position = Vector2(4930, 138)
-
-[node name="FlowersRunout" parent="Items/Decoration" instance=ExtResource("8")]
-position = Vector2(5350, 178)
-
-[node name="TreeGoal" parent="Items/Decoration" instance=ExtResource("7")]
-position = Vector2(5920, 128)
-
+${decorations}
 [node name="Coins" type="Node2D" parent="Items"]
 
-[node name="Coin1" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(370, 132)
-
-[node name="Coin2" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(410, 124)
-
-[node name="Coin3" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(450, 120)
-
-[node name="Coin4" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(590, 88)
-
-[node name="Coin5" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(940, 52)
-
-[node name="Coin6" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(980, 44)
-
-[node name="Coin7" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(1020, 52)
-
-[node name="Coin8" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(1250, 32)
-
-[node name="Coin9" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(1290, 24)
-
-[node name="Coin10" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(1330, 32)
-
-[node name="Coin11" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(1960, 72)
-
-[node name="Coin12" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(2120, 48)
-
-[node name="Coin13" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(2350, 74)
-
-[node name="Coin14" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(3000, 48)
-
-[node name="Coin15" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(3260, 16)
-
-[node name="Coin16" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(3300, 8)
-
-[node name="Coin17" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(3340, 16)
-
-[node name="BlueCoinReward" parent="Items/Coins" instance=ExtResource("11")]
-position = Vector2(3770, 52)
-
-[node name="RunoutCoin1" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(4780, 176)
-
-[node name="RunoutCoin2" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(4920, 136)
-
-[node name="RunoutCoin3" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(5060, 126)
-
-[node name="RunoutCoin4" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(5220, 146)
-
-[node name="RunoutCoin5" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(5420, 154)
-
-[node name="GoalCoin1" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(5860, 126)
-
-[node name="GoalCoin2" parent="Items/Coins" instance=ExtResource("10")]
-position = Vector2(5920, 112)
-
-[node name="GoalBlueCoin" parent="Items/Coins" instance=ExtResource("11")]
-position = Vector2(6100, 108)
-
+${coins}
 [node name="Enemies" type="Node2D" parent="Items"]
 
-[node name="Goomba1" parent="Items/Enemies" instance=ExtResource("9")]
-position = Vector2(770, 152)
-
-[node name="Goomba2" parent="Items/Enemies" instance=ExtResource("9")]
-position = Vector2(1570, 182)
-
-[node name="Goomba3" parent="Items/Enemies" instance=ExtResource("9")]
-position = Vector2(2760, 150)
-
-[node name="Goomba4" parent="Items/Enemies" instance=ExtResource("9")]
-position = Vector2(3550, 138)
-
+${enemies}
 [node name="Logs" type="Node2D" parent="Items"]
 
-[node name="Log1" parent="Items/Logs" instance=ExtResource("13")]
-position = Vector2(540, 145)
-
-[node name="Log2" parent="Items/Logs" instance=ExtResource("13")]
-position = Vector2(570, 145)
-
-[node name="Log3" parent="Items/Logs" instance=ExtResource("13")]
-position = Vector2(600, 145)
-
-[node name="FallingLog" parent="Items/Logs" instance=ExtResource("14")]
-position = Vector2(2500, 120)
-
+${logs}
 [node name="Water" type="Node2D" parent="."]
 
 [node name="Lake" parent="Water" instance=ExtResource("12")]
 position = Vector2(2060, 206)
 polygon = PackedVector2Array(0, 0, 390, 0, 390, 80, 320, 118, 120, 126, 0, 82)
 
+[node name="SecondLake" parent="Water" instance=ExtResource("12")]
+position = Vector2(6820, 226)
+polygon = PackedVector2Array(0, 0, 860, 0, 860, 84, 720, 126, 180, 128, 0, 84)
+
 [node name="WarpZone" parent="." instance=ExtResource("15")]
-position = Vector2(6320, -120)
+position = Vector2(9660, -120)
 sweep_direction = Vector2(-1, 0)
 spawn_location = Vector2(110, 153)
 scene_path = "res://scenes/menus/title/main_menu/main_menu.tscn"
