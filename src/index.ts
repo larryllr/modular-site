@@ -697,6 +697,51 @@ const jsonHeaders = {
   "cache-control": "no-store"
 };
 
+const revalidatingStaticAssetExtensions = /\.(?:css|js|mjs|map|png|jpe?g|webp|gif|svg|ico|avif|woff2?|ttf|otf|txt|xml|json|webmanifest|glb|gltf|bin|mp3|ogg|wav|wasm|pck|gz|br)$/i;
+
+function cacheControlForStaticPath(pathname: string): string | null {
+  if (pathname.startsWith("/llrgamecubecity/assets/")) {
+    return "public, max-age=31536000, immutable";
+  }
+
+  if (pathname.endsWith(".html") || pathname === "/" || !pathname.split("/").pop()?.includes(".")) {
+    return "public, max-age=0, must-revalidate";
+  }
+
+  if (revalidatingStaticAssetExtensions.test(pathname)) {
+    return "public, max-age=0, must-revalidate";
+  }
+
+  return null;
+}
+
+function withStaticAssetHeaders(request: Request, response: Response): Response {
+  const url = new URL(request.url);
+  const cacheControl = cacheControlForStaticPath(url.pathname);
+
+  if (!cacheControl && response.headers.has("cache-control")) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+
+  if (cacheControl) {
+    headers.set("cache-control", cacheControl);
+  }
+
+  headers.set("x-content-type-options", "nosniff");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
+async function fetchStaticAsset(request: Request, env: AppEnv): Promise<Response> {
+  return withStaticAssetHeaders(request, await env.ASSETS.fetch(request));
+}
+
 const apiRoutes: Record<string, ApiRoute> = {
   "/api/health": () =>
     json({
@@ -2375,10 +2420,14 @@ function safeUrlSearchParam(value: string, name: string): string {
 async function fetchCompressedGodotWasm(request: Request, env: AppEnv, origin: string): Promise<Response> {
   const wasmUrl = new URL(`${llrMarioRunPath}/godot/index.wasm.gz`, origin);
   const response = await env.ASSETS.fetch(new Request(wasmUrl, request));
-  const headers = new Headers({
-    "content-type": "application/wasm",
-    "cache-control": response.headers.get("cache-control") || "public, max-age=31536000, immutable"
-  });
+
+  if (!response.ok) {
+    return withStaticAssetHeaders(request, response);
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set("content-type", "application/wasm");
+  headers.set("cache-control", cacheControlForStaticPath(`${llrMarioRunPath}/godot/index.wasm`) || "public, max-age=0, must-revalidate");
   headers.delete("content-encoding");
   headers.delete("content-length");
   const body = response.body?.pipeThrough(new DecompressionStream("gzip")) || null;
@@ -2844,7 +2893,7 @@ function shouldRecordAccess(request: Request): boolean {
     return false;
   }
 
-  return !/\.(?:css|js|mjs|map|png|jpe?g|webp|gif|svg|ico|avif|woff2?|ttf|otf|txt|xml|json)$/i.test(path);
+  return !revalidatingStaticAssetExtensions.test(path);
 }
 
 function commentKey(page: string): string {
@@ -3242,6 +3291,6 @@ export default {
 
     ctx.waitUntil(recordAccessLog(request, env as AppEnv));
 
-    return env.ASSETS.fetch(request);
+    return fetchStaticAsset(request, env as AppEnv);
   }
 } satisfies ExportedHandler<Env>;

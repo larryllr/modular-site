@@ -9,6 +9,7 @@ const wrangler = source("wrangler.jsonc");
 const worker = source("src/index.ts");
 const app = source("public/app.js");
 const styles = source("public/styles.css");
+const assetHeaders = source("public/_headers");
 
 function parseGodotPckEntryNames(path) {
   const buffer = readFileSync(new URL(path, root));
@@ -31,7 +32,10 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(wrangler, /"d1_databases"\s*:/);
   assert.match(wrangler, /"binding"\s*:\s*"GAME_DB"/);
   assert.match(wrangler, /"run_worker_first"\s*:\s*\[[\s\S]*"\/llr-mariorun"/);
-  assert.match(wrangler, /"\/llr-mariorun\/\*"/);
+  assert.doesNotMatch(wrangler, /"\/llr-mariorun\/\*"/);
+  assert.match(wrangler, /"\/llrgamecubecity\/assets\/\*"/);
+  assert.match(wrangler, /"\/llr-mariorun\/godot\/index\.pck"/);
+  assert.match(wrangler, /"\/llr-mariorun\/godot\/index\.wasm"/);
   assert.match(worker, /GAME_ASSETS\?: R2Bucket/);
   assert.match(worker, /GAME_DB\?: D1Database/);
   assert.match(worker, /const gameAssetPacksKey = "game:asset-packs"/);
@@ -60,9 +64,18 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/godot\/index\.pck`/);
   assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/godot\/index\.wasm`/);
   assert.match(worker, /new DecompressionStream\("gzip"\)/);
+  assert.match(worker, /headers\.delete\("content-encoding"\)/);
+  assert.doesNotMatch(worker, /encodeBody: "manual"/);
+  assert.match(worker, /function fetchStaticAsset/);
+  assert.match(worker, /function cacheControlForStaticPath/);
+  assert.match(worker, /revalidatingStaticAssetExtensions/);
   assert.match(worker, /env\.SITE_CONFIG\.put\(key, await file\.arrayBuffer\(\)/);
   assert.match(worker, /env\.SITE_CONFIG\.getWithMetadata/);
   assert.match(worker, /url\.pathname\.startsWith\("\/api\/game\/assets\/"\)/);
+  assert.match(assetHeaders, /\/llrgamecubecity\/assets\/\*/);
+  assert.match(assetHeaders, /max-age=31536000, immutable/);
+  assert.match(assetHeaders, /\/llr-mariorun\/godot\/index\.wasm\.gz/);
+  assert.match(assetHeaders, /Content-Encoding: gzip/);
 });
 
 test("default game content includes asset slots and ten fair long levels", () => {
@@ -158,7 +171,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function selectedGameUrl/);
   assert.match(launcher, /"\/llr-mariorun\/godot\/"/);
   assert.match(launcher, /function startSelectedGame/);
-  assert.match(launcher, /loadGameRuntime\(\{ cacheBust: true \}\)/);
+  assert.match(launcher, /function startSelectedGame\(\) \{\s*clearResumeScene\(\);\s*loadGameRuntime\(\);\s*\}/);
   assert.match(launcher, /function recoverGameRuntime/);
   assert.match(launcher, /function returnToLauncher/);
   assert.match(launcher, /function rescueGameRuntime/);
@@ -191,6 +204,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.doesNotMatch(launcher, /\/llr-mariorun\/custom\.html/);
   assert.match(launcher, /searchParams\.set\("pack", selectedPackId\)/);
   assert.match(godotHtml, /window\.fetch = function/);
+  assert.doesNotMatch(godotHtml, /rel="preload" href="index\.wasm"/);
+  assert.match(godotHtml, /rel="preload" href="index\.js\?v=llr-secure-context-20260627"/);
   assert.match(godotHtml, /<script src="index\.js\?v=llr-secure-context-20260627"><\/script>/);
   assert.match(godotHtml, /window\.parent\.postMessage\(\{ type: 'llr-godot-missing-features'/);
   assert.match(godotHtml, /这台设备或浏览器没有开启 WebGL2/);
@@ -198,7 +213,8 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(godotHtml, /\/\\\/index\\\.pck\$/);
   assert.match(godotHtml, /url\.searchParams\.set\('pack', selectedPack\)/);
   assert.match(godotHtml, /url\.searchParams\.set\('run', runId\)/);
-  assert.match(godotHtml, /cache: 'no-store'/);
+  assert.match(godotHtml, /cache: init\?\.cache \|\| 'default'/);
+  assert.doesNotMatch(godotHtml, /cache: 'no-store'/);
   assert.match(worker, /const requestUrl = new URL\(request\.url\)/);
   assert.match(worker, /requestUrl\.searchParams\.get\("pack"\) \|\| safeUrlSearchParam\(referer, "pack"\)/);
   assert.match(worker, /headers\.set\("cache-control", "no-store, max-age=0"\)/);

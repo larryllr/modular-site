@@ -78,6 +78,7 @@ body {
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
+<link rel="preload" href="index.js?v=llr-secure-context-20260627" as="script" />
 
 	</head>
 	<body>
@@ -115,7 +116,7 @@ body {
 				}
 				const responsePromise = nativeFetch(url.toString(), {
 					...init,
-					cache: 'no-store',
+					cache: init?.cache || 'default',
 					credentials: init?.credentials || 'same-origin'
 				});
 				responsePromise.then((response) => {
