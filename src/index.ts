@@ -698,10 +698,20 @@ const jsonHeaders = {
 };
 
 const revalidatingStaticAssetExtensions = /\.(?:css|js|mjs|map|png|jpe?g|webp|gif|svg|ico|avif|woff2?|ttf|otf|txt|xml|json|webmanifest|glb|gltf|bin|mp3|ogg|wav|wasm|pck|gz|br)$/i;
+const cubeCityRevalidatingAssetPrefixes = [
+  "/llrgamecubecity/audio/",
+  "/llrgamecubecity/fonts/",
+  "/llrgamecubecity/models/",
+  "/llrgamecubecity/textures/"
+];
 
 function cacheControlForStaticPath(pathname: string): string | null {
   if (pathname.startsWith("/llrgamecubecity/assets/")) {
     return "public, max-age=31536000, immutable";
+  }
+
+  if (cubeCityRevalidatingAssetPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    return "public, max-age=0, must-revalidate";
   }
 
   if (pathname.endsWith(".html") || pathname === "/" || !pathname.split("/").pop()?.includes(".")) {

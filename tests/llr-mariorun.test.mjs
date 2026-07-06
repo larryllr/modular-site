@@ -34,6 +34,10 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(wrangler, /"run_worker_first"\s*:\s*\[[\s\S]*"\/llr-mariorun"/);
   assert.doesNotMatch(wrangler, /"\/llr-mariorun\/\*"/);
   assert.match(wrangler, /"\/llrgamecubecity\/assets\/\*"/);
+  assert.match(wrangler, /"\/llrgamecubecity\/audio\/\*"/);
+  assert.match(wrangler, /"\/llrgamecubecity\/fonts\/\*"/);
+  assert.match(wrangler, /"\/llrgamecubecity\/models\/\*"/);
+  assert.match(wrangler, /"\/llrgamecubecity\/textures\/\*"/);
   assert.match(wrangler, /"\/llr-mariorun\/godot\/index\.pck"/);
   assert.match(wrangler, /"\/llr-mariorun\/godot\/index\.wasm"/);
   assert.match(worker, /GAME_ASSETS\?: R2Bucket/);
@@ -68,11 +72,14 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.doesNotMatch(worker, /encodeBody: "manual"/);
   assert.match(worker, /function fetchStaticAsset/);
   assert.match(worker, /function cacheControlForStaticPath/);
+  assert.match(worker, /cubeCityRevalidatingAssetPrefixes/);
+  assert.match(worker, /\/llrgamecubecity\/fonts\//);
   assert.match(worker, /revalidatingStaticAssetExtensions/);
   assert.match(worker, /env\.SITE_CONFIG\.put\(key, await file\.arrayBuffer\(\)/);
   assert.match(worker, /env\.SITE_CONFIG\.getWithMetadata/);
   assert.match(worker, /url\.pathname\.startsWith\("\/api\/game\/assets\/"\)/);
   assert.match(assetHeaders, /\/llrgamecubecity\/assets\/\*/);
+  assert.match(assetHeaders, /\/llrgamecubecity\/fonts\/\*/);
   assert.match(assetHeaders, /max-age=31536000, immutable/);
   assert.match(assetHeaders, /\/llr-mariorun\/godot\/index\.wasm\.gz/);
   assert.match(assetHeaders, /Content-Encoding: gzip/);

@@ -7,7 +7,18 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/llrgamecubecity", "/llrgamecubecity/assets/*", "/llr-mariorun", "/llr-mariorun/godot/index.pck", "/llr-mariorun/godot/index.wasm"],
+    "run_worker_first": [
+      "/api/*",
+      "/llrgamecubecity",
+      "/llrgamecubecity/assets/*",
+      "/llrgamecubecity/audio/*",
+      "/llrgamecubecity/fonts/*",
+      "/llrgamecubecity/models/*",
+      "/llrgamecubecity/textures/*",
+      "/llr-mariorun",
+      "/llr-mariorun/godot/index.pck",
+      "/llr-mariorun/godot/index.wasm"
+    ],
     "not_found_handling": "single-page-application"
   },
   "routes": [
