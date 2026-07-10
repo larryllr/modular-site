@@ -9,6 +9,7 @@
     "binding": "ASSETS",
     "run_worker_first": [
       "/api/*",
+      "/site-assets/*",
       "/llrgamecubecity",
       "/llrgamecubecity/assets/*",
       "/llrgamecubecity/audio/*",

@@ -3,11 +3,94 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f7f8" />
     <title>宽宽的模块化网站</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/site-assets/styles-c4a30ba583b0.css" data-site-styles />
+    <script type="module" data-site-bootstrap>
+  const route = location.pathname.replace(/^\/+|\/+$/g, "").split("/")[0];
+  void import(route === "admin" ? "/site-assets/admin/app-4GUK3BDQ.js" : "/site-assets/public/app-6C5OGAHH.js");
+</script>
+    <style>
+      html.app-booting,
+      html.app-booting body {
+        margin: 0;
+        background: #f4f7f8;
+      }
+      .boot-shell {
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        min-height: 100vh;
+        color: #17201d;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .boot-sidebar {
+        border-right: 1px solid #dce4e1;
+        background: #fff;
+        padding: 24px;
+      }
+      .boot-brand {
+        width: 132px;
+        height: 42px;
+        border-radius: 8px;
+        background: #dff4ee;
+      }
+      .boot-main {
+        padding: clamp(24px, 4vw, 52px);
+      }
+      .boot-title,
+      .boot-line,
+      .boot-card {
+        overflow: hidden;
+        border-radius: 8px;
+        background: #e7eeeb;
+      }
+      .boot-title {
+        width: min(430px, 72vw);
+        height: 64px;
+      }
+      .boot-line {
+        width: min(620px, 78vw);
+        height: 18px;
+        margin-top: 18px;
+      }
+      .boot-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 40px;
+      }
+      .boot-card {
+        min-height: 210px;
+      }
+      @media (max-width: 860px) {
+        .boot-shell {
+          grid-template-columns: 1fr;
+        }
+        .boot-sidebar {
+          min-height: 76px;
+          border-right: 0;
+          border-bottom: 1px solid #dce4e1;
+          padding: 16px;
+        }
+        .boot-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/app.js"></script>
+    <div id="app">
+      <div class="boot-shell" aria-hidden="true">
+        <aside class="boot-sidebar"><div class="boot-brand"></div></aside>
+        <main class="boot-main">
+          <div class="boot-title"></div>
+          <div class="boot-line"></div>
+          <section class="boot-grid">
+            <div class="boot-card"></div>
+            <div class="boot-card"></div>
+          </section>
+        </main>
+      </div>
+    </div>
   </body>
 </html>

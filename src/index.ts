@@ -348,6 +348,8 @@ const gameAssetPacksKey = "game:asset-packs";
 const gameLevelsKey = "game:levels";
 const gameAssetKvPrefix = "game-assets-kv/";
 const gameAssetR2Prefix = "game-assets/";
+const siteMediaKvPrefix = "site-media/";
+const siteMediaPathPrefix = "/api/site-media/";
 const bingOrigin = "https://www.bing.com";
 const bingDailyMetadataUrl = `${bingOrigin}/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN`;
 
@@ -706,7 +708,7 @@ const cubeCityRevalidatingAssetPrefixes = [
 ];
 
 function cacheControlForStaticPath(pathname: string): string | null {
-  if (pathname.startsWith("/llrgamecubecity/assets/")) {
+  if (pathname.startsWith("/site-assets/") || pathname.startsWith("/llrgamecubecity/assets/")) {
     return "public, max-age=31536000, immutable";
   }
 
@@ -767,9 +769,9 @@ const apiRoutes: Record<string, ApiRoute> = {
       total: serverModules.length
     }),
 
-  "/api/site-config": async (_request, env) =>
-    json({
-      config: toPublicSiteConfig(await readSiteConfig(env))
+  "/api/site-config": async (request, env) =>
+    conditionalJson(request, {
+      config: toPublicSiteConfig(await readPublicSiteConfig(env), request)
     }),
 
   "/api/game/manifest": fetchGameManifest,
@@ -1085,12 +1087,13 @@ const apiRoutes: Record<string, ApiRoute> = {
     const body = asRecord(await readJson(request));
     const currentConfig = await readSiteConfig(env);
     const requestedConfig = withUpdatedAt(normalizeSiteConfig(body.config));
-    const config = auth.sub === "limited" ? mergeLimitedConfig(currentConfig, requestedConfig) : requestedConfig;
+    const mergedConfig = auth.sub === "limited" ? mergeLimitedConfig(currentConfig, requestedConfig) : requestedConfig;
 
     if (!env.SITE_CONFIG) {
       return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
     }
 
+    const { config } = await materializeSiteConfigMedia(mergedConfig, env);
     await env.SITE_CONFIG.put(configKey, JSON.stringify(config));
 
     return json({
@@ -1136,12 +1139,13 @@ const apiRoutes: Record<string, ApiRoute> = {
       }
       throw error;
     }
-    const config = auth.sub === "limited" ? mergeLimitedConfig(currentConfig, requestedConfig) : requestedConfig;
+    const mergedConfig = auth.sub === "limited" ? mergeLimitedConfig(currentConfig, requestedConfig) : requestedConfig;
 
     if (!env.SITE_CONFIG) {
       return json({ error: "SITE_CONFIG KV binding is missing" }, 503);
     }
 
+    const { config } = await materializeSiteConfigMedia(mergedConfig, env);
     await env.SITE_CONFIG.put(configKey, JSON.stringify(config));
 
     return json({
@@ -1349,11 +1353,38 @@ async function readSiteConfig(env: AppEnv): Promise<SiteConfig> {
   return normalizeSiteConfig(stored ?? defaultSiteConfig);
 }
 
-function toPublicSiteConfig(config: SiteConfig): SiteConfig {
+async function readPublicSiteConfig(env: AppEnv): Promise<SiteConfig> {
+  const config = await readSiteConfig(env);
+  const materialized = await materializeSiteConfigMedia(config, env);
+
+  if (materialized.changed && env.SITE_CONFIG) {
+    await env.SITE_CONFIG.put(configKey, JSON.stringify(materialized.config));
+  }
+
+  return materialized.config;
+}
+
+function toPublicSiteConfig(config: SiteConfig, request?: Request): SiteConfig {
+  const route = request ? normalizePublicConfigRoute(new URL(request.url).searchParams.get("route") || "") : "";
+  const [requestedSlug = "", requestedArticleId = ""] = route.split("/");
+  const requestedPage = config.pages.find((page) => page.slug === requestedSlug);
+  const referencedArticles = collectReferencedArticles(requestedPage);
+
   return {
     ...config,
     commentBlockWords: [],
-    pages: config.pages.map((page) => (page.passwordEnabled ? toLockedPublicPage(page) : toPublicPage(page)))
+    pages: config.pages.map((page) => {
+      if (page.passwordEnabled) {
+        return toLockedPublicPage(page);
+      }
+
+      const publicPage = toPublicPage(page);
+      if (page.slug === requestedSlug) {
+        return toScopedCurrentPage(publicPage, requestedArticleId);
+      }
+
+      return toPublicPageSummary(publicPage, referencedArticles);
+    })
   };
 }
 
@@ -1362,6 +1393,82 @@ function toPublicPage(page: SitePage): SitePage {
     ...page,
     pagePassword: ""
   };
+}
+
+function toScopedCurrentPage(page: SitePage, requestedArticleId: string): SitePage {
+  if (page.kind !== "blog") {
+    return page;
+  }
+
+  const articleId = requestedArticleId.toLowerCase();
+  return {
+    ...page,
+    blog: {
+      ...page.blog,
+      articles: page.blog.articles.map((article) => (
+        articleId && article.id.toLowerCase() === articleId
+          ? article
+          : toPublicArticleSummary(article)
+      ))
+    }
+  };
+}
+
+function toPublicPageSummary(page: SitePage, referencedArticles: Set<string>): SitePage {
+  return {
+    ...page,
+    backgroundImage: "",
+    modules: [],
+    blocks: [],
+    sections: [],
+    blog: {
+      ...page.blog,
+      profileImage: "",
+      articles: page.blog.articles
+        .filter((article) => referencedArticles.has(`${page.slug}/${article.id}`.toLowerCase()))
+        .map(toPublicArticleSummary)
+    }
+  };
+}
+
+function toPublicArticleSummary(article: BlogArticle): BlogArticle {
+  return {
+    ...article,
+    body: "",
+    bodyHtml: ""
+  };
+}
+
+function normalizePublicConfigRoute(value: string): string {
+  return value
+    .trim()
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .slice(0, 2)
+    .map((segment) => segment.replace(/[^\p{Letter}\p{Number}_-]/gu, ""))
+    .filter(Boolean)
+    .join("/")
+    .toLowerCase();
+}
+
+function collectReferencedArticles(page: SitePage | undefined): Set<string> {
+  const references = new Set<string>();
+  if (!page) {
+    return references;
+  }
+
+  for (const section of page.sections) {
+    if (section.type !== "article") {
+      continue;
+    }
+
+    const normalized = normalizePublicConfigRoute(section.articlePath);
+    if (normalized.includes("/")) {
+      references.add(normalized);
+    }
+  }
+
+  return references;
 }
 
 function toLockedPublicPage(page: SitePage): SitePage {
@@ -1384,6 +1491,159 @@ function toLockedPublicPage(page: SitePage): SitePage {
       articles: []
     }
   };
+}
+
+async function materializeSiteConfigMedia(
+  config: SiteConfig,
+  env: AppEnv
+): Promise<{ config: SiteConfig; changed: boolean }> {
+  if (!env.SITE_CONFIG) {
+    return { config, changed: false };
+  }
+
+  const next = structuredClone(config);
+  const pending = new Map<string, Promise<string>>();
+  let changed = false;
+
+  const materializeImage = async (source: string): Promise<string> => {
+    if (!source.startsWith("data:image/")) {
+      return source;
+    }
+
+    let task = pending.get(source);
+    if (!task) {
+      task = storeSiteMediaDataUrl(source, env);
+      pending.set(source, task);
+    }
+
+    const result = await task;
+    if (result !== source) {
+      changed = true;
+    }
+    return result;
+  };
+
+  next.homeImage = await materializeImage(next.homeImage);
+
+  for (const link of next.links) {
+    link.iconImage = await materializeImage(link.iconImage);
+    link.backgroundImage = await materializeImage(link.backgroundImage);
+  }
+
+  for (const page of next.pages) {
+    page.backgroundImage = await materializeImage(page.backgroundImage);
+    page.entry.iconImage = await materializeImage(page.entry.iconImage);
+    page.entry.sidebarIconImage = await materializeImage(page.entry.sidebarIconImage);
+    page.entry.backgroundImage = await materializeImage(page.entry.backgroundImage);
+    await materializeBlogMedia(page.blog, materializeImage);
+
+    for (const section of page.sections) {
+      if (section.type === "image") {
+        section.src = await materializeImage(section.src);
+      } else if (section.type === "video") {
+        section.poster = await materializeImage(section.poster);
+      } else if (section.type === "link") {
+        section.iconImage = await materializeImage(section.iconImage);
+        section.backgroundImage = await materializeImage(section.backgroundImage);
+      } else if (section.type === "blog") {
+        await materializeBlogMedia(section, materializeImage);
+      }
+    }
+  }
+
+  return { config: next, changed };
+}
+
+async function materializeBlogMedia(
+  blog: BlogSection,
+  materializeImage: (source: string) => Promise<string>
+): Promise<void> {
+  blog.profileImage = await materializeImage(blog.profileImage);
+
+  for (const article of blog.articles) {
+    article.coverImage = await materializeImage(article.coverImage);
+    article.bodyHtml = await replaceEmbeddedHtmlImages(article.bodyHtml, materializeImage);
+  }
+}
+
+async function replaceEmbeddedHtmlImages(
+  html: string,
+  materializeImage: (source: string) => Promise<string>
+): Promise<string> {
+  const expression = /(src\s*=\s*["'])(data:image\/[^"']+)(["'])/gi;
+  const matches = [...html.matchAll(expression)];
+  if (matches.length === 0) {
+    return html;
+  }
+
+  let result = "";
+  let offset = 0;
+
+  for (const match of matches) {
+    const index = match.index ?? 0;
+    result += html.slice(offset, index);
+    result += `${match[1]}${await materializeImage(match[2])}${match[3]}`;
+    offset = index + match[0].length;
+  }
+
+  return result + html.slice(offset);
+}
+
+async function storeSiteMediaDataUrl(source: string, env: AppEnv): Promise<string> {
+  const parsed = parseImageDataUrl(source);
+  if (!parsed || !env.SITE_CONFIG) {
+    return source;
+  }
+
+  try {
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", parsed.bytes));
+    const hash = [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const fileName = `${hash}.${parsed.extension}`;
+    const key = `${siteMediaKvPrefix}${fileName}`;
+    await env.SITE_CONFIG.put(key, parsed.bytes, {
+      metadata: {
+        contentType: parsed.contentType,
+        size: parsed.bytes.byteLength,
+        cacheControl: "public, max-age=31536000, immutable"
+      }
+    });
+    return `${siteMediaPathPrefix}${fileName}`;
+  } catch {
+    return source;
+  }
+}
+
+function parseImageDataUrl(
+  source: string
+): { bytes: Uint8Array; contentType: string; extension: string } | null {
+  const match = /^data:(image\/(?:png|jpeg|webp|gif|avif));base64,([a-z0-9+/=\s]+)$/i.exec(source);
+  if (!match) {
+    return null;
+  }
+
+  const extensions: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/avif": "avif"
+  };
+  const contentType = match[1].toLowerCase();
+  const extension = extensions[contentType];
+  if (!extension) {
+    return null;
+  }
+
+  try {
+    const binary = atob(match[2].replace(/\s+/g, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return { bytes, contentType, extension };
+  } catch {
+    return null;
+  }
 }
 
 function mergeLimitedConfig(current: SiteConfig, requested: SiteConfig): SiteConfig {
@@ -1912,6 +2172,46 @@ function normalizeExternalUrl(value: string): string {
   } catch {
     return "";
   }
+}
+
+async function fetchSiteMedia(request: Request, env: AppEnv, fileName: string): Promise<Response> {
+  if (!["GET", "HEAD"].includes(request.method)) {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+
+  if (!env.SITE_CONFIG || !/^[a-f0-9]{64}\.(?:png|jpe?g|webp|gif|avif)$/i.test(fileName)) {
+    return json({ error: "Site media not found" }, 404);
+  }
+
+  const object = await env.SITE_CONFIG.getWithMetadata<{
+    contentType?: string;
+    cacheControl?: string;
+  }>(`${siteMediaKvPrefix}${fileName}`, "arrayBuffer");
+
+  if (!object.value) {
+    return json({ error: "Site media not found" }, 404);
+  }
+
+  const headers = new Headers({
+    "content-type": object.metadata?.contentType || contentTypeForSiteMedia(fileName),
+    "cache-control": object.metadata?.cacheControl || "public, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff"
+  });
+
+  return new Response(request.method === "HEAD" ? null : object.value, { headers });
+}
+
+function contentTypeForSiteMedia(fileName: string): string {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  const types: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif",
+    avif: "image/avif"
+  };
+  return types[extension || ""] || "application/octet-stream";
 }
 
 async function fetchGameManifest(request: Request, env: AppEnv): Promise<Response> {
@@ -3238,10 +3538,29 @@ function asString(value: unknown): string {
 }
 
 function json(payload: unknown, status = 200): Response {
-  return new Response(JSON.stringify(payload, null, 2), {
+  return new Response(JSON.stringify(payload), {
     status,
     headers: jsonHeaders
   });
+}
+
+async function conditionalJson(request: Request, payload: unknown): Promise<Response> {
+  const body = JSON.stringify(payload);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)));
+  const hash = [...digest.slice(0, 12)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const etag = `W/"${hash}"`;
+  const headers = new Headers(jsonHeaders);
+  headers.set("cache-control", "private, no-cache, must-revalidate");
+  headers.set("etag", etag);
+
+  if (request.headers.get("if-none-match")?.split(",").some((value) => {
+    const candidate = value.trim();
+    return candidate === "*" || candidate === etag;
+  })) {
+    return new Response(null, { status: 304, headers });
+  }
+
+  return new Response(body, { headers });
 }
 
 export default {
@@ -3256,6 +3575,11 @@ export default {
     if (url.pathname.startsWith("/api/game/assets/")) {
       const key = decodeURIComponent(url.pathname.slice("/api/game/assets/".length));
       return fetchGameAsset(request, env as AppEnv, key);
+    }
+
+    if (url.pathname.startsWith(siteMediaPathPrefix)) {
+      const fileName = decodeURIComponent(url.pathname.slice(siteMediaPathPrefix.length));
+      return fetchSiteMedia(request, env as AppEnv, fileName);
     }
 
     if (url.pathname === "/api/admin/game/assets" && request.method === "POST") {

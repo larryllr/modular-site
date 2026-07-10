@@ -31,10 +31,12 @@ test("worker proxies and caches a validated Bing daily image", () => {
   assert.match(workerSource, /caches\.default\.put\(request, response\.clone\(\)\)/);
 });
 
-test("daily backgrounds decode asynchronously after the boot gate can reveal the page", () => {
+test("daily backgrounds decode asynchronously after the visible boot shell", () => {
   assert.match(indexSource, /<html[^>]*class="app-booting"/);
-  assert.match(stylesSource, /html\.app-booting[\s\S]*?background: #[0-9a-f]{6}/i);
-  assert.match(stylesSource, /html\.app-booting #app[\s\S]*?visibility: hidden/);
+  assert.match(indexSource, /class="boot-shell"/);
+  assert.match(indexSource, /class="boot-grid"/);
+  assert.match(stylesSource, /html\.app-booting[\s\S]*?background: var\(--bg\)/);
+  assert.doesNotMatch(stylesSource, /html\.app-booting #app[\s\S]*?visibility: hidden/);
   assert.match(appSource, /async function prepareDailyBackground\(page\)/);
   assert.match(appSource, /function scheduleDailyBackground\(page\)/);
   assert.match(appSource, /requestIdleCallback/);

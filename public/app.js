@@ -117,7 +117,7 @@ const state = {
   config: fallbackConfig,
   token: localStorage.getItem(adminTokenKey) || "",
   adminRole: localStorage.getItem(adminRoleKey) || "admin",
-  homeEntryLayout: localStorage.getItem(homeLayoutKey) === "two" ? "two" : "one",
+  homeEntryLayout: localStorage.getItem(homeLayoutKey) === "one" ? "one" : "two",
   selectedItemType: "page",
   selectedPageId: "",
   selectedLinkId: "",
@@ -143,8 +143,8 @@ class ApiError extends Error {
 }
 
 const api = {
-  getJson: async (path, useAuth = false) => {
-    const response = await fetch(path, requestOptions("GET", undefined, useAuth));
+  getJson: async (path, useAuth = false, cache = "no-store") => {
+    const response = await fetch(path, requestOptions("GET", undefined, useAuth, cache));
 
     if (!response.ok) {
       throw new Error(`Request failed: ${response.status}`);
@@ -164,18 +164,8 @@ const api = {
   }
 };
 
-init();
-
-async function init() {
+export async function startPublicApp() {
   try {
-    const loaded = await Promise.all(moduleLoaders.map((entry) => entry.load()));
-    state.modules = loaded.map((module) => module.default);
-
-    if (getRouteSlug() === "admin") {
-      await renderAdmin();
-      return;
-    }
-
     setLoadedConfig(await loadPublicConfig());
     if (getRouteSlug() === "p2p") {
       renderP2PTransferPage();
@@ -184,12 +174,52 @@ async function init() {
 
     const pageSlug = getRouteSlug().split("/")[0];
     const page = state.config.pages.find((item) => item.visible && item.slug === pageSlug);
+    const unlockedPage = page?.passwordEnabled ? getUnlockedPage(page.slug) : null;
+    await loadModulesForPage(unlockedPage || page);
     renderPublicSite();
     if (page?.dailyBackgroundEnabled) {
       scheduleDailyBackground(page);
     }
   } finally {
     document.documentElement.classList.remove("app-booting");
+  }
+}
+
+export async function startAdminApp() {
+  try {
+    await renderAdmin();
+  } finally {
+    document.documentElement.classList.remove("app-booting");
+  }
+}
+
+async function loadModules(ids = null) {
+  const requested = ids ? new Set(ids) : null;
+  const entries = requested
+    ? moduleLoaders.filter((entry) => requested.has(entry.id))
+    : moduleLoaders;
+  const loaded = await Promise.all(entries.map((entry) => entry.load()));
+  const modules = loaded.map((module) => module.default);
+  const existing = new Map(state.modules.map((module) => [module.id, module]));
+
+  for (const module of modules) {
+    existing.set(module.id, module);
+  }
+
+  state.modules = [...existing.values()];
+}
+
+async function loadModulesForPage(page) {
+  if (!page || page.kind === "blog") {
+    return;
+  }
+
+  const ids = (page.sections || [])
+    .filter((section) => section.type === "system" && section.moduleId)
+    .map((section) => section.moduleId);
+
+  if (ids.length > 0) {
+    await loadModules(ids);
   }
 }
 
@@ -245,7 +275,7 @@ function applyPreparedDailyBackground(page) {
   applyPageBackground(workspace, resolvePageBackground(page));
 }
 
-function requestOptions(method, body, useAuth) {
+function requestOptions(method, body, useAuth, cache = "no-store") {
   const headers = new Headers();
 
   if (body) {
@@ -259,14 +289,16 @@ function requestOptions(method, body, useAuth) {
   return {
     method,
     headers,
-    cache: "no-store",
+    cache,
     body: body ? JSON.stringify(body) : undefined
   };
 }
 
 async function loadPublicConfig() {
   try {
-    const payload = await api.getJson("/api/site-config");
+    const route = getRouteSlug();
+    const query = route ? `?route=${encodeURIComponent(route)}` : "";
+    const payload = await api.getJson(`/api/site-config${query}`, false, "no-cache");
 
     return payload.config || fallbackConfig;
   } catch {
@@ -288,6 +320,7 @@ async function renderAdmin() {
     state.undoStack = [];
     state.undoFingerprint = "";
     ensureAdminSelection();
+    await loadModules();
     renderAdminEditor();
   } catch {
     state.token = "";
@@ -334,6 +367,7 @@ function renderLogin(message = "") {
       ensureAdminSelection();
       localStorage.setItem(adminTokenKey, state.token);
       localStorage.setItem(adminRoleKey, state.adminRole);
+      await loadModules();
       renderAdminEditor();
     } catch (error) {
       feedback.textContent = error.message;
@@ -2841,6 +2875,9 @@ function renderPublicSite() {
 
 function renderPublicSidebar(slug, pages, links) {
   const sidebar = element("aside", "sidebar public-sidebar");
+  const brand = element("a", "brand public-brand");
+  brand.href = "/";
+  brand.append(element("span", "brand-mark", "宽"), textBlock("宽宽的网站", "模块、文章与游戏"));
   const nav = element("nav", "module-nav");
   nav.append(navLink("/", "HM", "主页入口", slug ? "所有分页面" : "当前页面", !slug));
 
@@ -2870,7 +2907,7 @@ function renderPublicSidebar(slug, pages, links) {
   }
 
   nav.append(navLink("/admin", "AD", "管理员", "管理页面和模块", false));
-  sidebar.append(nav);
+  sidebar.append(brand, nav);
   return sidebar;
 }
 
@@ -2904,6 +2941,9 @@ function renderHome(pages, links) {
     const visual = element("figure", "home-visual");
     const image = document.createElement("img");
     image.src = homeImage;
+    image.loading = "eager";
+    image.decoding = "async";
+    image.fetchPriority = "high";
     image.alt = state.config.homeTitle;
     visual.append(image);
     header.append(visual);
@@ -3235,6 +3275,7 @@ function renderPagePasswordGate(page) {
       const fullPage = hydratePage(payload.page);
       rememberUnlockedPage(fullPage);
       replaceConfigPage(fullPage);
+      await loadModulesForPage(fullPage);
       renderPublicSite();
       if (fullPage.dailyBackgroundEnabled) scheduleDailyBackground(fullPage);
     } catch (error) {
@@ -3929,6 +3970,7 @@ function renderNavigationSection(section) {
       image.src = iconUrl;
       image.alt = "";
       image.loading = "lazy";
+      image.decoding = "async";
       image.addEventListener("error", () => image.replaceWith(fallback), { once: true });
       icon.append(image);
     } else {
@@ -4057,6 +4099,8 @@ function renderBlogSection(section, adminPreview = false) {
   const avatar = section.profileImage ? document.createElement("img") : null;
   if (avatar) {
     avatar.src = section.profileImage;
+    avatar.loading = "lazy";
+    avatar.decoding = "async";
     avatar.alt = section.profileName || "作者头像";
   }
   sidebar.append(
@@ -4183,6 +4227,8 @@ function renderBlogListItem(page, blog, article) {
   if (article.coverImage) {
     const image = document.createElement("img");
     image.src = article.coverImage;
+    image.loading = "lazy";
+    image.decoding = "async";
     image.alt = article.title || "";
     link.append(image);
   } else {
@@ -4229,6 +4275,8 @@ function renderBlogAuthorFooter(blog) {
   const avatar = blog.profileImage ? document.createElement("img") : null;
   if (avatar) {
     avatar.src = blog.profileImage;
+    avatar.loading = "lazy";
+    avatar.decoding = "async";
     avatar.alt = blog.profileName || "作者头像";
   }
   footer.append(
@@ -4272,6 +4320,8 @@ function renderBlogArticlePage(page, blog, article, articles) {
   if (article.coverImage) {
     const image = document.createElement("img");
     image.src = article.coverImage;
+    image.loading = "eager";
+    image.decoding = "async";
     image.alt = article.title || "";
     content.append(image);
   }
@@ -4367,6 +4417,8 @@ function renderArticleAuthorLine(blog, article) {
   const avatar = blog.profileImage ? document.createElement("img") : null;
   if (avatar) {
     avatar.src = blog.profileImage;
+    avatar.loading = "eager";
+    avatar.decoding = "async";
     avatar.alt = blog.profileName || "作者头像";
   }
   line.append(
@@ -4965,6 +5017,8 @@ function renderBlogArticleCard(article) {
   if (article.coverImage) {
     const image = document.createElement("img");
     image.src = article.coverImage;
+    image.loading = "lazy";
+    image.decoding = "async";
     image.alt = article.title || "";
     item.append(image);
   }
@@ -5045,6 +5099,8 @@ function renderImageSection(section) {
     if (section.src) {
       const image = document.createElement("img");
       image.src = section.src;
+      image.loading = "lazy";
+      image.decoding = "async";
       image.alt = section.alt || section.title || "";
       image.style.objectFit = section.fit;
       frame.append(image);
@@ -6835,6 +6891,8 @@ function iconMark(text, image, fallbackImage = "") {
     const img = document.createElement("img");
     img.alt = "";
     img.src = src;
+    img.loading = "lazy";
+    img.decoding = "async";
     img.addEventListener("error", () => {
       icon.classList.remove("has-image");
       icon.replaceChildren(document.createTextNode(text || "WEB"));
@@ -6936,11 +6994,36 @@ function applyEntryCardStyle(card, image) {
   if (!image) {
     card.classList.remove("has-entry-background");
     card.style.backgroundImage = "";
+    delete card.dataset.entryBackground;
     return;
   }
 
   card.classList.add("has-entry-background");
-  card.style.backgroundImage = `linear-gradient(90deg, rgba(23, 32, 29, 0.82), rgba(23, 32, 29, 0.22)), url("${cssUrl(image)}")`;
+  card.dataset.entryBackground = image;
+  card.style.backgroundImage = "";
+
+  if (!("IntersectionObserver" in window)) {
+    revealEntryCardBackground(card);
+    return;
+  }
+
+  entryBackgroundObserver.observe(card);
+}
+
+const entryBackgroundObserver = "IntersectionObserver" in window
+  ? new IntersectionObserver((entries, observer) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        revealEntryCardBackground(entry.target);
+        observer.unobserve(entry.target);
+      }
+    }, { rootMargin: "240px 0px" })
+  : null;
+
+function revealEntryCardBackground(card) {
+  const image = card.dataset.entryBackground;
+  if (!image) return;
+  card.style.backgroundImage = `linear-gradient(90deg, rgba(17, 32, 38, 0.9), rgba(17, 32, 38, 0.3)), url("${cssUrl(image)}")`;
 }
 
 function applyPageBackground(node, image) {

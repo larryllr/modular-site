@@ -10,7 +10,8 @@ test("page backgrounds are softened behind readable content", () => {
   assert.match(stylesSource, /\.workspace\.has-page-background::before\s*{[^}]*background-color: rgba\(70, 157, 174, 0\.32\)[^}]*background-blend-mode: screen[^}]*filter: saturate\(0\.85\) brightness\(1\.15\) contrast\(0\.9\)/);
   assert.match(stylesSource, /\.workspace\.has-page-background::after\s*{[^}]*linear-gradient\(135deg, rgba\(3, 61, 70, 0\.38\) 0%, rgba\(3, 61, 70, 0\.12\) 38%, rgba\(3, 61, 70, 0\.02\) 72%, rgba\(3, 61, 70, 0\) 100%\)/);
   assert.match(stylesSource, /\.workspace\.has-page-background \.workspace-header[\s\S]*?color: #ffffff/);
-  assert.match(stylesSource, /\.workspace\.has-page-background \.module-card\s*{[^}]*background: rgba\(255, 255, 255, 0\.9\)[^}]*box-shadow: 0 10px 28px rgba\(1, 36, 42, 0\.14\)/);
+  assert.match(stylesSource, /\.workspace\.has-page-background \.module-card\s*{[^}]*background: rgba\(255, 255, 255, 0\.94\)[^}]*box-shadow: 0 10px 28px rgba\(1, 36, 42, 0\.14\)/);
+  assert.doesNotMatch(stylesSource, /\.workspace\.has-page-background \.module-card\s*{[^}]*backdrop-filter/);
 });
 
 test("background page modules form an equal and compact grid", () => {
