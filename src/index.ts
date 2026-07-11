@@ -2584,14 +2584,26 @@ const sm63ExtrasPckEntries = [
   "res://scenes/menus/title/main_menu/main_menu.gdc",
   "res://classes/zone/trigger/death_plane/death_plane.gdc",
   "res://classes/global/singleton/singleton.gdc",
-  "res://scenes/levels/llr_complete/llr_complete_1.tscn"
+  "res://scenes/levels/llr_complete/llr_complete_1.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_2.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_3.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_4.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_5.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_6.tscn.remap"
 ];
 
 function patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer): Uint8Array {
   const target = parseGodotPck(targetBuffer);
   const source = parseGodotPck(sourceBuffer);
   const sourceEntries = new Map(source.entries.map((entry) => [entry.name, entry]));
-  const replacementNames = [...sm63ExtrasPckEntries];
+  const compiledExtraScenes = source.entries
+    .map((entry) => entry.name)
+    .filter((name) => /-llr_complete_[1-6]\.scn$/.test(name));
+  const replacementNames = [...sm63ExtrasPckEntries, ...compiledExtraScenes];
+
+  if (compiledExtraScenes.length !== 6) {
+    throw new Error(`Expected 6 compiled SM63 Extras scenes, found ${compiledExtraScenes.length}`);
+  }
 
   for (const name of replacementNames) {
     if (!sourceEntries.has(name)) {

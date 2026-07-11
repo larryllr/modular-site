@@ -1,14 +1,14 @@
 :root {
   color-scheme: dark;
-  --bg: #140b2d;
-  --panel: rgba(17, 24, 50, 0.78);
-  --panel-strong: rgba(9, 14, 32, 0.94);
+  --bg: #091321;
+  --panel: rgba(13, 27, 43, 0.96);
+  --panel-strong: #08111f;
   --text: #fff8d8;
-  --muted: #b9c4ef;
+  --muted: #bed0df;
   --accent: #ffcf33;
   --accent-2: #5be7ff;
   --danger: #ff5d73;
-  --shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+  --shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
 }
 
 * {
@@ -27,10 +27,11 @@ body {
 body {
   overflow-x: hidden;
   color: var(--text);
-  background:
-    radial-gradient(circle at 18% 12%, rgba(91, 231, 255, 0.28), transparent 28%),
-    radial-gradient(circle at 84% 4%, rgba(255, 207, 51, 0.28), transparent 24%),
-    linear-gradient(135deg, #080b21 0%, #183d86 46%, #5b205e 100%);
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(rgba(91, 231, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 231, 255, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
   font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
   touch-action: manipulation;
   overscroll-behavior: none;
@@ -62,7 +63,6 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: var(--panel);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
 }
 
 .redux-copy {
@@ -70,7 +70,7 @@ a {
   overflow: hidden;
   min-height: 220px;
   padding: clamp(22px, 4vw, 46px);
-  border-radius: 30px;
+  border-radius: 8px;
 }
 
 .redux-copy::after {
@@ -79,7 +79,7 @@ a {
   inset: auto -8% -44px auto;
   width: min(42vw, 520px);
   height: 150px;
-  border-radius: 999px 999px 0 0;
+  border-radius: 8px 8px 0 0;
   background:
     linear-gradient(#6bd04b, #2b9d45 52%, #12724a 53%),
     repeating-linear-gradient(90deg, transparent 0 44px, rgba(0, 0, 0, 0.18) 44px 48px);
@@ -125,7 +125,7 @@ h1 {
 .frame-toolbar button,
 .virtual-controls button {
   border: 0;
-  border-radius: 999px;
+  border-radius: 8px;
   cursor: pointer;
   color: #10152f;
   font-weight: 900;
@@ -144,7 +144,7 @@ h1 {
 
 .primary-button {
   background: linear-gradient(180deg, #ffe780, #ffb300);
-  box-shadow: 0 10px 0 #9a5b00, 0 18px 34px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 6px 0 #9a5b00, 0 12px 24px rgba(0, 0, 0, 0.24);
 }
 
 .secondary-button {
@@ -166,7 +166,7 @@ h1 {
   gap: 10px;
   align-content: center;
   padding: 24px;
-  border-radius: 28px;
+  border-radius: 8px;
 }
 
 .redux-card strong {
@@ -189,11 +189,10 @@ h1 {
   align-items: end;
   margin-bottom: 18px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 26px;
+  border-radius: 8px;
   background: rgba(9, 14, 32, 0.72);
   box-shadow: var(--shadow);
   padding: 18px;
-  backdrop-filter: blur(18px);
 }
 
 .prelaunch-panel h2,
@@ -238,7 +237,7 @@ h1 {
   justify-content: space-between;
   min-height: 48px;
   border: 1px dashed rgba(91, 231, 255, 0.32);
-  border-radius: 18px;
+  border-radius: 8px;
   background: rgba(91, 231, 255, 0.08);
   padding: 12px 14px;
   color: var(--muted);
@@ -274,8 +273,12 @@ h1 {
   width: 100%;
   aspect-ratio: 16 / 9;
   min-height: 520px;
-  border-radius: 32px;
+  border-radius: 8px;
   background: #050713;
+}
+
+body:not(.game-has-launched) .game-frame-shell {
+  display: none;
 }
 
 .godot-frame {

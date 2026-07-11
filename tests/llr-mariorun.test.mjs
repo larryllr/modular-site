@@ -61,6 +61,11 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(worker, /function patchSm63ExtrasIntoPck\(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer\)/);
   assert.match(worker, /const sm63ExtrasPckEntries = \[/);
   assert.match(worker, /res:\/\/classes\/zone\/trigger\/death_plane\/death_plane\.gdc/);
+  assert.match(worker, /-llr_complete_\[1-6\]\\\.scn\$/);
+  assert.match(worker, /Expected 6 compiled SM63 Extras scenes/);
+  for (let index = 1; index <= 6; index += 1) {
+    assert.match(worker, new RegExp(`res://scenes/levels/llr_complete/llr_complete_${index}\\.tscn\\.remap`));
+  }
   assert.match(worker, /headers\.set\("x-llr-extra-patch", "applied"\)/);
   assert.match(worker, /safeUrlSearchParam\(referer, "pack"\)/);
   assert.match(worker, /pack\.id === requestedPackId/);
@@ -156,6 +161,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(css, /\.prelaunch-panel/);
   assert.match(css, /\.launch-buttons/);
   assert.match(css, /body\.game-has-launched \.prelaunch-panel/);
+  assert.match(css, /body:not\(\.game-has-launched\) \.game-frame-shell\s*{\s*display: none/);
   assert.match(css, /\.virtual-joystick/);
   assert.match(css, /\.joystick-knob/);
   assert.match(css, /body\.game-has-launched:not\(\.is-landscape-fullscreen\) \.game-frame-shell/);
@@ -179,6 +185,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /"\/llr-mariorun\/godot\/"/);
   assert.match(launcher, /function startSelectedGame/);
   assert.match(launcher, /function startSelectedGame\(\) \{\s*clearResumeScene\(\);\s*loadGameRuntime\(\);\s*\}/);
+  assert.match(launcher, /focusButton\?\.addEventListener\("click", \(\) => \{[\s\S]*?isFrameBlank\(\)[\s\S]*?startSelectedGame\(\)/);
   assert.match(launcher, /function recoverGameRuntime/);
   assert.match(launcher, /function returnToLauncher/);
   assert.match(launcher, /function rescueGameRuntime/);
@@ -249,11 +256,28 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });
 
-test("llr-mariorun Godot pack keeps Extras on a complete built-in level and rescues void falls", () => {
+test("llr-mariorun Godot pack exposes six Story Mode-based Extras levels and rescues void falls", () => {
   const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");
   assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));
   assert.ok(entries.includes("res://classes/zone/trigger/death_plane/death_plane.gdc"));
+  for (let index = 1; index <= 6; index += 1) {
+    assert.ok(entries.includes(`res://scenes/levels/llr_complete/llr_complete_${index}.tscn.remap`));
+    assert.ok(entries.some((entry) => entry.endsWith(`-llr_complete_${index}.scn`)));
+  }
   assert.equal(existsSync(new URL("public/llr-mariorun/extra/smb-1-1/index.html", root)), false);
+});
+
+test("llr-mariorun Extras menu offers six complete touch-friendly level choices", () => {
+  const patch = source("tools/patch-llr-complete-level.mjs");
+  const menu = source("vendor/Legacy_SM63Redux/scenes/menus/title/main_menu/main_menu.gd");
+  for (const title of ["林间热身", "爆弹湖岸", "蘑菇高地", "云端机关", "爆弹乱斗", "天空终极赛"]) {
+    assert.match(patch, new RegExp(title));
+    assert.match(menu, new RegExp(title));
+  }
+  assert.match(menu, /func _open_extras_menu\(\) -> void:/);
+  assert.match(menu, /func _launch_extra_level\(scene: String\) -> void:/);
+  assert.match(menu, /button\.pressed\.connect\(_launch_extra_level\.bind/);
+  assert.match(menu, /if !show_options and !show_extras:/);
 });
 
 test("admin app exposes llr-mariorun entry and online editors", () => {

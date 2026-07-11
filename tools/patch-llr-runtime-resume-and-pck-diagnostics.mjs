@@ -45,6 +45,10 @@ if (!singleton.includes("func _llr_store_scene_checkpoint")) {
   singleton = replaceOnce(singleton, `func _llr_return_to_main_menu():\n\tprepare_exit_game()`, `func _llr_store_scene_checkpoint(scene: String):\n\tif !OS.has_feature("web"):\n\t\treturn\n\tvar escaped = scene.replace("\\\\", "\\\\\\\\").replace("'", "\\\\'")\n\tJavaScriptBridge.eval("window.parent && window.parent.postMessage({type:'llr-godot-scene-checkpoint', scene:'" + escaped + "'}, window.location.origin)", true)\n\n\nfunc _llr_clear_scene_checkpoint():\n\tif OS.has_feature("web"):\n\t\tJavaScriptBridge.eval("window.parent && window.parent.postMessage({type:'llr-godot-clear-checkpoint'}, window.location.origin)", true)\n\n\nfunc _llr_resume_requested_scene():\n\tif !OS.has_feature("web"):\n\t\treturn\n\tvar scene = str(JavaScriptBridge.eval("(function(){return new URL(window.location.href).searchParams.get('resumeScene') || '';})()", true))\n\tif scene.begins_with("res://scenes/") and scene != "res://scenes/menus/title/main_menu/main_menu.tscn":\n\t\tget_tree().change_scene_to_file(scene)\n\n\nfunc _llr_return_to_main_menu():\n\t_llr_clear_scene_checkpoint()\n\tprepare_exit_game()`, "add scene checkpoint helpers");
   singleton = replaceOnce(singleton, `\t# Do the actual warp.\n\t# warning-ignore:RETURN_VALUE_DISCARDED\n\tget_tree().call_deferred("change_scene_to_file", path)`, `\t# Save target scene before changing scenes, so low-memory web reloads can resume.\n\t_llr_store_scene_checkpoint(path)\n\t# Do the actual warp.\n\t# warning-ignore:RETURN_VALUE_DISCARDED\n\tget_tree().call_deferred("change_scene_to_file", path)`, "store checkpoint before warp");
 }
+singleton = singleton.replace(
+  `\tif scene.begins_with("res://scenes/") and scene != "res://scenes/menus/title/main_menu/main_menu.tscn":`,
+  `\tif scene.begins_with("res://scenes/"):`
+);
 write("vendor/Legacy_SM63Redux/classes/global/singleton/singleton.gd", singleton);
 
 let mainMenu = read("vendor/Legacy_SM63Redux/scenes/menus/title/main_menu/main_menu.gd");

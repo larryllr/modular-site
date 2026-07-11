@@ -815,7 +815,13 @@ async function requestLandscapeFullscreen() {
   focusGame();
 }
 
-focusButton?.addEventListener("click", focusGame);
+focusButton?.addEventListener("click", () => {
+  if (isFrameBlank()) {
+    startSelectedGame();
+    return;
+  }
+  focusGame();
+});
 packSelect?.addEventListener("change", () => {
   selectedPackId = packSelect.value;
   loadManifestStatus();
