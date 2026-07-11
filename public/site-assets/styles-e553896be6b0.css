@@ -2466,7 +2466,7 @@ select:focus-visible {
 }
 
 .blog-tab-button {
-  min-height: 38px;
+  min-height: 42px;
   border: 0;
   border-radius: 11px;
   background: transparent;
@@ -2478,6 +2478,11 @@ select:focus-visible {
 
 .blog-tab-button:hover {
   background: #eef2ff;
+}
+
+.blog-tab-button:focus-visible {
+  outline: 3px solid rgba(79, 99, 255, 0.24);
+  outline-offset: 2px;
 }
 
 .blog-tab-button.is-active {
