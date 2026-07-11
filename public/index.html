@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f4f7f8" />
+    <meta name="theme-color" content="#f1f5f3" />
     <title>宽宽的模块化网站</title>
-    <link rel="stylesheet" href="/site-assets/styles-c4a30ba583b0.css" data-site-styles />
+    <link rel="stylesheet" href="/site-assets/styles-9cf86b0f9e8c.css" data-site-styles />
     <script type="module" data-site-bootstrap>
   const route = location.pathname.replace(/^\/+|\/+$/g, "").split("/")[0];
   void import(route === "admin" ? "/site-assets/admin/app-4GUK3BDQ.js" : "/site-assets/public/app-6C5OGAHH.js");
@@ -14,53 +14,64 @@
       html.app-booting,
       html.app-booting body {
         margin: 0;
-        background: #f4f7f8;
+        background:
+          radial-gradient(circle at 78% -12%, rgba(19, 161, 143, 0.12), transparent 34rem),
+          linear-gradient(180deg, #f9fbfa 0%, #f1f5f3 100%);
       }
       .boot-shell {
         display: grid;
-        grid-template-columns: 248px minmax(0, 1fr);
+        grid-template-columns: 264px minmax(0, 1fr);
         min-height: 100vh;
-        color: #17201d;
+        color: #10231d;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       .boot-sidebar {
-        border-right: 1px solid #dce4e1;
-        background: #fff;
+        border-right: 1px solid #d9e4df;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 250, 0.98));
         padding: 24px;
+        box-shadow: 10px 0 42px rgba(16, 35, 29, 0.045);
       }
       .boot-brand {
-        width: 132px;
-        height: 42px;
-        border-radius: 8px;
-        background: #dff4ee;
+        width: 146px;
+        height: 44px;
+        border-radius: 14px;
+        background: linear-gradient(145deg, #e5f7f2, #d8eee8);
       }
       .boot-main {
-        padding: clamp(24px, 4vw, 52px);
+        padding: clamp(28px, 4vw, 64px);
       }
       .boot-title,
       .boot-line,
       .boot-card {
         overflow: hidden;
-        border-radius: 8px;
-        background: #e7eeeb;
+        border-radius: 18px;
+        background: linear-gradient(110deg, #e7eeeb 22%, #f3f7f5 42%, #e7eeeb 62%);
+        background-size: 220% 100%;
+        animation: boot-shimmer 1.6s ease-in-out infinite;
       }
       .boot-title {
         width: min(430px, 72vw);
-        height: 64px;
+        height: 72px;
+        border-radius: 18px;
       }
       .boot-line {
         width: min(620px, 78vw);
         height: 18px;
         margin-top: 18px;
+        border-radius: 9px;
       }
       .boot-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
+        gap: 18px;
         margin-top: 40px;
       }
       .boot-card {
         min-height: 210px;
+      }
+      @keyframes boot-shimmer {
+        0%, 100% { background-position: 100% 0; }
+        50% { background-position: 0 0; }
       }
       @media (max-width: 860px) {
         .boot-shell {
@@ -69,11 +80,18 @@
         .boot-sidebar {
           min-height: 76px;
           border-right: 0;
-          border-bottom: 1px solid #dce4e1;
+          border-bottom: 1px solid #d9e4df;
           padding: 16px;
         }
         .boot-grid {
           grid-template-columns: 1fr;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-title,
+        .boot-line,
+        .boot-card {
+          animation: none;
         }
       }
     </style>
