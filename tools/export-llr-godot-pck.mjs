@@ -39,14 +39,23 @@ if (!existsSync(exportedPck)) {
   throw new Error(`Godot export did not create index.pck. Exit status: ${result.status}\nSTDERR:\n${stderr}\nSTDOUT:\n${stdout}`);
 }
 
+const outputLines = `${result.stderr || ""}\n${result.stdout || ""}`.split(/\r?\n/).filter(Boolean);
+const warningLines = outputLines.filter((line) => /warning/i.test(line));
+const errorLines = outputLines.filter((line) => /^ERROR:/i.test(line));
+if (result.status !== 0 || errorLines.length) {
+  throw new Error([
+    `Godot export was not clean. Exit status: ${result.status}`,
+    ...errorLines.slice(-20),
+    ...warningLines.slice(-10)
+  ].join("\n"));
+}
+
 copyFileSync(exportedPck, targetPck);
-const warningCount = (result.stderr || "").split(/\r?\n/).filter((line) => /warning/i.test(line)).length;
-const errorCount = (result.stderr || "").split(/\r?\n/).filter((line) => /^ERROR:/i.test(line)).length;
 console.log(JSON.stringify({
   exportedPck,
   targetPck,
   bytes: statSync(targetPck).size,
   godotExitStatus: result.status,
-  warnings: warningCount,
-  errors: errorCount
+  warnings: warningLines.length,
+  errors: errorLines.length
 }, null, 2));

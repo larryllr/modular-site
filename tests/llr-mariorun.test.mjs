@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -260,6 +261,8 @@ test("llr-mariorun Godot pack exposes ten original long Extras levels and rescue
   const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");
   assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));
   assert.ok(entries.includes("res://classes/zone/trigger/death_plane/death_plane.gdc"));
+  assert.ok(entries.includes("res://scenes/menus/level_designer/items.xml"));
+  assert.ok(!entries.includes("res://scenes/menus/level_designer/items.xml.tres"));
   for (let index = 1; index <= 10; index += 1) {
     assert.ok(entries.includes(`res://scenes/levels/llr_complete/llr_complete_${index}.tscn.remap`));
     assert.ok(entries.some((entry) => entry.endsWith(`-llr_complete_${index}.scn`)));
@@ -280,20 +283,28 @@ test("llr-mariorun Extras menu offers ten complete touch-friendly level choices"
   assert.match(menu, /if !show_options and !show_extras:/);
 });
 
-test("llr-mariorun Extras scenes are 38k-wide ten-segment originals with chained finishes", () => {
+test("llr-mariorun Extras scenes are audited 32k-wide V2 levels with chained finishes", () => {
   for (let index = 1; index <= 10; index += 1) {
     const scene = source(`vendor/Legacy_SM63Redux/scenes/levels/llr_complete/llr_complete_${index}.tscn`);
     assert.equal((scene.match(/\[node name="LLRSegment\d{2}_/g) || []).length, 10);
-    assert.ok((scene.match(/RecoveryGroundA"/g) || []).length >= 2);
+    assert.equal((scene.match(/metadata\/_llr_geometry_version = 2/g) || []).length, 10);
+    assert.equal((scene.match(/metadata\/_llr_kind = "main"/g) || []).length, 10);
+    assert.ok((scene.match(/metadata\/_llr_kind = "recovery"/g) || []).length >= 2);
+    assert.match(scene, /metadata\/_llr_points = PackedVector2Array\(/);
+    assert.doesNotMatch(scene, /type="Marker2D" parent="Route"/);
     const entries = [...scene.matchAll(/metadata\/_llr_entry_y = (-?\d+(?:\.\d+)?)\nmetadata\/_llr_exit_y = (-?\d+(?:\.\d+)?)/g)];
     assert.equal(entries.length, 10);
     const heightChanges = entries.map((match) => Math.abs(Number(match[2]) - Number(match[1])));
     assert.ok(heightChanges.filter((change) => change > 180).length >= 6);
     assert.ok(heightChanges.filter((change) => change > 450).length >= 3);
-    assert.ok((scene.match(/^\[node /gm) || []).length >= 140);
-    assert.match(scene, /38180, -1050/);
+    const nodeCount = (scene.match(/^\[node /gm) || []).length;
+    assert.ok(nodeCount >= 400);
+    assert.ok(nodeCount <= 750);
+    const flow = scene.match(/metadata\/_llr_main_seconds = (\d+(?:\.\d+)?)/);
+    assert.ok(flow && Number(flow[1]) >= 180);
+    assert.match(scene, /32180, -820/);
     assert.match(scene, /\[node name="FinishWarp"/);
-    assert.match(scene, /size = Vector2\(80, 2100\)/);
+    assert.match(scene, /size = Vector2\(76, 340\)/);
     assert.doesNotMatch(scene, /scene_path = "res:\/\/scenes\/levels\/tutorial_1\//);
     if (index < 10) {
       assert.match(scene, new RegExp(`scene_path = "res://scenes/levels/llr_complete/llr_complete_${index + 1}\\.tscn"`));
@@ -301,6 +312,32 @@ test("llr-mariorun Extras scenes are 38k-wide ten-segment originals with chained
       assert.match(scene, /scene_path = "res:\/\/scenes\/menus\/title\/main_menu\/main_menu\.tscn"/);
     }
   }
+});
+
+test("llr-mariorun Extras V2 strict geometry audit passes", () => {
+  const result = spawnSync(process.execPath, ["tools/audit-llr-level-geometry.mjs", "--strict"], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /"totalViolations": 0/);
+});
+
+test("llr-mariorun Level Designer keeps negative coordinates and exports clean data files", () => {
+  const serializer = source("vendor/Legacy_SM63Redux/scenes/menus/level_designer/serializers/serializer.gd");
+  const designer = source("vendor/Legacy_SM63Redux/scenes/menus/level_designer/ld_main.gd");
+  const designerMusic = source("vendor/Legacy_SM63Redux/scenes/menus/level_designer/music.gd");
+  const exportPresets = source("vendor/Legacy_SM63Redux/export_presets.cfg");
+  const packageJson = source("package.json");
+  assert.match(serializer, /bytes\.slice\(\s*0, half\s*\)/);
+  assert.match(serializer, /bytes\.slice\(\s*half, size\s*\)/);
+  assert.match(serializer, /val < -sign_bit or val > sign_bit - 1/);
+  assert.doesNotMatch(designer, /serializer\.run_tests\(true\)/);
+  assert.match(designer, /parser\.open\("res:\/\/scenes\/menus\/level_designer\/items\.xml"\)/);
+  assert.doesNotMatch(designerMusic, /preload\("\.\/music\/editor[1-4]\.ogg"\)/);
+  assert.match(designerMusic, /ResourceLoader\.exists\(path\)/);
+  assert.match(exportPresets, /name="Web"[\s\S]*?include_filter="\*\.xml"/);
+  assert.match(packageJson, /tools\/test-llr-godot-serializer\.mjs/);
 });
 
 test("admin app exposes llr-mariorun entry and online editors", () => {
