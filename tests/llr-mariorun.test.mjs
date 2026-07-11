@@ -61,9 +61,9 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(worker, /function patchSm63ExtrasIntoPck\(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer\)/);
   assert.match(worker, /const sm63ExtrasPckEntries = \[/);
   assert.match(worker, /res:\/\/classes\/zone\/trigger\/death_plane\/death_plane\.gdc/);
-  assert.match(worker, /-llr_complete_\[1-6\]\\\.scn\$/);
-  assert.match(worker, /Expected 6 compiled SM63 Extras scenes/);
-  for (let index = 1; index <= 6; index += 1) {
+  assert.ok(worker.includes("/-llr_complete_(?:[1-9]|10)\\.scn$/"));
+  assert.match(worker, /Expected 10 compiled SM63 Extras scenes/);
+  for (let index = 1; index <= 10; index += 1) {
     assert.match(worker, new RegExp(`res://scenes/levels/llr_complete/llr_complete_${index}\\.tscn\\.remap`));
   }
   assert.match(worker, /headers\.set\("x-llr-extra-patch", "applied"\)/);
@@ -256,21 +256,21 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });
 
-test("llr-mariorun Godot pack exposes six Story Mode-based Extras levels and rescues void falls", () => {
+test("llr-mariorun Godot pack exposes ten original long Extras levels and rescues void falls", () => {
   const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");
   assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));
   assert.ok(entries.includes("res://classes/zone/trigger/death_plane/death_plane.gdc"));
-  for (let index = 1; index <= 6; index += 1) {
+  for (let index = 1; index <= 10; index += 1) {
     assert.ok(entries.includes(`res://scenes/levels/llr_complete/llr_complete_${index}.tscn.remap`));
     assert.ok(entries.some((entry) => entry.endsWith(`-llr_complete_${index}.scn`)));
   }
   assert.equal(existsSync(new URL("public/llr-mariorun/extra/smb-1-1/index.html", root)), false);
 });
 
-test("llr-mariorun Extras menu offers six complete touch-friendly level choices", () => {
+test("llr-mariorun Extras menu offers ten complete touch-friendly level choices", () => {
   const patch = source("tools/patch-llr-complete-level.mjs");
   const menu = source("vendor/Legacy_SM63Redux/scenes/menus/title/main_menu/main_menu.gd");
-  for (const title of ["林间热身", "爆弹湖岸", "蘑菇高地", "云端机关", "爆弹乱斗", "天空终极赛"]) {
+  for (const title of ["郊野多层远征", "湖区水陆环线", "爆弹施工塔", "蘑菇垂直山谷", "云海双层航线", "水下遗迹往返", "飞行军团空港", "旋转机关塔", "九机制混合长征", "终极老师城"]) {
     assert.match(patch, new RegExp(title));
     assert.match(menu, new RegExp(title));
   }
@@ -278,6 +278,29 @@ test("llr-mariorun Extras menu offers six complete touch-friendly level choices"
   assert.match(menu, /func _launch_extra_level\(scene: String\) -> void:/);
   assert.match(menu, /button\.pressed\.connect\(_launch_extra_level\.bind/);
   assert.match(menu, /if !show_options and !show_extras:/);
+});
+
+test("llr-mariorun Extras scenes are 38k-wide ten-segment originals with chained finishes", () => {
+  for (let index = 1; index <= 10; index += 1) {
+    const scene = source(`vendor/Legacy_SM63Redux/scenes/levels/llr_complete/llr_complete_${index}.tscn`);
+    assert.equal((scene.match(/\[node name="LLRSegment\d{2}_/g) || []).length, 10);
+    assert.ok((scene.match(/RecoveryGroundA"/g) || []).length >= 2);
+    const entries = [...scene.matchAll(/metadata\/_llr_entry_y = (-?\d+(?:\.\d+)?)\nmetadata\/_llr_exit_y = (-?\d+(?:\.\d+)?)/g)];
+    assert.equal(entries.length, 10);
+    const heightChanges = entries.map((match) => Math.abs(Number(match[2]) - Number(match[1])));
+    assert.ok(heightChanges.filter((change) => change > 180).length >= 6);
+    assert.ok(heightChanges.filter((change) => change > 450).length >= 3);
+    assert.ok((scene.match(/^\[node /gm) || []).length >= 140);
+    assert.match(scene, /38180, -1050/);
+    assert.match(scene, /\[node name="FinishWarp"/);
+    assert.match(scene, /size = Vector2\(80, 2100\)/);
+    assert.doesNotMatch(scene, /scene_path = "res:\/\/scenes\/levels\/tutorial_1\//);
+    if (index < 10) {
+      assert.match(scene, new RegExp(`scene_path = "res://scenes/levels/llr_complete/llr_complete_${index + 1}\\.tscn"`));
+    } else {
+      assert.match(scene, /scene_path = "res:\/\/scenes\/menus\/title\/main_menu\/main_menu\.tscn"/);
+    }
+  }
 });
 
 test("admin app exposes llr-mariorun entry and online editors", () => {

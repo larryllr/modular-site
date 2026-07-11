@@ -2589,7 +2589,11 @@ const sm63ExtrasPckEntries = [
   "res://scenes/levels/llr_complete/llr_complete_3.tscn.remap",
   "res://scenes/levels/llr_complete/llr_complete_4.tscn.remap",
   "res://scenes/levels/llr_complete/llr_complete_5.tscn.remap",
-  "res://scenes/levels/llr_complete/llr_complete_6.tscn.remap"
+  "res://scenes/levels/llr_complete/llr_complete_6.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_7.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_8.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_9.tscn.remap",
+  "res://scenes/levels/llr_complete/llr_complete_10.tscn.remap"
 ];
 
 function patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer): Uint8Array {
@@ -2598,11 +2602,11 @@ function patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBu
   const sourceEntries = new Map(source.entries.map((entry) => [entry.name, entry]));
   const compiledExtraScenes = source.entries
     .map((entry) => entry.name)
-    .filter((name) => /-llr_complete_[1-6]\.scn$/.test(name));
+    .filter((name) => /-llr_complete_(?:[1-9]|10)\.scn$/.test(name));
   const replacementNames = [...sm63ExtrasPckEntries, ...compiledExtraScenes];
 
-  if (compiledExtraScenes.length !== 6) {
-    throw new Error(`Expected 6 compiled SM63 Extras scenes, found ${compiledExtraScenes.length}`);
+  if (compiledExtraScenes.length !== 10) {
+    throw new Error(`Expected 10 compiled SM63 Extras scenes, found ${compiledExtraScenes.length}`);
   }
 
   for (const name of replacementNames) {
