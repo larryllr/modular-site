@@ -183,3 +183,4 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 - `tools/audit-llr-level-geometry.mjs --strict` 现在同时审计 set piece、三幕结构、房间形态、玩法标签、动态机关、节点预算和回收路线；十关均为 0 violations，预计熟练流程 231–289 秒，节点数 295–421。
 - 部署补丁会自动修复此前未被旧关卡触发的两个上游兼容问题：`thwomp.gd` 枚举逗号，以及 `rebind_option.gd` 在节点 ready 前访问 `key_list` 的空引用。
 - Godot 4.3 已实际启动第 1、4、5、8、10 关；浏览器已进入第 4、10 关并确认无 Godot 脚本错误，虚拟摇杆、跳跃、移动平台和掉落回场路径均做过实跑。最终提交的默认 PCK 为 9,756,672 bytes，Godot 导出为 0 warnings / 0 errors；正式部署应在这次导出后直接执行站点构建与 Wrangler，避免 npm 生命周期再次重导 PCK。
+- 已部署到正式 Cloudflare Worker，Version ID：`9d0a0f76-fd92-4d71-abfe-a24dd6a1fa7c`。
