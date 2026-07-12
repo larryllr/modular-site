@@ -2584,6 +2584,18 @@ const sm63ExtrasPckEntries = [
   "res://scenes/menus/title/main_menu/main_menu.gdc",
   "res://classes/zone/trigger/death_plane/death_plane.gdc",
   "res://classes/global/singleton/singleton.gdc",
+  "res://classes/solid/llr_spring/llr_spring.gd.remap",
+  "res://classes/solid/llr_spring/llr_spring.gdc",
+  "res://classes/solid/llr_spring/llr_spring.tscn.remap",
+  "res://classes/solid/llr_conveyor/llr_conveyor.gd.remap",
+  "res://classes/solid/llr_conveyor/llr_conveyor.gdc",
+  "res://classes/solid/llr_conveyor/llr_conveyor.tscn.remap",
+  "res://classes/solid/llr_pound_gate/llr_pound_gate.gd.remap",
+  "res://classes/solid/llr_pound_gate/llr_pound_gate.gdc",
+  "res://classes/solid/llr_pound_gate/llr_pound_gate.tscn.remap",
+  "res://classes/solid/llr_coin_gate/llr_coin_gate.gd.remap",
+  "res://classes/solid/llr_coin_gate/llr_coin_gate.gdc",
+  "res://classes/solid/llr_coin_gate/llr_coin_gate.tscn.remap",
   "res://scenes/levels/llr_complete/llr_complete_1.tscn.remap",
   "res://scenes/levels/llr_complete/llr_complete_2.tscn.remap",
   "res://scenes/levels/llr_complete/llr_complete_3.tscn.remap",
@@ -2603,10 +2615,16 @@ function patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBu
   const compiledExtraScenes = source.entries
     .map((entry) => entry.name)
     .filter((name) => /-llr_complete_(?:[1-9]|10)\.scn$/.test(name));
-  const replacementNames = [...sm63ExtrasPckEntries, ...compiledExtraScenes];
+  const compiledSupportScenes = source.entries
+    .map((entry) => entry.name)
+    .filter((name) => /-llr_(?:spring|conveyor|pound_gate|coin_gate)\.scn$/.test(name));
+  const replacementNames = [...sm63ExtrasPckEntries, ...compiledExtraScenes, ...compiledSupportScenes];
 
   if (compiledExtraScenes.length !== 10) {
     throw new Error(`Expected 10 compiled SM63 Extras scenes, found ${compiledExtraScenes.length}`);
+  }
+  if (compiledSupportScenes.length !== 4) {
+    throw new Error(`Expected 4 compiled SM63 support scenes, found ${compiledSupportScenes.length}`);
   }
 
   for (const name of replacementNames) {

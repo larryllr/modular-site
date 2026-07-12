@@ -10,16 +10,16 @@ export const V3_STAGE_BLUEPRINTS = [
     tint: "Color(1, 0.98, 0.9, 1)",
     heights: [220, -40, 300, -200, -620, -80, 300, -280, -620, -40, 140],
     rooms: [
-      room("果园热身", "rolling", 19, ["terrain", "goomba", "koopa"]),
+      room("果园热身", "rolling", 21, ["terrain", "goomba", "koopa", "spring"]),
       room("倒木溪谷", "creek", 22, ["water", "falling_log", "cheep"], true),
       room("谷仓跷跷桥", "seesaw", 21, ["tipping_log", "terrain"]),
-      room("树冠岔路", "fork", 23, ["branch", "cloud", "blue_coin"]),
+      room("树冠岔路", "fork", 25, ["branch", "cloud", "blue_coin", "spring"]),
       room("第一座风车", "wheel", 24, ["pivot", "cloud"], true),
       room("溪流摆渡", "ferry", 23, ["shuttle", "water", "cheep"], true),
       room("龟壳牧场", "corridor", 21, ["koopa", "box", "terrain"]),
       room("风车塔", "tower", 26, ["pivot", "cloud", "mushroom"], true),
       room("暴雨下山", "descent", 23, ["falling_log", "goonie", "terrain"]),
-      room("丰收终局", "finale", 29, ["tipping_log", "shuttle", "pivot", "koopa"])
+      room("丰收终局", "finale", 32, ["tipping_log", "shuttle", "pivot", "koopa", "spring"])
     ]
   },
   {
@@ -36,7 +36,7 @@ export const V3_STAGE_BLUEPRINTS = [
       room("管道暗渠", "vault", 24, ["pipe", "water", "blue_coin"]),
       room("瀑布升降井", "tower", 27, ["shuttle", "mushroom", "water"], true),
       room("游鱼花园", "waterway", 24, ["cheep", "water", "terrain"], true),
-      room("沉没大厅", "vault", 25, ["door", "water", "blue_coin"]),
+      room("沉没大厅", "vault", 30, ["door", "water", "blue_coin", "red_gate"]),
       room("开闸冲刺", "rolling", 22, ["water", "tipping_log", "terrain"]),
       room("灯塔港终局", "finale", 30, ["shuttle", "thwomp", "water", "cheep"])
     ]
@@ -48,16 +48,16 @@ export const V3_STAGE_BLUEPRINTS = [
     tint: "Color(1, 0.93, 0.84, 1)",
     heights: [220, 80, -460, -120, 260, -420, 180, -360, -620, -60, 100],
     rooms: [
-      room("安全培训场", "corridor", 19, ["box", "goomba", "terrain"]),
+      room("安全培训场", "corridor", 23, ["box", "goomba", "terrain", "pound_gate"]),
       room("三层箱屋", "factory", 25, ["box", "branch", "bobomb"]),
       room("爆弹斜坡", "rolling", 22, ["bobomb", "terrain", "box"]),
-      room("冲压走廊", "corridor", 24, ["thwomp", "box"]),
+      room("冲压走廊", "corridor", 27, ["thwomp", "box", "pound_gate"]),
       room("龟壳保龄道", "corridor", 23, ["koopa", "box", "branch"]),
       room("拆除竖井", "tower", 27, ["box", "mushroom", "shuttle"], true),
-      room("废料传送带", "ferry", 24, ["shuttle", "big_rock", "bobomb"], true),
+      room("废料传送带", "ferry", 27, ["shuttle", "big_rock", "bobomb", "conveyor"], true),
       room("吊臂工地", "wheel", 26, ["pivot", "tipping_log", "box"], true),
       room("爆破岔路", "fork", 24, ["box", "branch", "cloud", "blue_coin"]),
-      room("拆迁终局", "finale", 32, ["thwomp", "rotating", "box", "bobomb"])
+      room("拆迁终局", "finale", 36, ["thwomp", "rotating", "box", "bobomb", "conveyor", "pound_gate"])
     ]
   },
   {
@@ -68,15 +68,15 @@ export const V3_STAGE_BLUEPRINTS = [
     heights: [260, -520, -180, 280, -620, -180, 320, -600, -180, -560, 80],
     rooms: [
       room("喷嘴广场", "rolling", 20, ["fludd_rocket", "bottle", "terrain"]),
-      room("低矮蘑菇阶", "tower", 24, ["mushroom", "goomba"]),
+      room("低矮蘑菇阶", "tower", 26, ["mushroom", "goomba", "spring"]),
       room("第一发射井", "tower", 27, ["fludd_rocket", "mushroom", "bottle"], true),
-      room("空中换层", "clock", 25, ["rotating", "cloud", "fludd_rocket"], true),
+      room("空中换层", "clock", 28, ["rotating", "cloud", "fludd_rocket", "fludd_hover"], true),
       room("门后观景台", "vault", 23, ["door", "blue_coin", "cloud"]),
       room("深井下降", "descent", 24, ["mushroom", "bottle", "falling_log"]),
       room("双发射井", "tower", 29, ["fludd_rocket", "shuttle", "mushroom"], true),
-      room("旋转菌冠", "clock", 27, ["rotating", "mushroom", "parakoopa"], true),
+      room("旋转菌冠", "clock", 30, ["rotating", "mushroom", "parakoopa", "spring"], true),
       room("云顶补给站", "skyline", 25, ["cloud", "bottle", "parakoopa"], true),
-      room("火山口发射", "finale", 34, ["fludd_rocket", "mushroom", "pivot", "bottle"])
+      room("火山口发射", "finale", 38, ["fludd_rocket", "mushroom", "pivot", "bottle", "spring"])
     ]
   },
   {
@@ -86,16 +86,16 @@ export const V3_STAGE_BLUEPRINTS = [
     tint: "Color(0.9, 0.95, 1, 1)",
     heights: [240, -420, -500, -180, -620, -220, -620, -260, -560, -120, -240],
     rooms: [
-      room("地面货梯", "tower", 25, ["shuttle", "cloud"], true),
-      room("双线摆渡", "ferry", 25, ["shuttle", "branch", "cloud"], true),
+      room("地面货梯", "tower", 28, ["shuttle", "cloud", "conveyor"], true),
+      room("双线摆渡", "ferry", 28, ["shuttle", "branch", "cloud", "conveyor"], true),
       room("枢轴吊车", "wheel", 27, ["pivot", "cloud"], true),
       room("坠落货仓", "creek", 24, ["falling_log", "cloud", "box"], true),
-      room("高低航线", "fork", 26, ["shuttle", "branch", "blue_coin"], true),
+      room("高低航线", "fork", 29, ["shuttle", "branch", "blue_coin", "fludd_hover"], true),
       room("双层升降塔", "tower", 29, ["shuttle", "cloud", "bottle"], true),
-      room("云仓库", "factory", 24, ["box", "cloud", "goomba"]),
+      room("云仓库", "factory", 27, ["box", "cloud", "goomba", "conveyor"]),
       room("长途空中渡轮", "ferry", 28, ["shuttle", "cloud", "goonie"], true),
       room("卸货下降", "descent", 25, ["tipping_log", "falling_log", "cloud"], true),
-      room("总调度终局", "finale", 35, ["shuttle", "pivot", "falling_log", "cloud"])
+      room("总调度终局", "finale", 39, ["shuttle", "pivot", "falling_log", "cloud", "conveyor"])
     ]
   },
   {
@@ -105,16 +105,16 @@ export const V3_STAGE_BLUEPRINTS = [
     tint: "Color(1, 0.96, 0.84, 1)",
     heights: [240, 160, 300, 40, -220, 180, 300, -120, -420, 20, 100],
     rooms: [
-      room("涡轮试车场", "corridor", 19, ["fludd_turbo", "terrain"]),
+      room("涡轮试车场", "corridor", 22, ["fludd_turbo", "terrain", "conveyor"]),
       room("沙丘波浪路", "rolling", 22, ["fludd_turbo", "terrain", "goomba"]),
       room("踏浪桥", "waterway", 23, ["fludd_turbo", "water", "branch"], true),
       room("双坡飞跃", "creek", 22, ["fludd_turbo", "water", "blue_coin"], true),
-      room("礁石回旋道", "factory", 23, ["big_rock", "box", "branch"]),
+      room("礁石回旋道", "factory", 26, ["big_rock", "box", "branch", "conveyor"]),
       room("渡口减速区", "ferry", 24, ["shuttle", "water"]),
       room("海堤冲压廊", "corridor", 24, ["thwomp", "fludd_turbo"]),
       room("海滩双路线", "fork", 25, ["fludd_turbo", "branch", "cloud"]),
       room("灯塔升降台", "tower", 26, ["shuttle", "cloud", "bottle"], true),
-      room("日落公路终局", "finale", 32, ["fludd_turbo", "water", "thwomp", "terrain"])
+      room("日落公路终局", "finale", 36, ["fludd_turbo", "water", "thwomp", "terrain", "conveyor"])
     ]
   },
   {
@@ -124,16 +124,16 @@ export const V3_STAGE_BLUEPRINTS = [
     tint: "Color(0.92, 1, 0.94, 1)",
     heights: [220, -180, -420, -580, -220, -600, -120, 260, -520, -260, -180],
     rooms: [
-      room("起飞草坡", "rolling", 20, ["goonie", "terrain"]),
-      room("低空鸟谷", "skyline", 25, ["goonie", "cloud"], true),
+      room("起飞草坡", "rolling", 22, ["goonie", "terrain", "spring"]),
+      room("低空鸟谷", "skyline", 28, ["goonie", "cloud", "fludd_hover"], true),
       room("飞龟阶梯", "tower", 25, ["parakoopa", "cloud", "mushroom"], true),
-      room("空中巴士", "ferry", 27, ["shuttle", "goonie", "cloud"], true),
+      room("空中巴士", "ferry", 30, ["shuttle", "goonie", "cloud", "fludd_hover"], true),
       room("巢穴双峰", "fork", 25, ["branch", "goonie", "blue_coin"], true),
       room("俯冲峡谷", "descent", 24, ["goonie", "parakoopa", "cloud"], true),
       room("云层回旋", "skyline", 27, ["cloud", "parakoopa"], true),
       room("巨型鸟巢", "wheel", 28, ["pivot", "goonie", "cloud"], true),
-      room("迁徙风暴", "clock", 28, ["shuttle", "rotating", "goonie"], true),
-      room("群鸟终局", "finale", 35, ["goonie", "parakoopa", "shuttle", "pivot"])
+      room("迁徙风暴", "clock", 31, ["shuttle", "rotating", "goonie", "spring", "fludd_hover"], true),
+      room("群鸟终局", "finale", 39, ["goonie", "parakoopa", "shuttle", "pivot", "spring"])
     ]
   },
   {
@@ -144,15 +144,15 @@ export const V3_STAGE_BLUEPRINTS = [
     heights: [220, -260, -600, -220, -620, -180, -600, -240, -620, -180, -120],
     rooms: [
       room("慢速齿轮课", "clock", 23, ["rotating", "terrain"]),
-      room("整点冲压厅", "corridor", 24, ["thwomp", "terrain"]),
+      room("整点冲压厅", "corridor", 28, ["thwomp", "terrain", "pound_gate"]),
       room("分针升降梯", "tower", 27, ["shuttle", "cloud"], true),
       room("摆锤桥", "seesaw", 24, ["tipping_log", "terrain"]),
       room("钟面枢轴", "wheel", 28, ["pivot", "cloud"], true),
-      room("幽灵齿轮廊", "clock", 27, ["rotating", "cloud"]),
+      room("幽灵齿轮廊", "clock", 30, ["rotating", "cloud", "conveyor"]),
       room("双钟大厅", "wheel", 29, ["pivot", "branch", "blue_coin"], true),
-      room("冲压升降井", "tower", 30, ["thwomp", "shuttle", "cloud"], true),
+      room("冲压升降井", "tower", 34, ["thwomp", "shuttle", "cloud", "pound_gate"], true),
       room("时针塔顶", "clock", 29, ["rotating", "pivot", "parakoopa"], true),
-      room("大钟终局", "finale", 38, ["thwomp", "tipping_log", "rotating", "pivot"])
+      room("大钟终局", "finale", 43, ["thwomp", "tipping_log", "rotating", "pivot", "conveyor", "pound_gate"])
     ]
   },
   {
@@ -169,9 +169,9 @@ export const V3_STAGE_BLUEPRINTS = [
       room("淹没书库", "waterway", 26, ["water", "shuttle", "cheep"], true),
       room("蘑菇地窖", "tower", 27, ["mushroom", "branch", "blue_coin"], true),
       room("断桥中庭", "ferry", 26, ["shuttle", "tipping_log", "water"], true),
-      room("三座藏宝室", "vault", 28, ["door", "pipe", "blue_coin"]),
+      room("三座藏宝室", "vault", 34, ["door", "pipe", "blue_coin", "red_gate"]),
       room("捷径汇合厅", "factory", 25, ["branch", "box", "cloud"]),
-      room("宝库出口", "finale", 35, ["door", "pipe", "shuttle", "blue_coin"])
+      room("宝库出口", "finale", 39, ["door", "pipe", "shuttle", "blue_coin", "pound_gate"])
     ]
   },
   {
@@ -182,15 +182,15 @@ export const V3_STAGE_BLUEPRINTS = [
     heights: [220, 80, 300, -180, -620, -220, -560, -100, 280, -520, 100],
     rooms: [
       room("城外庭院", "rolling", 21, ["koopa", "branch", "terrain"]),
-      room("拆迁城门", "factory", 25, ["box", "bobomb", "branch"]),
+      room("拆迁城门", "factory", 29, ["box", "bobomb", "branch", "pound_gate"]),
       room("护城水道", "waterway", 26, ["water", "shuttle", "cheep"], true),
-      room("城堡货梯", "tower", 29, ["shuttle", "mushroom", "cloud"], true),
-      room("火箭露台", "fork", 27, ["fludd_rocket", "cloud", "bottle"], true),
-      room("机械城墙", "clock", 29, ["thwomp", "rotating", "terrain"]),
-      room("空中围城", "skyline", 30, ["goonie", "parakoopa", "pivot"], true),
-      room("地下逃生道", "vault", 28, ["pipe", "box", "water"]),
+      room("城堡货梯", "tower", 32, ["shuttle", "mushroom", "cloud", "conveyor"], true),
+      room("火箭露台", "fork", 30, ["fludd_rocket", "cloud", "bottle", "fludd_hover"], true),
+      room("机械城墙", "clock", 32, ["thwomp", "rotating", "terrain", "conveyor"]),
+      room("空中围城", "skyline", 33, ["goonie", "parakoopa", "pivot", "spring"], true),
+      room("地下逃生道", "vault", 34, ["pipe", "box", "water", "red_gate"]),
       room("最终双塔", "tower", 34, ["shuttle", "pivot", "mushroom"], true),
-      room("王座桥", "finale", 40, ["tipping_log", "shuttle", "thwomp", "pivot"])
+      room("王座桥", "finale", 46, ["tipping_log", "shuttle", "thwomp", "pivot", "spring", "conveyor", "pound_gate"])
     ]
   }
 ];
@@ -379,12 +379,14 @@ metadata/_llr_points = ${packed(route.map((point) => [point.x, point.y]))}
 
   function roomMarker(ctx) {
     const act = ctx.index < 3 ? 1 : ctx.index < 7 ? 2 : 3;
+    const cadence = ctx.index < 2 ? "introduction" : ctx.index < 5 ? "development" : ctx.index < 8 ? "twist" : "resolution";
     nodes.push(`${plainNode(`LLRSegment${String(ctx.index + 1).padStart(2, "0")}_${ctx.spec.form}`, "Node2D").trimEnd()}
 position = ${vector(ctx.x, ctx.entryY)}
 metadata/_llr_entry_y = ${fmt(ctx.entryY)}
 metadata/_llr_exit_y = ${fmt(ctx.exitY)}
 metadata/_llr_geometry_version = 3
 metadata/_llr_act = ${act}
+metadata/_llr_cadence = ${JSON.stringify(cadence)}
 metadata/_llr_set_piece = ${JSON.stringify(ctx.spec.name)}
 metadata/_llr_mechanics = ${JSON.stringify(ctx.spec.mechanics.join(","))}
 metadata/_llr_target_seconds = ${fmt(ctx.spec.seconds)}
@@ -957,11 +959,20 @@ metadata/_llr_target_seconds = ${fmt(ctx.spec.seconds)}
     return result.surfaceIds[index % Math.max(1, result.surfaceIds.length)] || null;
   }
 
+  function widestSurface(result, excluded = new Set()) {
+    return [...result.surfaceIds]
+      .filter((id) => !excluded.has(id))
+      .sort((left, right) => (surfaces.get(right)?.width || 0) - (surfaces.get(left)?.width || 0))[0]
+      || result.surfaceIds[0]
+      || null;
+  }
+
   function decorateRoom(ctx, result) {
     const mechanics = new Set(ctx.spec.mechanics);
     const first = pickSurface(result, 0) || ctx.edge.start;
     const middle = pickSurface(result, 1) || first;
     const last = pickSurface(result, 2) || middle;
+    const gateSurface = mechanics.has("pound_gate") ? widestSurface(result) : null;
 
     if (mechanics.has("goomba")) {
       grounded(`S${ctx.index + 1}Goomba1`, "Items/Enemies", "goomba", first, 0.42, -12);
@@ -1001,6 +1012,9 @@ metadata/_llr_target_seconds = ${fmt(ctx.spec.seconds)}
     }
     if (mechanics.has("fludd_turbo")) {
       grounded(`S${ctx.index + 1}FluddTurbo`, "Items/Pickups", "fluddTurbo", first, 0.36, -30);
+    }
+    if (mechanics.has("fludd_hover")) {
+      grounded(`S${ctx.index + 1}FluddHover`, "Items/Pickups", "fluddHover", first, 0.22, -30);
     }
     if (mechanics.has("bottle")) {
       grounded(`S${ctx.index + 1}Bottle`, "Items/Pickups", "bottle", last, 0.52, -30);
@@ -1042,6 +1056,68 @@ metadata/_llr_target_seconds = ${fmt(ctx.spec.seconds)}
       }, {
         width: 5,
         pivotOffset: (stage.id + ctx.index) % 2 ? 1 : -1
+      });
+    }
+
+    if (mechanics.has("spring")) {
+      const springSurface = widestSurface(result, new Set(gateSurface ? [gateSurface] : [])) || first;
+      const spring = grounded(`S${ctx.index + 1}Spring`, "Items/Mechanisms", "spring", springSurface, 0.62, -9, {
+        launch_speed: fmt(7.8 + Math.min(1.2, stage.id * 0.08)),
+        horizontal_boost: fmt(ctx.index % 2 ? 0.7 : 0.35)
+      });
+      const landing = {
+        x: Math.min(ctx.x + 2800, spring.x + 225),
+        y: clamp(spring.y - 205, -690, 510)
+      };
+      addPlatformPoint(`S${ctx.index + 1}SpringLanding`, 1, "cloud", landing, { width: 5 });
+      airborne(`S${ctx.index + 1}SpringPrize`, "Items/Pickups", "blueCoin", landing.x, landing.y - 54);
+    }
+
+    if (mechanics.has("conveyor")) {
+      const excluded = new Set(gateSurface ? [gateSurface] : []);
+      const candidates = [...result.surfaceIds]
+        .filter((id) => !excluded.has(id))
+        .sort((left, right) => (surfaces.get(right)?.width || 0) - (surfaces.get(left)?.width || 0))
+        .slice(0, 2);
+      candidates.forEach((surfaceId, index) => {
+        const surface = surfaces.get(surfaceId);
+        const direction = stage.id === 6 || (stage.id === 10 && ctx.index === 9)
+          ? 1
+          : (stage.id + ctx.index + index) % 2 ? -1 : 1;
+        grounded(`S${ctx.index + 1}Conveyor${index + 1}`, "Items/Mechanisms", "conveyor", surfaceId, index ? 0.64 : 0.38, -8, {
+          width: fmt(clamp((surface?.width || 480) * 0.42, 160, 280)),
+          speed: fmt(direction * (88 + stage.id * 4 + index * 12))
+        });
+      });
+    }
+
+    if (gateSurface) {
+      const surface = surfaces.get(gateSurface);
+      grounded(`S${ctx.index + 1}PoundGate`, "Items/Mechanisms", "poundGate", gateSurface, 0.24, -8, {
+        gate_offset: vector(clamp((surface?.width || 620) * 0.34, 195, 240), -92),
+        gate_height: fmt(172 + Math.min(20, stage.id * 2)),
+        open_distance: "224"
+      });
+    }
+
+    if (mechanics.has("red_gate")) {
+      const coinGateSurface = last || widestSurface(result) || ctx.edge.end;
+      const gateAnchor = surfacePoint(coinGateSurface, 0.7);
+      const candidates = result.route.filter((point) => point.x < gateAnchor.x - 80 && point.x > ctx.x + 340);
+      const coinPoints = Array.from({ length: 5 }, (_, index) => {
+        const sampleIndex = Math.min(
+          candidates.length - 1,
+          Math.max(0, Math.floor((index + 1) * candidates.length / 6))
+        );
+        return candidates[sampleIndex] || result.route[Math.floor((index + 1) * result.route.length / 7)];
+      });
+      coinPoints.forEach((point, index) => {
+        airborne(`S${ctx.index + 1}ChallengeRedCoin${index + 1}`, "Items/Pickups", "redCoin", point.x, point.y - 62 - (index % 2) * 18);
+      });
+      grounded(`S${ctx.index + 1}RedCoinGate`, "Items/Mechanisms", "coinGate", coinGateSurface, 0.7, 0, {
+        required_coins: "4",
+        gate_height: fmt(176 + Math.min(16, stage.id)),
+        open_distance: "224"
       });
     }
 
@@ -1136,6 +1212,7 @@ metadata/_llr_target_seconds = ${fmt(ctx.spec.seconds)}
 metadata/_llr_main_seconds = ${fmt(mainEstimatedSeconds)}
 metadata/_llr_recovery_seconds = ${fmt(recoveryEstimatedSeconds)}
 metadata/_llr_campaign_version = 3
+metadata/_llr_cadence_model = "introduction-development-twist-resolution"
 metadata/_llr_room_forms = ${JSON.stringify(stage.rooms.map((item) => item.form).join(","))}
 `);
 

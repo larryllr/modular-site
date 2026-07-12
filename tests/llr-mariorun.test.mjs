@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
@@ -64,6 +64,11 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(worker, /res:\/\/classes\/zone\/trigger\/death_plane\/death_plane\.gdc/);
   assert.ok(worker.includes("/-llr_complete_(?:[1-9]|10)\\.scn$/"));
   assert.match(worker, /Expected 10 compiled SM63 Extras scenes/);
+  assert.match(worker, /const compiledSupportScenes = source\.entries/);
+  assert.match(worker, /Expected 4 compiled SM63 support scenes/);
+  for (const mechanic of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate"]) {
+    assert.match(worker, new RegExp(`res://classes/solid/${mechanic}/${mechanic}\\.gdc`));
+  }
   for (let index = 1; index <= 10; index += 1) {
     assert.match(worker, new RegExp(`res://scenes/levels/llr_complete/llr_complete_${index}\\.tscn\\.remap`));
   }
@@ -263,6 +268,10 @@ test("llr-mariorun Godot pack exposes ten original long Extras levels and rescue
   assert.ok(entries.includes("res://classes/zone/trigger/death_plane/death_plane.gdc"));
   assert.ok(entries.includes("res://scenes/menus/level_designer/items.xml"));
   assert.ok(!entries.includes("res://scenes/menus/level_designer/items.xml.tres"));
+  for (const mechanic of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate"]) {
+    assert.ok(entries.includes(`res://classes/solid/${mechanic}/${mechanic}.gdc`));
+    assert.ok(entries.includes(`res://classes/solid/${mechanic}/${mechanic}.tscn.remap`));
+  }
   for (let index = 1; index <= 10; index += 1) {
     assert.ok(entries.includes(`res://scenes/levels/llr_complete/llr_complete_${index}.tscn.remap`));
     assert.ok(entries.some((entry) => entry.endsWith(`-llr_complete_${index}.scn`)));
@@ -291,6 +300,10 @@ test("llr-mariorun Extras scenes are audited 32k-wide V3 set-piece levels with c
     assert.equal((scene.match(/metadata\/_llr_act = 1/g) || []).length, 3);
     assert.equal((scene.match(/metadata\/_llr_act = 2/g) || []).length, 4);
     assert.equal((scene.match(/metadata\/_llr_act = 3/g) || []).length, 3);
+    assert.equal((scene.match(/metadata\/_llr_cadence = "introduction"/g) || []).length, 2);
+    assert.equal((scene.match(/metadata\/_llr_cadence = "development"/g) || []).length, 3);
+    assert.equal((scene.match(/metadata\/_llr_cadence = "twist"/g) || []).length, 3);
+    assert.equal((scene.match(/metadata\/_llr_cadence = "resolution"/g) || []).length, 2);
     assert.equal((scene.match(/metadata\/_llr_kind = "main"/g) || []).length, 10);
     assert.ok((scene.match(/metadata\/_llr_kind = "recovery"/g) || []).length >= 2);
     const setPieces = [...scene.matchAll(/\[node name="LLRSegment\d{2}_[^\"]+"[^\]]*\][\s\S]*?metadata\/_llr_set_piece = "([^"]+)"/g)]
@@ -349,6 +362,28 @@ test("llr-mariorun Extras V3 includes a touch-friendly moving shuttle mechanic",
   assert.match(rebindOption, /if !is_node_ready\(\) or !is_instance_valid\(key_list\):/);
 });
 
+test("llr-mariorun Extras V3.1 adds readable challenge beats instead of more flat distance", () => {
+  const blueprint = source("tools/llr-level-v3.mjs");
+  const patch = source("tools/patch-llr-complete-level.mjs");
+  const spring = source("vendor/Legacy_SM63Redux/classes/solid/llr_spring/llr_spring.gd");
+  const conveyor = source("vendor/Legacy_SM63Redux/classes/solid/llr_conveyor/llr_conveyor.gd");
+  const poundGate = source("vendor/Legacy_SM63Redux/classes/solid/llr_pound_gate/llr_pound_gate.gd");
+  const coinGate = source("vendor/Legacy_SM63Redux/classes/solid/llr_coin_gate/llr_coin_gate.gd");
+  for (const mechanic of ["spring", "conveyor", "pound_gate", "red_gate", "fludd_hover"]) {
+    assert.match(blueprint, new RegExp(`"${mechanic}"`));
+  }
+  for (const resource of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate"]) {
+    assert.match(patch, new RegExp(`${resource}/${resource}\\.tscn`));
+  }
+  assert.match(spring, /launch_speed/);
+  assert.match(spring, /body\.set\("vel"/);
+  assert.match(conveyor, /body\.position\.x \+= speed \* delta/);
+  assert.match(poundGate, /body\.S\.POUND/);
+  assert.match(coinGate, /Singleton\.red_coin_total - starting_coins/);
+  assert.match(blueprint, /required_coins: "4"/);
+  assert.equal((blueprint.match(/ChallengeRedCoin/g) || []).length, 1);
+});
+
 test("llr-mariorun Level Designer keeps negative coordinates and exports clean data files", () => {
   const serializer = source("vendor/Legacy_SM63Redux/scenes/menus/level_designer/serializers/serializer.gd");
   const designer = source("vendor/Legacy_SM63Redux/scenes/menus/level_designer/ld_main.gd");
@@ -364,6 +399,7 @@ test("llr-mariorun Level Designer keeps negative coordinates and exports clean d
   assert.match(designerMusic, /ResourceLoader\.exists\(path\)/);
   assert.match(exportPresets, /name="Web"[\s\S]*?include_filter="\*\.xml"/);
   assert.match(packageJson, /tools\/test-llr-godot-serializer\.mjs/);
+  assert.match(packageJson, /tools\/test-llr-godot-mechanisms\.mjs/);
 });
 
 test("admin app exposes llr-mariorun entry and online editors", () => {
@@ -383,6 +419,9 @@ test("admin app exposes llr-mariorun entry and online editors", () => {
   assert.match(app, /PCK 在线编辑器/);
   assert.match(app, /查看 PCK 内容/);
   assert.match(app, /保存成新素材包/);
+  assert.match(app, /pack\?\.id === "original"/);
+  assert.match(app, /source=pck-editor/);
+  assert.match(app, /可直接读取内置原版/);
   assert.match(app, /function importLocalGameAssetPacks/);
   assert.match(app, /function dataUrlToFile/);
   assert.match(app, /function downloadJson/);
@@ -414,4 +453,15 @@ test("admin app exposes llr-mariorun entry and online editors", () => {
   assert.doesNotMatch(styles, /\.game-level-preview/);
   assert.doesNotMatch(styles, /\.game-level-object/);
   assert.match(styles, /\.game-level-editor/);
+});
+
+test("Godot pack export synchronizes the generated PCK size into the web shell", () => {
+  const exporter = readFileSync("tools/export-llr-godot-pck.mjs", "utf8");
+  assert.match(exporter, /const pckBytes = statSync\(targetPck\)\.size/);
+  assert.match(exporter, /fileSizes/);
+  assert.match(exporter, /html\.replace\(fileSizePattern, `\$1\$\{pckBytes\}`\)/);
+  const html = source("public/llr-mariorun/godot/index.html");
+  const configuredBytes = Number(html.match(/"fileSizes":\{"index\.pck":(\d+)/)?.[1]);
+  const actualBytes = statSync(new URL("public/llr-mariorun/godot/index.pck", root)).size;
+  assert.equal(configuredBytes, actualBytes);
 });

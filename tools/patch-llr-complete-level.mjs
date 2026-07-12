@@ -17,6 +17,18 @@ const exportPresetsPath = `${projectRoot}/export_presets.cfg`;
 const shuttleRoot = `${projectRoot}/classes/solid/llr_shuttle`;
 const shuttleScriptPath = `${shuttleRoot}/llr_shuttle.gd`;
 const shuttleScenePath = `${shuttleRoot}/llr_shuttle.tscn`;
+const springRoot = `${projectRoot}/classes/solid/llr_spring`;
+const springScriptPath = `${springRoot}/llr_spring.gd`;
+const springScenePath = `${springRoot}/llr_spring.tscn`;
+const conveyorRoot = `${projectRoot}/classes/solid/llr_conveyor`;
+const conveyorScriptPath = `${conveyorRoot}/llr_conveyor.gd`;
+const conveyorScenePath = `${conveyorRoot}/llr_conveyor.tscn`;
+const poundGateRoot = `${projectRoot}/classes/solid/llr_pound_gate`;
+const poundGateScriptPath = `${poundGateRoot}/llr_pound_gate.gd`;
+const poundGateScenePath = `${poundGateRoot}/llr_pound_gate.tscn`;
+const coinGateRoot = `${projectRoot}/classes/solid/llr_coin_gate`;
+const coinGateScriptPath = `${coinGateRoot}/llr_coin_gate.gd`;
+const coinGateScenePath = `${coinGateRoot}/llr_coin_gate.tscn`;
 const thwompScriptPath = `${projectRoot}/classes/entity/enemy/thwomp/thwomp.gd`;
 const rebindOptionScriptPath = `${projectRoot}/gui/pause/options/rebind_option.gd`;
 const segmentWidth = 3200;
@@ -132,6 +144,355 @@ script = ExtResource("2")
 [node name="MovingPlatform" parent="." instance=ExtResource("1")]
 `;
 
+const springScriptSource = `class_name LLRSpring
+extends Node2D
+
+
+@export_range(5.0, 11.0, 0.1) var launch_speed: float = 8.2
+@export_range(-4.0, 4.0, 0.1) var horizontal_boost: float = 0.0
+
+var rest_scale := Vector2.ONE
+var squash_tween: Tween
+
+
+func _ready() -> void:
+	rest_scale = $FungusHead.scale
+
+
+func _on_BounceArea_body_entered(body) -> void:
+	var velocity = body.get("vel")
+	if !(velocity is Vector2) or velocity.y < -0.8 or !body.has_method("off_ground"):
+		return
+	body.position.y -= 4.0
+	body.off_ground()
+	if body.has_method("switch_state"):
+		body.switch_state(1)
+	body.set("bouncing", false)
+	body.set("pound_state", 0)
+	body.set("vel", Vector2(velocity.x + horizontal_boost, -launch_speed))
+	if squash_tween != null and squash_tween.is_valid():
+		squash_tween.kill()
+	$FungusHead.scale = rest_scale
+	squash_tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	squash_tween.tween_property($FungusHead, "scale", Vector2(rest_scale.x * 1.12, rest_scale.y * 0.62), 0.07)
+	squash_tween.tween_property($FungusHead, "scale", rest_scale, 0.16)
+`;
+
+const springSceneSource = `[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://classes/solid/llr_spring/llr_spring.gd" id="1"]
+[ext_resource type="PackedScene" path="res://classes/solid/fungus_platform/fungus_head.tscn" id="2"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(66, 18)
+
+[node name="LLRSpring" type="Node2D"]
+script = ExtResource("1")
+
+[node name="FungusHead" parent="." instance=ExtResource("2")]
+scale = Vector2(1.35, 0.9)
+
+[node name="BounceArea" type="Area2D" parent="."]
+position = Vector2(0, -11)
+collision_layer = 0
+collision_mask = 2
+input_pickable = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BounceArea"]
+shape = SubResource("1")
+
+[connection signal="body_entered" from="BounceArea" to="." method="_on_BounceArea_body_entered"]
+`;
+
+const conveyorScriptSource = `class_name LLRConveyor
+extends StaticBody2D
+
+
+@export_range(96.0, 384.0, 8.0) var width: float = 224.0
+@export_range(-220.0, 220.0, 5.0) var speed: float = 105.0
+
+@onready var ride_area: Area2D = $RideArea
+
+
+func _ready() -> void:
+	$CollisionShape2D.shape = $CollisionShape2D.shape.duplicate()
+	$RideArea/CollisionShape2D.shape = $RideArea/CollisionShape2D.shape.duplicate()
+	$CollisionShape2D.shape.size.x = width
+	$RideArea/CollisionShape2D.shape.size.x = width
+	$Sprite2D.scale.x = width / 48.0
+	$Arrows.scale.x = -1.0 if speed < 0.0 else 1.0
+
+
+func _physics_process(delta: float) -> void:
+	for body in ride_area.get_overlapping_bodies():
+		if body.has_method("is_on_floor") and body.is_on_floor():
+			body.position.x += speed * delta
+`;
+
+const conveyorSceneSource = `[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://classes/solid/llr_conveyor/llr_conveyor.gd" id="1"]
+[ext_resource type="Texture2D" path="res://classes/solid/moving_platform/moving_platform.png" id="2"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+resource_local_to_scene = true
+size = Vector2(224, 14)
+
+[sub_resource type="RectangleShape2D" id="2"]
+resource_local_to_scene = true
+size = Vector2(224, 5)
+
+[node name="LLRConveyor" type="StaticBody2D"]
+collision_mask = 0
+script = ExtResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("2")
+scale = Vector2(4.66667, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("1")
+one_way_collision = true
+
+[node name="RideArea" type="Area2D" parent="."]
+position = Vector2(0, -9)
+collision_layer = 0
+collision_mask = 4
+input_pickable = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RideArea"]
+shape = SubResource("2")
+
+[node name="Arrows" type="Node2D" parent="."]
+position = Vector2(0, -2)
+
+[node name="Arrow1" type="Polygon2D" parent="Arrows"]
+position = Vector2(-55, 0)
+color = Color(0.82, 0.96, 1, 0.94)
+polygon = PackedVector2Array(-11, -5, -2, 0, -11, 5, -5, 5, 4, 0, -5, -5)
+
+[node name="Arrow2" type="Polygon2D" parent="Arrows"]
+color = Color(0.82, 0.96, 1, 0.94)
+polygon = PackedVector2Array(-11, -5, -2, 0, -11, 5, -5, 5, 4, 0, -5, -5)
+
+[node name="Arrow3" type="Polygon2D" parent="Arrows"]
+position = Vector2(55, 0)
+color = Color(0.82, 0.96, 1, 0.94)
+polygon = PackedVector2Array(-11, -5, -2, 0, -11, 5, -5, 5, 4, 0, -5, -5)
+`;
+
+const poundGateScriptSource = `class_name LLRPoundGate
+extends Node2D
+
+
+@export var gate_offset := Vector2(224, -92)
+@export_range(120.0, 240.0, 4.0) var gate_height: float = 184.0
+@export_range(150.0, 300.0, 4.0) var open_distance: float = 220.0
+
+var opened := false
+
+
+func _ready() -> void:
+	$Gate.position = gate_offset
+	$Gate/CollisionShape2D.shape = $Gate/CollisionShape2D.shape.duplicate()
+	$Gate/CollisionShape2D.shape.size.y = gate_height
+	$Gate/Sprite2D.scale.x = gate_height / 48.0
+
+
+func _physics_process(_delta: float) -> void:
+	if opened:
+		return
+	for body in $PoundArea.get_overlapping_bodies():
+		if is_pound_activation(body):
+			open_gate()
+			return
+
+
+func is_pound_activation(body) -> bool:
+	if body.get("state") == null or body.get("pound_state") == null:
+		return false
+	return body.state == body.S.POUND and body.pound_state != body.Pound.SPIN
+
+
+func open_gate() -> void:
+	if opened:
+		return
+	opened = true
+	$Hint.text = "✓"
+	$Hint.modulate = Color(0.55, 1.0, 0.65, 1.0)
+	$PadSprite.modulate = Color(0.55, 1.0, 0.65, 1.0)
+	var tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN_OUT)
+	tween.parallel().tween_property($PadSprite, "scale:y", 0.55, 0.14)
+	tween.tween_property($Gate, "position", gate_offset + Vector2(0, -open_distance), 0.58)
+	tween.finished.connect(func(): $Gate.collision_layer = 0)
+`;
+
+const poundGateSceneSource = `[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://classes/solid/llr_pound_gate/llr_pound_gate.gd" id="1"]
+[ext_resource type="Texture2D" path="res://classes/solid/moving_platform/moving_platform.png" id="2"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(88, 14)
+
+[sub_resource type="RectangleShape2D" id="2"]
+resource_local_to_scene = true
+size = Vector2(20, 184)
+
+[node name="LLRPoundGate" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Pad" type="StaticBody2D" parent="."]
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Pad"]
+shape = SubResource("1")
+one_way_collision = true
+
+[node name="PadSprite" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("2")
+scale = Vector2(1.83333, 1)
+
+[node name="PoundArea" type="Area2D" parent="."]
+position = Vector2(0, -11)
+collision_layer = 0
+collision_mask = 2
+input_pickable = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PoundArea"]
+shape = SubResource("1")
+
+[node name="Hint" type="Label" parent="."]
+offset_left = -16.0
+offset_top = -62.0
+offset_right = 16.0
+offset_bottom = -28.0
+theme_override_colors/font_color = Color(1, 0.94, 0.35, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.14, 0.2, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 24
+text = "Z"
+horizontal_alignment = 1
+
+[node name="Pointer" type="Polygon2D" parent="."]
+position = Vector2(0, -23)
+color = Color(1, 0.94, 0.35, 1)
+polygon = PackedVector2Array(-8, -7, 8, -7, 0, 4)
+
+[node name="Gate" type="StaticBody2D" parent="."]
+position = Vector2(224, -92)
+collision_mask = 0
+
+[node name="Sprite2D" type="Sprite2D" parent="Gate"]
+texture_filter = 1
+rotation = 1.5708
+texture = ExtResource("2")
+scale = Vector2(3.83333, 1.35)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Gate"]
+shape = SubResource("2")
+`;
+
+const coinGateScriptSource = `class_name LLRCoinGate
+extends Node2D
+
+
+@export_range(1, 8, 1) var required_coins: int = 4
+@export_range(120.0, 240.0, 4.0) var gate_height: float = 184.0
+@export_range(150.0, 300.0, 4.0) var open_distance: float = 220.0
+
+var starting_coins := 0
+var opened := false
+
+
+func _ready() -> void:
+	starting_coins = Singleton.red_coin_total
+	$Gate/CollisionShape2D.shape = $Gate/CollisionShape2D.shape.duplicate()
+	$Gate/CollisionShape2D.shape.size.y = gate_height
+	$Gate/Sprite2D.scale.x = gate_height / 48.0
+	update_counter()
+
+
+func _process(_delta: float) -> void:
+	if opened:
+		return
+	update_counter()
+	if collected_coins() >= required_coins:
+		open_gate()
+
+
+func collected_coins() -> int:
+	return max(0, Singleton.red_coin_total - starting_coins)
+
+
+func update_counter() -> void:
+	$Counter.text = "%d/%d" % [min(collected_coins(), required_coins), required_coins]
+
+
+func open_gate() -> void:
+	if opened:
+		return
+	opened = true
+	$Counter.text = "✓"
+	$Counter.modulate = Color(0.55, 1.0, 0.65, 1.0)
+	var tween = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property($Gate, "position", Vector2(0, -gate_height * 0.5 - open_distance), 0.62)
+	tween.finished.connect(func(): $Gate.collision_layer = 0)
+`;
+
+const coinGateSceneSource = `[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://classes/solid/llr_coin_gate/llr_coin_gate.gd" id="1"]
+[ext_resource type="Texture2D" path="res://classes/solid/moving_platform/moving_platform.png" id="2"]
+[ext_resource type="Texture2D" path="res://classes/pickup/coin/coins.png" id="3"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+resource_local_to_scene = true
+size = Vector2(20, 184)
+
+[sub_resource type="AtlasTexture" id="2"]
+atlas = ExtResource("3")
+region = Rect2(0, 16, 16, 16)
+
+[node name="LLRCoinGate" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Gate" type="StaticBody2D" parent="."]
+position = Vector2(0, -92)
+collision_mask = 0
+
+[node name="Sprite2D" type="Sprite2D" parent="Gate"]
+texture_filter = 1
+rotation = 1.5708
+texture = ExtResource("2")
+scale = Vector2(3.83333, 1.35)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Gate"]
+shape = SubResource("1")
+
+[node name="Coin" type="Sprite2D" parent="."]
+position = Vector2(-24, -205)
+texture_filter = 1
+texture = SubResource("2")
+scale = Vector2(1.35, 1.35)
+
+[node name="Counter" type="Label" parent="."]
+offset_left = -4.0
+offset_top = -224.0
+offset_right = 60.0
+offset_bottom = -187.0
+theme_override_colors/font_color = Color(1, 0.9, 0.9, 1)
+theme_override_colors/font_outline_color = Color(0.16, 0.08, 0.12, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 22
+text = "0/4"
+`;
+
 const resources = {
   terrain: "res://classes/solid/terrain/terrain_polygon.tscn",
   player: "res://classes/player/player.tscn",
@@ -150,11 +511,13 @@ const resources = {
   thwomp: "res://classes/entity/enemy/thwomp/thwomp.tscn",
   thwump: "res://classes/entity/enemy/thwomp/thwump.tscn",
   coin: "res://classes/pickup/coin/yellow/coin_yellow.tscn",
+  redCoin: "res://classes/pickup/coin/red/coin_red.tscn",
   blueCoin: "res://classes/pickup/coin/blue/coin_blue.tscn",
   bottle: "res://classes/pickup/bottle/bottle_big.tscn",
   fludd: "res://classes/pickup/fludd_box/fludd_box.tscn",
   fluddRocket: "res://classes/pickup/fludd_box/fludd_pickup_rocket.tscn",
   fluddTurbo: "res://classes/pickup/fludd_box/fludd_pickup_turbo.tscn",
+  fluddHover: "res://classes/pickup/fludd_box/fludd_pickup_hover.tscn",
   water: "res://classes/water/water.tscn",
   log: "res://classes/solid/log/log.tscn",
   fallingLog: "res://classes/solid/log/log_fall.tscn",
@@ -167,6 +530,10 @@ const resources = {
   tippingLog: "res://classes/solid/telescoping/tipping_log/tipping_log.tscn",
   rotating: "res://classes/solid/rotating_block/rotating_block.tscn",
   shuttle: "res://classes/solid/llr_shuttle/llr_shuttle.tscn",
+  spring: "res://classes/solid/llr_spring/llr_spring.tscn",
+  conveyor: "res://classes/solid/llr_conveyor/llr_conveyor.tscn",
+  poundGate: "res://classes/solid/llr_pound_gate/llr_pound_gate.tscn",
+  coinGate: "res://classes/solid/llr_coin_gate/llr_coin_gate.tscn",
   pipe: "res://classes/interactable/pipe/pipe.tscn",
   door: "res://classes/interactable/door/door.tscn",
   arrow: "res://classes/decorative/arrow/arrow.tscn",
@@ -632,6 +999,18 @@ function writeLlrSupportResources() {
   mkdirSync(shuttleRoot, { recursive: true });
   writeFileSync(shuttleScriptPath, shuttleScriptSource, "utf8");
   writeFileSync(shuttleScenePath, shuttleSceneSource, "utf8");
+  mkdirSync(springRoot, { recursive: true });
+  writeFileSync(springScriptPath, springScriptSource, "utf8");
+  writeFileSync(springScenePath, springSceneSource, "utf8");
+  mkdirSync(conveyorRoot, { recursive: true });
+  writeFileSync(conveyorScriptPath, conveyorScriptSource, "utf8");
+  writeFileSync(conveyorScenePath, conveyorSceneSource, "utf8");
+  mkdirSync(poundGateRoot, { recursive: true });
+  writeFileSync(poundGateScriptPath, poundGateScriptSource, "utf8");
+  writeFileSync(poundGateScenePath, poundGateSceneSource, "utf8");
+  mkdirSync(coinGateRoot, { recursive: true });
+  writeFileSync(coinGateScriptPath, coinGateScriptSource, "utf8");
+  writeFileSync(coinGateScenePath, coinGateSceneSource, "utf8");
 
   let thwompScript = readFileSync(thwompScriptPath, "utf8").replace(/\r\n/g, "\n");
   thwompScript = thwompScript.replace(

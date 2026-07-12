@@ -1,5 +1,24 @@
 # 老师快跑 `???` V3：十关机关战役设计
 
+## 0. V3.1 节奏增强（2026-07-12）
+
+玩家实测认为 V3 比旧版丰富，但连续房间仍有“沿横向路线换一种机关”的平移感。本轮参考 Mario 的四段式关卡结构、Super Mario World 的 cadence（挑战节拍）分析和 Celeste 的 GDC 关卡设计分享，保留十关主骨架并增加以下变化：
+
+- 每关房间重新标记为安全介绍、发展、转折、总结四个节奏阶段，不再只按难度线性加量。
+- 新增同画风弹跳蘑菇、双向传送带、砸地开门和四红币开门；机关前后都保留可停留安全区。
+- 补入 Hover FLUDD，让空中关不再只依赖同一种移动平台或 Rocket FLUDD。
+- 红币门固定放 5 枚、只要求 4 枚，避免单枚遗漏造成软锁；砸地门使用大号 `Z` 提示，和手机“砸地”键一致。
+- 新机制先在低压力房间单独出现，再与水路、移动台、Thwomp、枢轴轮组合；终局只复习已经出现过的动作。
+- 关卡长度仍来自路线变化、观察和选择，不通过无意义加宽或堆敌人延时。
+
+调研来源：
+
+- [Super Mario 3D World's 4 Step Level Design](https://www.youtube.com/watch?v=dBmIkEvEBtA)
+- [Level Design Workshop: Designing Celeste（GDC）](https://www.youtube.com/watch?v=4RlpMhBKNr0)
+- [Cadences: Finding the Voice of Any Level's Design](https://www.youtube.com/watch?v=x3y7CIfCI7E)
+
+其中直接落地的原则是：一个挑战必须由相对安全区分隔；“发展”应改变同一机制的空间语境，“转折”应重新组合旧机制；精确跳跃只放在关卡真正想让玩家记住的核心动作上，非核心接近段应允许多种落点。
+
 ## 1. 本轮重做结论
 
 V2 的问题不是关卡不够长，而是 100 个房间主要由同一套“台阶平台、金币弧线、低层回收路”重排而成。V3 不再用主题和高度变化冒充玩法变化，改成十个拥有独立核心动作的关卡。

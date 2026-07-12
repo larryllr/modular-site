@@ -194,6 +194,7 @@ function auditLevel(level) {
   const roomMarkers = nodes.filter((node) => /^LLRSegment\d{2}_/.test(node.name));
   const setPieces = roomMarkers.map((node) => metadata(node.block, "_llr_set_piece"));
   const acts = new Set(roomMarkers.map((node) => metadata(node.block, "_llr_act")));
+  const cadences = new Set(roomMarkers.map((node) => metadata(node.block, "_llr_cadence")));
   const forms = new Set(roomMarkers.map((node) => node.name.replace(/^LLRSegment\d{2}_/, "")));
   const mechanicSets = roomMarkers.map((node) => metadata(node.block, "_llr_mechanics") || "");
   const mechanicTags = new Set(
@@ -207,6 +208,9 @@ function auditLevel(level) {
   }
   if (acts.size !== 3 || ![1, 2, 3].every((act) => acts.has(act))) {
     violations.push({ type: "act-structure", acts: [...acts] });
+  }
+  if (!["introduction", "development", "twist", "resolution"].every((phase) => cadences.has(phase))) {
+    violations.push({ type: "cadence-structure", cadences: [...cadences] });
   }
   if (forms.size < 6) {
     violations.push({ type: "room-form-variety", expectedMinimum: 6, actual: forms.size });
@@ -231,7 +235,10 @@ function auditLevel(level) {
     ["tipping", /\/tipping_log\/tipping_log\.tscn$/],
     ["warp", /\/interactable\/(?:pipe|door)\//],
     ["fludd", /\/fludd_box\/fludd_pickup_/],
-    ["falling", /\/log\/log_fall\.tscn$/]
+    ["falling", /\/log\/log_fall\.tscn$/],
+    ["spring", /\/llr_spring\/llr_spring\.tscn$/],
+    ["conveyor", /\/llr_conveyor\/llr_conveyor\.tscn$/],
+    ["challenge-gate", /\/llr_(?:pound|coin)_gate\/llr_(?:pound|coin)_gate\.tscn$/]
   ];
   const dynamicTypes = new Set();
   let dynamicNodes = 0;
@@ -290,6 +297,7 @@ function auditLevel(level) {
     setPieceCount: new Set(setPieces).size,
     formCount: forms.size,
     mechanicTagCount: mechanicTags.size,
+    cadences: [...cadences],
     dynamicTypes: [...dynamicTypes],
     dynamicNodes,
     violations
@@ -310,6 +318,7 @@ for (const report of reports) {
     setPieces: report.setPieceCount,
     forms: report.formCount,
     mechanicTags: report.mechanicTagCount,
+    cadences: report.cadences,
     dynamicTypes: report.dynamicTypes,
     dynamicNodes: report.dynamicNodes,
     violations: report.violations.length

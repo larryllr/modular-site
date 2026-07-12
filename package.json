@@ -7,7 +7,7 @@
     "dev": "node ./node_modules/wrangler/bin/wrangler.js dev",
     "build:site": "node tools/build-site-assets.mjs",
     "build:cubecity": "npm --prefix vendor/cubecity run build -- --outDir ../../public/llrgamecubecity --emptyOutDir",
-    "predeploy": "node tools/patch-llr-mariorun-controls.mjs && node tools/patch-llr-mariorun-game-actions.mjs && node tools/patch-llr-mariorun-pck-sync.mjs && node tools/patch-llr-complete-level.mjs && node tools/patch-llr-runtime-resume-and-pck-diagnostics.mjs && node tools/patch-llr-joystick-transform.mjs && node tools/test-llr-godot-serializer.mjs && node tools/export-llr-godot-pck.mjs",
+    "predeploy": "node tools/patch-llr-mariorun-controls.mjs && node tools/patch-llr-mariorun-game-actions.mjs && node tools/patch-llr-mariorun-pck-sync.mjs && node tools/patch-llr-complete-level.mjs && node tools/patch-llr-runtime-resume-and-pck-diagnostics.mjs && node tools/patch-llr-joystick-transform.mjs && node tools/test-llr-godot-serializer.mjs && node tools/test-llr-godot-mechanisms.mjs && node tools/export-llr-godot-pck.mjs",
     "deploy": "npm run build:site && npm run build:cubecity && node ./node_modules/wrangler/bin/wrangler.js deploy",
     "check": "node ./node_modules/typescript/bin/tsc --noEmit",
     "pretest": "npm run build:site",

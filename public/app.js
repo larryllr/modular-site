@@ -884,7 +884,11 @@ function renderGameAssetPackEditor(config) {
 
 function renderPckArchiveEditor(config) {
   const panel = element("div", "game-editor-card pck-editor-card");
-  const packs = structuredClone(config.assetPacks || []).filter((pack) => pack.assets?.["game.bundle.pck"]?.url);
+  const builtinPckUrl = (pack) => pack?.id === "original"
+    ? `/llr-mariorun/godot/index.pck?pack=${encodeURIComponent(pack.id)}&source=pck-editor`
+    : "";
+  const pckUrl = (pack) => pack?.assets?.["game.bundle.pck"]?.url || builtinPckUrl(pack);
+  const packs = structuredClone(config.assetPacks || []).filter((pack) => pckUrl(pack));
   const packSelect = document.createElement("select");
   packSelect.className = "input";
   const inspect = button("查看 PCK 内容", "button", "button");
@@ -900,7 +904,10 @@ function renderPckArchiveEditor(config) {
   let archive = null;
   let selectedPath = "";
 
-  packSelect.replaceChildren(...packs.map((pack) => new Option(pack.name || pack.id, pack.id)));
+  packSelect.replaceChildren(...packs.map((pack) => new Option(
+    `${pack.name || pack.id}${builtinPckUrl(pack) ? "（内置）" : ""}`,
+    pack.id
+  )));
 
   const selectedPack = () => packs.find((pack) => pack.id === packSelect.value) || packs[0];
   const selectedEntry = () => archive?.entries.find((entry) => entry.path === selectedPath);
@@ -925,14 +932,14 @@ function renderPckArchiveEditor(config) {
 
   inspect.addEventListener("click", async () => {
     const pack = selectedPack();
-    const asset = pack?.assets?.["game.bundle.pck"];
-    if (!asset?.url) {
+    const sourceUrl = pckUrl(pack);
+    if (!sourceUrl) {
       feedback.textContent = "这个素材包没有 game.bundle.pck。";
       return;
     }
     feedback.textContent = `正在读取 ${pack.name || pack.id}…`;
     try {
-      const response = await fetch(asset.url, { cache: "no-store" });
+      const response = await fetch(sourceUrl, { cache: "no-store" });
       if (!response.ok) throw new Error(`下载失败：${response.status}`);
       archive = parseGodotPck(await response.arrayBuffer());
       selectedPath = archive.entries[0]?.path || "";
@@ -1041,7 +1048,7 @@ function renderPckArchiveEditor(config) {
 
   const tools = element("div", "game-editor-tools");
   tools.append(packSelect, inspect, addFileLabel, replaceCurrent, replaceInput, deleteCurrent, download, saveAsPack);
-  panel.append(element("h4", "", "PCK 在线编辑器"), element("p", "form-hint", "选择已经上传的 game.bundle.pck，在线查看 PCK 内容。第一版支持文件级编辑：预览常见图片/音频/文本，替换或删除文件，最后整理并保存成新的 PCK 素材包。Godot 内部 .ctex/.scn/.res 会按二进制文件处理。"), tools, list, preview, feedback);
+  panel.append(element("h4", "", "PCK 在线编辑器"), element("p", "form-hint", "可直接读取内置原版，也可选择已经上传的 game.bundle.pck 在线查看内容。支持文件级编辑：预览常见图片/音频/文本，替换或删除文件，最后整理并保存成新的 PCK 素材包。内置原版不会被覆盖；Godot 内部 .ctex/.scn/.res 会按二进制文件处理。"), tools, list, preview, feedback);
   return panel;
 }
 

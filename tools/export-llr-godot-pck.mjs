@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdtempSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -11,6 +11,7 @@ const project = join(root, "vendor", "Legacy_SM63Redux");
 const outDir = mkdtempSync(join(tmpdir(), "llr-mariorun-export-"));
 const exportedPck = join(outDir, "index.pck");
 const targetPck = join(root, "public", "llr-mariorun", "godot", "index.pck");
+const targetHtml = join(root, "public", "llr-mariorun", "godot", "index.html");
 
 if (!existsSync(godot)) {
   throw new Error(`Godot 4.3 console binary not found: ${godot}`);
@@ -51,10 +52,18 @@ if (result.status !== 0 || errorLines.length) {
 }
 
 copyFileSync(exportedPck, targetPck);
+const pckBytes = statSync(targetPck).size;
+const html = readFileSync(targetHtml, "utf8");
+const fileSizePattern = /(\"fileSizes\"\s*:\s*\{\s*\"index\.pck\"\s*:\s*)\d+/;
+if (!fileSizePattern.test(html)) {
+  throw new Error(`Godot HTML fileSizes.index.pck entry not found: ${targetHtml}`);
+}
+writeFileSync(targetHtml, html.replace(fileSizePattern, `$1${pckBytes}`));
 console.log(JSON.stringify({
   exportedPck,
   targetPck,
-  bytes: statSync(targetPck).size,
+  targetHtml,
+  bytes: pckBytes,
   godotExitStatus: result.status,
   warnings: warningLines.length,
   errors: errorLines.length
