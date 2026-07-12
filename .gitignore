@@ -8,3 +8,4 @@ vendor/Legacy_SM63Redux/
 !.dev.vars.example
 dist/
 *.log
+.firecrawl/

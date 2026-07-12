@@ -2509,7 +2509,59 @@ async function fetchGameAsset(request: Request, env: AppEnv, key: string): Promi
   return json({ error: "Game asset storage is missing" }, 503);
 }
 
-async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Response | null> {
+function hasStablePckVersion(url: URL): boolean {
+  const version = url.searchParams.get("v") || "";
+  return version.length >= 8 && version.length <= 240;
+}
+
+function pckClientCacheControl(url: URL, custom: boolean): string {
+  if (hasStablePckVersion(url)) {
+    return "public, max-age=31536000, immutable, no-transform";
+  }
+
+  return custom
+    ? "no-store, max-age=0"
+    : "public, max-age=0, must-revalidate, no-transform";
+}
+
+function appendVaryHeader(headers: Headers, value: string): void {
+  const values = (headers.get("vary") || "").split(",").map((item) => item.trim()).filter(Boolean);
+  if (!values.some((item) => item.toLowerCase() === value.toLowerCase())) {
+    values.push(value);
+  }
+  headers.set("vary", values.join(", "));
+}
+
+function customGodotPackCacheKey(request: Request, activePack: GameAssetPack, gamePack: GameAssetRef, baseEtag: string): Request {
+  const url = new URL(request.url);
+  url.search = "";
+  url.searchParams.set("__llr_pck_cache", "patched-v1");
+  url.searchParams.set("pack", activePack.id);
+  url.searchParams.set("asset", `${gamePack.key}:${gamePack.updatedAt}`);
+  url.searchParams.set("base", baseEtag || "no-etag");
+  return new Request(url.toString(), { method: "GET" });
+}
+
+function customGodotPackResponse(request: Request, response: Response, cacheStatus: "HIT" | "MISS"): Response {
+  const headers = new Headers(response.headers);
+  const requestUrl = new URL(request.url);
+  headers.set("content-type", "application/octet-stream");
+  headers.set("cache-control", pckClientCacheControl(requestUrl, true));
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-llr-pck-edge-cache", cacheStatus);
+  if (!requestUrl.searchParams.has("pack")) {
+    appendVaryHeader(headers, "Referer");
+  } else {
+    headers.delete("vary");
+  }
+  return new Response(request.method === "HEAD" ? null : response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
+async function fetchGodotGamePack(request: Request, env: AppEnv, ctx: ExecutionContext): Promise<Response | null> {
   const packs = await readGameAssetPacks(env);
   const requestUrl = new URL(request.url);
   const referer = request.headers.get("referer") || "";
@@ -2523,12 +2575,25 @@ async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Respon
     return null;
   }
 
+  const defaultPackUrl = new URL(`${llrMarioRunPath}/godot/index.pck`, request.url);
+  const defaultPackResponse = await env.ASSETS.fetch(new Request(defaultPackUrl, request));
+  const baseEtag = defaultPackResponse.headers.get("etag") || requestUrl.searchParams.get("v") || "";
+  const cacheKey = customGodotPackCacheKey(request, activePack!, gamePack, baseEtag);
+  const cachedPack = await caches.default.match(cacheKey);
+
+  if (cachedPack) {
+    return customGodotPackResponse(request, cachedPack, "HIT");
+  }
+
   const response = await fetchGameAsset(request, env, gamePack.key);
   const headers = new Headers(response.headers);
   headers.set("content-type", headers.get("content-type") || "application/octet-stream");
-  headers.set("cache-control", "no-store, max-age=0");
+  headers.set("cache-control", pckClientCacheControl(requestUrl, true));
   headers.set("x-llr-pack-id", activePack?.id || requestedPackId || "default");
-  headers.append("vary", "Referer");
+  headers.set("x-content-type-options", "nosniff");
+  if (!requestUrl.searchParams.has("pack")) {
+    appendVaryHeader(headers, "Referer");
+  }
 
   if (!response.ok) {
     return new Response(response.body, {
@@ -2539,7 +2604,6 @@ async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Respon
   }
 
   const targetPackBuffer = await response.arrayBuffer();
-  const defaultPackResponse = await env.ASSETS.fetch(new Request(new URL(`${llrMarioRunPath}/godot/index.pck`, request.url), request));
 
   if (!defaultPackResponse.ok) {
     headers.set("x-llr-extra-patch", "default-pack-missing");
@@ -2553,11 +2617,90 @@ async function fetchGodotGamePack(request: Request, env: AppEnv): Promise<Respon
     );
     headers.set("content-length", String(patchedPack.byteLength));
     headers.set("x-llr-extra-patch", "applied");
-    return new Response(patchedPack, { headers });
+    headers.set("x-llr-pck-edge-cache", "MISS");
+    const edgeHeaders = new Headers(headers);
+    edgeHeaders.set("cache-control", "public, max-age=31536000, immutable");
+    edgeHeaders.delete("vary");
+    edgeHeaders.set("x-llr-pck-edge-cache", "STORED");
+    const edgeResponse = new Response(patchedPack, { headers: edgeHeaders });
+    if (request.method === "GET") {
+      ctx.waitUntil(caches.default.put(cacheKey, edgeResponse).catch(() => undefined));
+    }
+    return new Response(request.method === "HEAD" ? null : patchedPack, { headers });
   } catch {
     headers.set("x-llr-extra-patch", "failed");
     return new Response(targetPackBuffer, { headers });
   }
+}
+
+function acceptsContentEncoding(request: Request, encoding: "br" | "gzip"): boolean {
+  const originalAcceptEncoding = request.cf?.clientAcceptEncoding;
+  const clientAcceptEncoding = typeof originalAcceptEncoding === "string"
+    ? originalAcceptEncoding
+    : request.headers.get("accept-encoding") || "";
+  return clientAcceptEncoding.split(",").some((item) => {
+    const [name, ...parameters] = item.trim().toLowerCase().split(";");
+    const disabled = parameters.some((parameter) => /^q=0(?:\.0*)?$/.test(parameter.trim()));
+    return name === encoding && !disabled;
+  });
+}
+
+type EncodedResponseInit = ResponseInit & {
+  encodeBody: "manual";
+};
+
+async function fetchPrecompressedGodotPck(request: Request, env: AppEnv, origin: string): Promise<Response | null> {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return null;
+  }
+
+  const encoding = acceptsContentEncoding(request, "br")
+    ? "br"
+    : acceptsContentEncoding(request, "gzip") ? "gzip" : null;
+  if (!encoding) {
+    return null;
+  }
+
+  const extension = encoding === "br" ? "br" : "gz";
+  const assetUrl = new URL(`${llrMarioRunPath}/godot/index.pck.${extension}`, origin);
+  const response = await env.ASSETS.fetch(new Request(assetUrl, request));
+  if (!response.ok) {
+    return null;
+  }
+
+  const requestUrl = new URL(request.url);
+  const headers = new Headers(response.headers);
+  headers.set("content-type", "application/octet-stream");
+  headers.set("content-encoding", encoding);
+  headers.set("cache-control", pckClientCacheControl(requestUrl, false));
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-llr-pck-compression", encoding);
+  headers.set("x-llr-pack-id", requestUrl.searchParams.get("pack") || "original");
+  appendVaryHeader(headers, "Accept-Encoding");
+
+  return new Response(request.method === "HEAD" ? null : response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+    encodeBody: "manual"
+  } as EncodedResponseInit);
+}
+
+async function fetchBuiltinGodotPck(request: Request, env: AppEnv): Promise<Response> {
+  const response = await env.ASSETS.fetch(request);
+  const headers = new Headers(response.headers);
+  const requestUrl = new URL(request.url);
+  headers.set("content-type", "application/octet-stream");
+  headers.set("cache-control", pckClientCacheControl(requestUrl, false));
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-llr-pck-compression", "identity");
+  headers.set("x-llr-pack-id", requestUrl.searchParams.get("pack") || "original");
+  appendVaryHeader(headers, "Accept-Encoding");
+  return new Response(request.method === "HEAD" ? null : response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 }
 
 type GodotPckEntry = {
@@ -2762,7 +2905,12 @@ function safeUrlSearchParam(value: string, name: string): string {
 }
 
 async function fetchCompressedGodotWasm(request: Request, env: AppEnv, origin: string): Promise<Response> {
-  const wasmUrl = new URL(`${llrMarioRunPath}/godot/index.wasm.gz`, origin);
+  const requestUrl = new URL(request.url);
+  const encoding = acceptsContentEncoding(request, "br")
+    ? "br"
+    : acceptsContentEncoding(request, "gzip") ? "gzip" : "identity";
+  const extension = encoding === "br" ? "br" : "gz";
+  const wasmUrl = new URL(`${llrMarioRunPath}/godot/index.wasm.${extension}`, origin);
   const response = await env.ASSETS.fetch(new Request(wasmUrl, request));
 
   if (!response.ok) {
@@ -2770,11 +2918,30 @@ async function fetchCompressedGodotWasm(request: Request, env: AppEnv, origin: s
   }
 
   const headers = new Headers(response.headers);
-  headers.set("content-type", "application/wasm");
-  headers.set("cache-control", cacheControlForStaticPath(`${llrMarioRunPath}/godot/index.wasm`) || "public, max-age=0, must-revalidate");
+  // The Godot loader recreates this response with application/wasm before
+  // instantiateStreaming. Keeping the encoded transport as octet-stream stops
+  // the edge from recompressing an already precompressed Brotli/gzip body.
+  headers.set("content-type", encoding === "identity" ? "application/wasm" : "application/octet-stream");
+  headers.set("cache-control", hasStablePckVersion(requestUrl)
+    ? "public, max-age=31536000, immutable, no-transform"
+    : "public, max-age=0, must-revalidate");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-llr-wasm-compression", encoding);
+  appendVaryHeader(headers, "Accept-Encoding");
+
+  if (encoding !== "identity") {
+    headers.set("content-encoding", encoding);
+    return new Response(request.method === "HEAD" ? null : response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+      encodeBody: "manual"
+    } as EncodedResponseInit);
+  }
+
   headers.delete("content-encoding");
   headers.delete("content-length");
-  const body = response.body?.pipeThrough(new DecompressionStream("gzip")) || null;
+  const body = request.method === "HEAD" ? null : response.body?.pipeThrough(new DecompressionStream("gzip")) || null;
 
   return new Response(body, {
     status: response.status,
@@ -3646,11 +3813,18 @@ export default {
     }
 
     if (url.pathname === `${llrMarioRunPath}/godot/index.pck`) {
-      const customGamePack = await fetchGodotGamePack(request, env as AppEnv);
+      const customGamePack = await fetchGodotGamePack(request, env as AppEnv, ctx);
 
       if (customGamePack) {
         return customGamePack;
       }
+
+      const compressedGamePack = await fetchPrecompressedGodotPck(request, env as AppEnv, url.origin);
+      if (compressedGamePack) {
+        return compressedGamePack;
+      }
+
+      return fetchBuiltinGodotPck(request, env as AppEnv);
     }
 
     if (url.pathname === `${llrMarioRunPath}/godot/index.wasm`) {

@@ -184,3 +184,11 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 - 部署补丁会自动修复此前未被旧关卡触发的两个上游兼容问题：`thwomp.gd` 枚举逗号，以及 `rebind_option.gd` 在节点 ready 前访问 `key_list` 的空引用。
 - Godot 4.3 已实际启动第 1、4、5、8、10 关；浏览器已进入第 4、10 关并确认无 Godot 脚本错误，虚拟摇杆、跳跃、移动平台和掉落回场路径均做过实跑。最终提交的默认 PCK 为 9,756,672 bytes，Godot 导出为 0 warnings / 0 errors；正式部署应在这次导出后直接执行站点构建与 Wrangler，避免 npm 生命周期再次重导 PCK。
 - 已部署到正式 Cloudflare Worker，Version ID：`9d0a0f76-fd92-4d71-abfe-a24dd6a1fa7c`。
+
+## 2026-07-13 Godot Web 冷启动与 PCK 缓存优化
+
+- 根据 Godot 与 Cloudflare 官方文档，为原版 PCK 和 WASM 增加构建期 Brotli/gzip 预压缩、内容哈希版本 URL、`immutable` 浏览器缓存和正确的 `encodeBody: "manual"`；编码协商读取 Cloudflare 保留的 `request.cf.clientAcceptEncoding`，不再误把所有客户端都当成支持 Brotli。
+- 最终原版 PCK 为 9,788,672 bytes，SHA256 `0408d6c1246daca7f3a6c9c98ffbf096b1376f6ffb4de4cc48ca5f88bd8b214e`；Brotli 5,727,626 bytes，gzip 6,786,495 bytes。WASM 原始 35,376,909 bytes，Brotli 6,284,689 bytes，SHA256 `fe5cebc590758c10bc4469be5a591e28edbde5ec8f458f21baeb83db50d028b9`。导出脚本会同步重建压缩制品和 HTML 版本号。
+- 线上 Chrome 冷启动实测：WASM 5.251 秒、PCK 5.046 秒并行完成，Godot 正常运行且控制台 0 errors；第二次启动两者 `transferSize` 均为 0。此前约 8.5 分钟的首次等待已降到约 5 秒大文件传输阶段。
+- 刘硕版和郭亮版的运行时补丁结果加入 Cloudflare Cache API：首次分别生成 11,082,768 / 11,122,304 bytes，均返回 `x-llr-extra-patch: applied`；随后从 `x-llr-pck-edge-cache: MISS` 变为 `HIT`。刘硕包已解析确认四类新机关和第 10 关资源都存在，并在真实浏览器中以约 3.9 秒加载、Godot 运行 0 errors、约 142 FPS。
+- 正式部署 Cloudflare Version ID：`09884dcd-e21d-4028-81f0-17701b55a599`。验证机存在失效 IPv6 路由，Node/Undici 直连会超时；强制 IPv4 后线上 PCK/WASM 完整哈希分别约 11 / 12.6 秒，浏览器的 Happy Eyeballs 路径不受该测试机问题影响。

@@ -2,6 +2,8 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, statSync, writeFil
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { brotliCompressSync, constants as zlibConstants, gunzipSync, gzipSync } from "node:zlib";
 
 const root = process.cwd();
 const tempRoot = process.env.TEMP || tmpdir();
@@ -11,6 +13,10 @@ const project = join(root, "vendor", "Legacy_SM63Redux");
 const outDir = mkdtempSync(join(tmpdir(), "llr-mariorun-export-"));
 const exportedPck = join(outDir, "index.pck");
 const targetPck = join(root, "public", "llr-mariorun", "godot", "index.pck");
+const targetPckGzip = `${targetPck}.gz`;
+const targetPckBrotli = `${targetPck}.br`;
+const targetWasmGzip = join(root, "public", "llr-mariorun", "godot", "index.wasm.gz");
+const targetWasmBrotli = join(root, "public", "llr-mariorun", "godot", "index.wasm.br");
 const targetHtml = join(root, "public", "llr-mariorun", "godot", "index.html");
 
 if (!existsSync(godot)) {
@@ -18,6 +24,9 @@ if (!existsSync(godot)) {
 }
 if (!existsSync(project)) {
   throw new Error(`Legacy_SM63Redux project not found: ${project}`);
+}
+if (!existsSync(targetWasmGzip)) {
+  throw new Error(`Godot compressed WASM not found: ${targetWasmGzip}`);
 }
 
 const result = spawnSync(godot, [
@@ -52,18 +61,62 @@ if (result.status !== 0 || errorLines.length) {
 }
 
 copyFileSync(exportedPck, targetPck);
-const pckBytes = statSync(targetPck).size;
+const pckBuffer = readFileSync(targetPck);
+const pckBytes = pckBuffer.byteLength;
+const pckHash = createHash("sha256").update(pckBuffer).digest("hex");
+const pckVersion = pckHash.slice(0, 16);
+const gzipBuffer = gzipSync(pckBuffer, { level: 9 });
+const brotliBuffer = brotliCompressSync(pckBuffer, {
+  params: {
+    [zlibConstants.BROTLI_PARAM_QUALITY]: 10
+  }
+});
+writeFileSync(targetPckGzip, gzipBuffer);
+writeFileSync(targetPckBrotli, brotliBuffer);
+const wasmBuffer = gunzipSync(readFileSync(targetWasmGzip));
+const wasmHash = createHash("sha256").update(wasmBuffer).digest("hex");
+const wasmVersion = wasmHash.slice(0, 16);
+const wasmBrotliBuffer = brotliCompressSync(wasmBuffer, {
+  params: {
+    [zlibConstants.BROTLI_PARAM_QUALITY]: 9
+  }
+});
+writeFileSync(targetWasmBrotli, wasmBrotliBuffer);
 const html = readFileSync(targetHtml, "utf8");
 const fileSizePattern = /(\"fileSizes\"\s*:\s*\{\s*\"index\.pck\"\s*:\s*)\d+/;
 if (!fileSizePattern.test(html)) {
   throw new Error(`Godot HTML fileSizes.index.pck entry not found: ${targetHtml}`);
 }
-writeFileSync(targetHtml, html.replace(fileSizePattern, `$1${pckBytes}`));
+const pckVersionPattern = /(const BUILTIN_PCK_VERSION = ')[a-f0-9]+(';)/;
+if (!pckVersionPattern.test(html)) {
+  throw new Error(`Godot HTML BUILTIN_PCK_VERSION entry not found: ${targetHtml}`);
+}
+const wasmVersionPattern = /(const BUILTIN_WASM_VERSION = ')[a-f0-9]+(';)/;
+if (!wasmVersionPattern.test(html)) {
+  throw new Error(`Godot HTML BUILTIN_WASM_VERSION entry not found: ${targetHtml}`);
+}
+writeFileSync(targetHtml, html
+  .replace(fileSizePattern, `$1${pckBytes}`)
+  .replace(pckVersionPattern, `$1${pckVersion}$2`)
+  .replace(wasmVersionPattern, `$1${wasmVersion}$2`));
 console.log(JSON.stringify({
   exportedPck,
   targetPck,
+  targetPckGzip,
+  targetPckBrotli,
+  targetWasmGzip,
+  targetWasmBrotli,
   targetHtml,
   bytes: pckBytes,
+  gzipBytes: gzipBuffer.byteLength,
+  brotliBytes: brotliBuffer.byteLength,
+  sha256: pckHash,
+  version: pckVersion,
+  wasmBytes: wasmBuffer.byteLength,
+  wasmGzipBytes: statSync(targetWasmGzip).size,
+  wasmBrotliBytes: wasmBrotliBuffer.byteLength,
+  wasmSha256: wasmHash,
+  wasmVersion,
   godotExitStatus: result.status,
   warnings: warningLines.length,
   errors: errorLines.length

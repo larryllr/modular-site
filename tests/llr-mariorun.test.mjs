@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 
 const root = new URL("../", import.meta.url);
 const source = (path) => readFileSync(new URL(path, root), "utf8");
@@ -58,7 +59,7 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.match(worker, /async function handleAdminGame\(request: Request, env: AppEnv\)/);
   assert.match(worker, /async function handleGameAssetUpload\(request: Request, env: AppEnv\)/);
   assert.match(worker, /async function fetchGameAsset\(request: Request, env: AppEnv, key: string\)/);
-  assert.match(worker, /async function fetchGodotGamePack\(request: Request, env: AppEnv\)/);
+  assert.match(worker, /async function fetchGodotGamePack\(request: Request, env: AppEnv, ctx: ExecutionContext\)/);
   assert.match(worker, /function patchSm63ExtrasIntoPck\(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBuffer\)/);
   assert.match(worker, /const sm63ExtrasPckEntries = \[/);
   assert.match(worker, /res:\/\/classes\/zone\/trigger\/death_plane\/death_plane\.gdc/);
@@ -73,14 +74,26 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
     assert.match(worker, new RegExp(`res://scenes/levels/llr_complete/llr_complete_${index}\\.tscn\\.remap`));
   }
   assert.match(worker, /headers\.set\("x-llr-extra-patch", "applied"\)/);
+  assert.match(worker, /caches\.default\.match\(cacheKey\)/);
+  assert.match(worker, /caches\.default\.put\(cacheKey, edgeResponse\)/);
+  assert.match(worker, /headers\.set\("x-llr-pck-edge-cache", "MISS"\)/);
+  assert.match(worker, /async function fetchPrecompressedGodotPck/);
+  assert.match(worker, /const originalAcceptEncoding = request\.cf\?\.clientAcceptEncoding/);
+  assert.match(worker, /typeof originalAcceptEncoding === "string"/);
+  assert.match(worker, /index\.pck\.\$\{extension\}/);
+  assert.match(worker, /headers\.set\("content-encoding", encoding\)/);
+  assert.match(worker, /encodeBody: "manual"/);
+  assert.match(worker, /public, max-age=31536000, immutable, no-transform/);
   assert.match(worker, /safeUrlSearchParam\(referer, "pack"\)/);
   assert.match(worker, /pack\.id === requestedPackId/);
   assert.match(worker, /async function fetchCompressedGodotWasm\(request: Request, env: AppEnv, origin: string\)/);
+  assert.match(worker, /index\.wasm\.\$\{extension\}/);
+  assert.match(worker, /headers\.set\("x-llr-wasm-compression", encoding\)/);
+  assert.match(worker, /encoding === "identity" \? "application\/wasm" : "application\/octet-stream"/);
   assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/godot\/index\.pck`/);
   assert.match(worker, /url\.pathname === `\$\{llrMarioRunPath\}\/godot\/index\.wasm`/);
   assert.match(worker, /new DecompressionStream\("gzip"\)/);
   assert.match(worker, /headers\.delete\("content-encoding"\)/);
-  assert.doesNotMatch(worker, /encodeBody: "manual"/);
   assert.match(worker, /function fetchStaticAsset/);
   assert.match(worker, /function cacheControlForStaticPath/);
   assert.match(worker, /cubeCityRevalidatingAssetPrefixes/);
@@ -120,7 +133,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.equal(existsSync(new URL("public/llr-mariorun/custom.html", root)), false);
   assert.equal(existsSync(new URL("public/llr-mariorun/game.css", root)), true);
   assert.equal(existsSync(new URL("public/llr-mariorun/launcher.js", root)), true);
-  for (const file of ["index.html", "index.js", "index.wasm.gz", "index.pck"]) {
+  for (const file of ["index.html", "index.js", "index.wasm.gz", "index.wasm.br", "index.pck", "index.pck.gz", "index.pck.br"]) {
     assert.equal(existsSync(new URL(`public/llr-mariorun/godot/${file}`, root)), true);
   }
   assert.equal(existsSync(new URL("public/llr-mariorun/godot/index.wasm", root)), false);
@@ -188,6 +201,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(launcher, /function renderPrelaunchChoices/);
   assert.match(html, /data-game-src="\/llr-mariorun\/godot\/"/);
   assert.match(launcher, /function selectedGameUrl/);
+  assert.match(launcher, /url\.searchParams\.set\("packVersion", String\(packVersion\)\.slice\(0, 160\)\)/);
   assert.match(launcher, /"\/llr-mariorun\/godot\/"/);
   assert.match(launcher, /function startSelectedGame/);
   assert.match(launcher, /function startSelectedGame\(\) \{\s*clearResumeScene\(\);\s*loadGameRuntime\(\);\s*\}/);
@@ -232,12 +246,17 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(godotHtml, /建议更换 Edge 浏览器/);
   assert.match(godotHtml, /\/\\\/index\\\.pck\$/);
   assert.match(godotHtml, /url\.searchParams\.set\('pack', selectedPack\)/);
-  assert.match(godotHtml, /url\.searchParams\.set\('run', runId\)/);
+  assert.match(godotHtml, /const BUILTIN_PCK_VERSION = '[a-f0-9]{16}'/);
+  assert.match(godotHtml, /const BUILTIN_WASM_VERSION = '[a-f0-9]{16}'/);
+  assert.match(godotHtml, /url\.searchParams\.set\('v', BUILTIN_WASM_VERSION\)/);
+  assert.match(godotHtml, /url\.searchParams\.set\('v', \[BUILTIN_PCK_VERSION, selectedPackVersion\]/);
+  assert.doesNotMatch(godotHtml, /url\.searchParams\.set\('run', runId\)/);
   assert.match(godotHtml, /cache: init\?\.cache \|\| 'default'/);
   assert.doesNotMatch(godotHtml, /cache: 'no-store'/);
   assert.match(worker, /const requestUrl = new URL\(request\.url\)/);
   assert.match(worker, /requestUrl\.searchParams\.get\("pack"\) \|\| safeUrlSearchParam\(referer, "pack"\)/);
-  assert.match(worker, /headers\.set\("cache-control", "no-store, max-age=0"\)/);
+  assert.match(worker, /headers\.set\("cache-control", pckClientCacheControl\(requestUrl, true\)\)/);
+  assert.match(worker, /\? "no-store, max-age=0"/);
   assert.match(worker, /headers\.set\("x-llr-pack-id", activePack\?\.id \|\| requestedPackId \|\| "default"\)/);
   assert.doesNotMatch(launcher, /searchParams\.set\("level"/);
   assert.doesNotMatch(launcher, /selectedLevelId/);
@@ -259,6 +278,7 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(godotLoader, /window\['isSecureContext'\] === true \|\|/);
   assert.match(godotLoader, /window\.location\.protocol === 'https:'/);
   assert.match(godotLoader, /new DecompressionStream\('gzip'\)/);
+  assert.match(godotLoader, /new Response\(response\.clone\(\)\.body, \{ 'headers': \[\['content-type', 'application\/wasm'\]\] \}\)/);
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });
 
@@ -457,11 +477,22 @@ test("admin app exposes llr-mariorun entry and online editors", () => {
 
 test("Godot pack export synchronizes the generated PCK size into the web shell", () => {
   const exporter = readFileSync("tools/export-llr-godot-pck.mjs", "utf8");
-  assert.match(exporter, /const pckBytes = statSync\(targetPck\)\.size/);
+  assert.match(exporter, /const pckHash = createHash\("sha256"\)/);
+  assert.match(exporter, /gzipSync\(pckBuffer/);
+  assert.match(exporter, /brotliCompressSync\(pckBuffer/);
+  assert.match(exporter, /const wasmBuffer = gunzipSync/);
+  assert.match(exporter, /writeFileSync\(targetWasmBrotli, wasmBrotliBuffer\)/);
   assert.match(exporter, /fileSizes/);
-  assert.match(exporter, /html\.replace\(fileSizePattern, `\$1\$\{pckBytes\}`\)/);
+  assert.match(exporter, /replace\(fileSizePattern, `\$1\$\{pckBytes\}`\)/);
+  assert.match(exporter, /replace\(pckVersionPattern, `\$1\$\{pckVersion\}\$2`\)/);
+  assert.match(exporter, /replace\(wasmVersionPattern, `\$1\$\{wasmVersion\}\$2`\)/);
   const html = source("public/llr-mariorun/godot/index.html");
   const configuredBytes = Number(html.match(/"fileSizes":\{"index\.pck":(\d+)/)?.[1]);
-  const actualBytes = statSync(new URL("public/llr-mariorun/godot/index.pck", root)).size;
+  const pck = readFileSync(new URL("public/llr-mariorun/godot/index.pck", root));
+  const actualBytes = pck.byteLength;
   assert.equal(configuredBytes, actualBytes);
+  assert.deepEqual(gunzipSync(readFileSync(new URL("public/llr-mariorun/godot/index.pck.gz", root))), pck);
+  assert.deepEqual(brotliDecompressSync(readFileSync(new URL("public/llr-mariorun/godot/index.pck.br", root))), pck);
+  const wasm = gunzipSync(readFileSync(new URL("public/llr-mariorun/godot/index.wasm.gz", root)));
+  assert.deepEqual(brotliDecompressSync(readFileSync(new URL("public/llr-mariorun/godot/index.wasm.br", root))), wasm);
 });

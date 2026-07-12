@@ -99,21 +99,29 @@ body {
 		<script>
 (function () {
 	const pageUrl = new URL(window.location.href);
+	const BUILTIN_PCK_VERSION = '0408d6c1246daca7';
+	const BUILTIN_WASM_VERSION = 'fe5cebc590758c10';
 	const selectedPack = pageUrl.searchParams.get('pack') || '';
-	const runId = pageUrl.searchParams.get('run') || '';
+	const selectedPackVersion = pageUrl.searchParams.get('packVersion') || '';
 	const nativeFetch = window.fetch.bind(window);
 
 	window.fetch = function (input, init) {
 		const requestUrl = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
 		try {
 			const url = new URL(requestUrl, window.location.href);
+			if (/\/index\.wasm$/.test(url.pathname)) {
+				url.searchParams.set('v', BUILTIN_WASM_VERSION);
+				return nativeFetch(url.toString(), {
+					...init,
+					cache: init?.cache || 'default',
+					credentials: init?.credentials || 'same-origin'
+				});
+			}
 			if (/\/index\.pck$/.test(url.pathname)) {
 				if (selectedPack) {
 					url.searchParams.set('pack', selectedPack);
 				}
-				if (runId) {
-					url.searchParams.set('run', runId);
-				}
+				url.searchParams.set('v', [BUILTIN_PCK_VERSION, selectedPackVersion].filter(Boolean).join('.'));
 				const responsePromise = nativeFetch(url.toString(), {
 					...init,
 					cache: init?.cache || 'default',
@@ -144,7 +152,7 @@ body {
 		</script>
 		<script src="index.js?v=llr-secure-context-20260627"></script>
 		<script>
-const GODOT_CONFIG = {"args":["--locale","zh_CN"],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":9788592,"index.wasm":35376909},"focusCanvas":true,"gdextensionLibs":[],"locale":"zh_CN"};
+const GODOT_CONFIG = {"args":["--locale","zh_CN"],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":9788672,"index.wasm":35376909},"focusCanvas":true,"gdextensionLibs":[],"locale":"zh_CN"};
 if (new URL(window.location.href).searchParams.get('perf') === 'desktop') {
 	GODOT_CONFIG.canvasResizePolicy = 1;
 }

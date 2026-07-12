@@ -194,6 +194,10 @@ function selectedGameUrl(options = {}) {
   const base = frame?.dataset.gameSrc || "/llr-mariorun/godot/";
   const url = new URL(base, window.location.origin);
   if (selectedPackId) url.searchParams.set("pack", selectedPackId);
+  const selectedPack = (manifest?.assetPacks || []).find((pack) => pack.id === selectedPackId);
+  const selectedPck = selectedPack?.assets?.["game.bundle.pck"];
+  const packVersion = selectedPck?.updatedAt || selectedPck?.key || selectedPack?.updatedAt || selectedPack?.id || "";
+  if (packVersion) url.searchParams.set("packVersion", String(packVersion).slice(0, 160));
   if (selectedDesignerLevelId) url.searchParams.set("designerLevel", selectedDesignerLevelId);
   if (options.resumeLast) {
     const resumeScene = readResumeScene();
