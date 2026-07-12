@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { buildV2StageScene } from "./llr-level-v2.mjs";
+import { buildV3StageScene, V3_STAGE_BLUEPRINTS } from "./llr-level-v3.mjs";
 
 const projectRoot = "vendor/Legacy_SM63Redux";
 const extrasRoot = `${projectRoot}/scenes/levels/llr_complete`;
@@ -14,6 +14,11 @@ const designerSerializerPath = `${projectRoot}/scenes/menus/level_designer/seria
 const singletonScenePath = `${projectRoot}/classes/global/singleton/singleton.tscn`;
 const musicScriptPath = `${projectRoot}/classes/global/singleton/music.gd`;
 const exportPresetsPath = `${projectRoot}/export_presets.cfg`;
+const shuttleRoot = `${projectRoot}/classes/solid/llr_shuttle`;
+const shuttleScriptPath = `${shuttleRoot}/llr_shuttle.gd`;
+const shuttleScenePath = `${shuttleRoot}/llr_shuttle.tscn`;
+const thwompScriptPath = `${projectRoot}/classes/entity/enemy/thwomp/thwomp.gd`;
+const rebindOptionScriptPath = `${projectRoot}/gui/pause/options/rebind_option.gd`;
 const segmentWidth = 3200;
 const segmentCount = 10;
 const levelWidth = segmentWidth * segmentCount;
@@ -74,6 +79,59 @@ func _on_FadeOut_tween_completed():
 \tswitch_song()
 `;
 
+const shuttleScriptSource = `class_name LLRShuttle
+extends Node2D
+
+
+@export var travel: Vector2 = Vector2(192, 0)
+@export_range(0.8, 12.0, 0.1) var travel_seconds: float = 2.6
+@export_range(0.0, 2.0, 0.05) var pause_seconds: float = 0.35
+@export_range(0.0, 1.0, 0.01) var phase: float = 0.0
+
+var elapsed: float = 0.0
+@onready var platform: Node2D = $MovingPlatform
+
+
+func _ready() -> void:
+\tplatform.scale = Vector2(1.75, 1.0)
+\telapsed = phase * _cycle_length()
+\t_apply_position()
+
+
+func _physics_process(delta: float) -> void:
+\telapsed = fposmod(elapsed + delta, _cycle_length())
+\t_apply_position()
+
+
+func _cycle_length() -> float:
+\treturn max(0.2, travel_seconds * 2.0 + pause_seconds * 2.0)
+
+
+func _apply_position() -> void:
+\tvar cursor := elapsed
+\tvar amount := 0.0
+\tif cursor < pause_seconds:
+\t\tamount = 0.0
+\telif cursor < pause_seconds + travel_seconds:
+\t\tamount = smoothstep(0.0, 1.0, (cursor - pause_seconds) / travel_seconds)
+\telif cursor < pause_seconds * 2.0 + travel_seconds:
+\t\tamount = 1.0
+\telse:
+\t\tamount = 1.0 - smoothstep(0.0, 1.0, (cursor - pause_seconds * 2.0 - travel_seconds) / travel_seconds)
+\tplatform.position = travel * amount
+`;
+
+const shuttleSceneSource = `[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://classes/solid/moving_platform/moving_platform.tscn" id="1"]
+[ext_resource type="Script" path="res://classes/solid/llr_shuttle/llr_shuttle.gd" id="2"]
+
+[node name="LLRShuttle" type="Node2D"]
+script = ExtResource("2")
+
+[node name="MovingPlatform" parent="." instance=ExtResource("1")]
+`;
+
 const resources = {
   terrain: "res://classes/solid/terrain/terrain_polygon.tscn",
   player: "res://classes/player/player.tscn",
@@ -87,11 +145,16 @@ const resources = {
   bobomb: "res://classes/entity/enemy/bobomb/bobomb.tscn",
   cheep: "res://classes/entity/enemy/cheep_cheep/cheep_cheep.tscn",
   parakoopa: "res://classes/entity/enemy/koopa/parakoopa.tscn",
+  koopa: "res://classes/entity/enemy/koopa/koopa.tscn",
   goonie: "res://classes/entity/passive/goonie/goonie.tscn",
+  thwomp: "res://classes/entity/enemy/thwomp/thwomp.tscn",
+  thwump: "res://classes/entity/enemy/thwomp/thwump.tscn",
   coin: "res://classes/pickup/coin/yellow/coin_yellow.tscn",
   blueCoin: "res://classes/pickup/coin/blue/coin_blue.tscn",
   bottle: "res://classes/pickup/bottle/bottle_big.tscn",
   fludd: "res://classes/pickup/fludd_box/fludd_box.tscn",
+  fluddRocket: "res://classes/pickup/fludd_box/fludd_pickup_rocket.tscn",
+  fluddTurbo: "res://classes/pickup/fludd_box/fludd_pickup_turbo.tscn",
   water: "res://classes/water/water.tscn",
   log: "res://classes/solid/log/log.tscn",
   fallingLog: "res://classes/solid/log/log_fall.tscn",
@@ -103,6 +166,10 @@ const resources = {
   pivot: "res://classes/solid/moving_platform/pivot.tscn",
   tippingLog: "res://classes/solid/telescoping/tipping_log/tipping_log.tscn",
   rotating: "res://classes/solid/rotating_block/rotating_block.tscn",
+  shuttle: "res://classes/solid/llr_shuttle/llr_shuttle.tscn",
+  pipe: "res://classes/interactable/pipe/pipe.tscn",
+  door: "res://classes/interactable/door/door.tscn",
+  arrow: "res://classes/decorative/arrow/arrow.tscn",
   warp: "res://classes/zone/trigger/warpzone/warp_zone.tscn",
   death: "res://classes/zone/trigger/death_plane/death_plane.tscn"
 };
@@ -111,88 +178,7 @@ const resourceIds = Object.fromEntries(
   Object.keys(resources).map((key, index) => [key, `llr_${index + 1}`])
 );
 
-const stages = [
-  {
-    id: 1,
-    title: "1 郊野多层远征",
-    description: "坡地、树冠、浅湖与两次强制爬升",
-    heights: [220, 160, -320, -80, 300, 40, 300, -420, -420, 160, 120],
-    themes: ["meadow", "meadow", "lake", "meadow", "bomb", "meadow", "lake", "flight", "meadow", "gauntlet"],
-    variants: ["ridge", "steps", "double", "valley", "zigzag", "ridge", "valley", "double", "zigzag", "ridge"]
-  },
-  {
-    id: 2,
-    title: "2 湖区水陆环线",
-    description: "两次潜水、两次上岸与高空跨湖路线",
-    heights: [220, 300, -180, 220, -420, 280, -340, -340, 260, -260, 120],
-    themes: ["lake", "meadow", "lake", "flight", "lake", "bomb", "lake", "fungus", "lake", "gauntlet"],
-    variants: ["valley", "ridge", "double", "zigzag", "valley", "steps", "double", "valley", "zigzag", "double"]
-  },
-  {
-    id: 3,
-    title: "3 爆弹施工塔",
-    description: "箱阵塔、爆弹竖井与旋转吊臂",
-    heights: [220, 80, -560, -220, 260, -480, 220, 220, -420, 140, 80],
-    themes: ["bomb", "meadow", "bomb", "rotor", "bomb", "lake", "bomb", "flight", "rotor", "gauntlet"],
-    variants: ["zigzag", "ridge", "double", "steps", "valley", "double", "ridge", "zigzag", "steps", "double"]
-  },
-  {
-    id: 4,
-    title: "4 蘑菇垂直山谷",
-    description: "四次爬升、两次下降与 FLUDD 横渡",
-    heights: [260, -520, -220, 300, -600, -300, 220, -520, 180, -480, 80],
-    themes: ["fungus", "meadow", "fungus", "lake", "fungus", "flight", "fungus", "rotor", "fungus", "gauntlet"],
-    variants: ["ridge", "valley", "double", "zigzag", "steps", "double", "valley", "ridge", "zigzag", "double"]
-  },
-  {
-    id: 5,
-    title: "5 云海双层航线",
-    description: "高低云层、双空港与完整地面回收路线",
-    heights: [240, -420, -420, -620, -180, -620, -620, 220, -520, -160, -260],
-    themes: ["sky", "fungus", "sky", "flight", "sky", "rotor", "sky", "lake", "sky", "gauntlet"],
-    variants: ["ridge", "double", "zigzag", "valley", "steps", "double", "valley", "zigzag", "double", "ridge"]
-  },
-  {
-    id: 6,
-    title: "6 水下遗迹往返",
-    description: "湖底、遗迹高架与云上路线反复切换",
-    heights: [240, 320, -260, -260, 260, -420, 320, -500, -500, 240, 120],
-    themes: ["lake", "fungus", "flight", "lake", "bomb", "fungus", "lake", "sky", "flight", "gauntlet"],
-    variants: ["valley", "ridge", "double", "zigzag", "steps", "double", "valley", "ridge", "zigzag", "double"]
-  },
-  {
-    id: 7,
-    title: "7 飞行军团空港",
-    description: "双登机塔、旋翼空港与密集航线",
-    heights: [220, -300, -300, -620, -180, -520, 220, 220, -520, -240, -160],
-    themes: ["flight", "sky", "flight", "meadow", "flight", "fungus", "flight", "rotor", "sky", "gauntlet"],
-    variants: ["ridge", "double", "zigzag", "valley", "steps", "double", "valley", "zigzag", "double", "ridge"]
-  },
-  {
-    id: 8,
-    title: "8 旋转机关塔",
-    description: "旋转方块、枢轴平台和倾斜木桥",
-    heights: [220, -480, -120, -620, -220, -620, -180, 220, -520, -240, -160],
-    themes: ["rotor", "bomb", "rotor", "sky", "rotor", "fungus", "rotor", "flight", "rotor", "gauntlet"],
-    variants: ["zigzag", "ridge", "double", "valley", "steps", "double", "ridge", "zigzag", "valley", "double"]
-  },
-  {
-    id: 9,
-    title: "9 九机制混合长征",
-    description: "前八关机制重组后的多层综合挑战",
-    heights: [220, 260, -180, -520, -160, -620, -260, 220, -480, -120, 100],
-    themes: ["meadow", "lake", "bomb", "fungus", "sky", "flight", "rotor", "lake", "gauntlet", "gauntlet"],
-    variants: ["double", "valley", "zigzag", "ridge", "steps", "double", "valley", "zigzag", "ridge", "double"]
-  },
-  {
-    id: 10,
-    title: "10 终极老师城",
-    description: "水牢、双塔、机械城墙与四阶段终局",
-    heights: [220, 60, 300, -420, -180, -620, -240, 220, -520, -80, 100],
-    themes: ["gauntlet", "bomb", "sky", "lake", "rotor", "fungus", "flight", "gauntlet", "sky", "finale"],
-    variants: ["ridge", "double", "zigzag", "valley", "steps", "double", "ridge", "zigzag", "valley", "double"]
-  }
-].map((stage) => ({
+const stages = V3_STAGE_BLUEPRINTS.map((stage) => ({
   ...stage,
   resource: `res://scenes/levels/llr_complete/llr_complete_${stage.id}.tscn`,
   output: `${extrasRoot}/llr_complete_${stage.id}.tscn`
@@ -630,7 +616,7 @@ function buildStageLegacy(stage) {
 }
 
 function buildStage(stage) {
-  const scene = buildV2StageScene({
+  const scene = buildV3StageScene({
     stage,
     stages,
     resources,
@@ -640,6 +626,34 @@ function buildStage(stage) {
   });
   mkdirSync(dirname(stage.output), { recursive: true });
   writeFileSync(stage.output, scene, "utf8");
+}
+
+function writeLlrSupportResources() {
+  mkdirSync(shuttleRoot, { recursive: true });
+  writeFileSync(shuttleScriptPath, shuttleScriptSource, "utf8");
+  writeFileSync(shuttleScenePath, shuttleSceneSource, "utf8");
+
+  let thwompScript = readFileSync(thwompScriptPath, "utf8").replace(/\r\n/g, "\n");
+  thwompScript = thwompScript.replace(
+    /enum F \{\n\tIDLE = 0,?\n\tBLINK = 1,?\n\tANGRY = 2,?\n\tLOOKLEFT = 3,?\n\tLOOKRIGHT = 4,?\n\}/,
+    "enum F {\n\tIDLE = 0,\n\tBLINK = 1,\n\tANGRY = 2,\n\tLOOKLEFT = 3,\n\tLOOKRIGHT = 4,\n}"
+  );
+  if (!/enum F \{\n\tIDLE = 0,\n\tBLINK = 1,/.test(thwompScript)) {
+    throw new Error("Thwomp enum compatibility patch was not applied");
+  }
+  writeFileSync(thwompScriptPath, thwompScript, "utf8");
+
+  let rebindScript = readFileSync(rebindOptionScriptPath, "utf8").replace(/\r\n/g, "\n");
+  if (!rebindScript.includes("if !is_node_ready() or !is_instance_valid(key_list):")) {
+    rebindScript = rebindScript.replace(
+      "func update_list():\n\tkey_list.text = join_action_array(InputMap.action_get_events(action_id))",
+      "func update_list():\n\tif !is_node_ready() or !is_instance_valid(key_list):\n\t\treturn\n\tkey_list.text = join_action_array(InputMap.action_get_events(action_id))"
+    );
+  }
+  if (!rebindScript.includes("if !is_node_ready() or !is_instance_valid(key_list):")) {
+    throw new Error("Rebind option node-readiness guard was not applied");
+  }
+  writeFileSync(rebindOptionScriptPath, rebindScript, "utf8");
 }
 
 const extrasDeclarations = `
@@ -907,10 +921,11 @@ function patchExportSources() {
   writeFileSync(exportPresetsPath, presets, "utf8");
 }
 
+writeLlrSupportResources();
 for (const stage of stages) {
   buildStage(stage);
 }
 patchMainMenu();
 patchExportSources();
 
-console.log(`llr Extras patch complete: ${stages.length} original stages, ${segmentCount} segments each, ${levelWidth}px wide`);
+console.log(`llr Extras V3 patch complete: ${stages.length} set-piece stages, ${segmentCount} rooms each, ${levelWidth}px wide`);

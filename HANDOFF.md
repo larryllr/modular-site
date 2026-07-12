@@ -174,3 +174,12 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 - 2026-06-26 老师包 v9：`build-ultrahd-godot-pack.mjs --teacher-action-map` 走步/跑步帧改用更大步幅的连续侧跑帧，让走路动作更明显；不再改已修好的显示比例、全人物裁切和刘硕白衣保护。线上 KV/D1 已覆盖并验证：`liushuo` PCK 10,657,984 bytes，`guoliang` PCK 10,697,520 bytes，`/llr-mariorun/godot/index.pck?pack=...` 实际下载大小与 `x-llr-pack-id` 均正确。
 - 2026-06-26 用户反馈电脑全屏是假按钮、桌面仍显示虚拟按键、电脑帧率低。已部署修复：桌面端默认隐藏虚拟按键，仅 `hover:none`/粗指针/触摸/窄屏显示；全屏按钮改为请求 `.game-frame-shell` 真全屏并写入 `is-landscape-fullscreen` 固定铺满视口样式，手机强制横屏旋转规则使用更高优先级；桌面启动 Godot iframe 时附加 `perf=desktop`，Godot Web 页收到后把 `canvasResizePolicy` 切到项目尺寸策略，降低大屏高 DPR 渲染压力。线上检查通过：`launcher.js` 含桌面性能参数和输入模式切换，`game.css` 含桌面隐藏/真全屏/强制横屏规则，`godot/index.html` 含 `perf=desktop` 策略切换。
 - 2026-06-27 用户反馈 Extras 进入后内容不完整、砖块像旋转未知物、掉进虚空无法回来、手机虚拟按键没有返回键。已本地修复：Extras 改为进入稳定的 `tutorial_1_1` 试玩关卡，不再打包 SMB 1-1 测试场景；`death_plane.gd` 改为把玩家从上方拉回并清零速度，而不是卡死/重开；手机端新增工具栏“返回选择”，虚拟按键新增“回场”和“返回”；Worker 的自定义 PCK 运行时补丁改为同步 `main_menu.gdc` 与 `death_plane.gdc`。新增 `tools/patch-llr-mariorun-controls.mjs` 和 `tools/export-llr-godot-pck.mjs`，`predeploy` 会先应用补丁并重新导出默认 `index.pck`。本地验证：`npm test`、`npm run check`、`git diff --check` 均通过；切换到 codex++ full bash 后已执行 `npm run deploy`，Cloudflare 部署命令退出码 0，线上发布已触发成功。随后用户要求右上角“回场/返回”不能重载外层游戏，而要游戏内回主菜单；已将 `launcher.js` 改为向 Godot iframe 写入 `main_menu` 内部命令，`singleton.gd` 轮询 Web 命令后执行 `prepare_exit_game()` 并切到 `res://scenes/menus/title/main_menu/main_menu.tscn`，Worker PCK 同步列表新增 `singleton.gdc`，并把 Godot 导出脚本日志压缩以避免连接器 502。已执行 `npm run check` 与 `npm run deploy`，上传 `/llr-mariorun/launcher.js` 和 `/llr-mariorun/godot/index.pck`，Cloudflare Version ID：`b770cca6-ec47-4203-9491-208458c6d24b`。
+
+## 2026-07-12 Extras V3 机关战役重做
+
+- “？？？”中的十关已从 V2 长平地模板重做为十个独立主题：风车牧场、潮汐水道、爆弹拆迁城、火箭蘑菇井、云端货运站、涡轮海岸公路、飞鸟迁徙谷、钟楼机关城、遗迹寻宝环线、老师城终局。
+- 新生成器为 `tools/llr-level-v3.mjs`，设计依据记录在 `docs/llr-extras-level-design-v3.md`。十关共使用 15 种房间轮廓，每关 10 个独立 set piece 和三幕节奏，不再调用旧 `steppedPath` 模板；V2 文件仅保留作历史参考。
+- 已加入真实承担路线的往返摆渡台、垂直货梯、枢轴轮、旋转方块、倾斜桥、下落原木、Thwomp/Thwump、Koopa/龟壳、Rocket/Turbo FLUDD、管道、门、水陆双路线和奖励支路。高空路线下方按水道、蘑菇、维修通道或岛屿设置本关风格的回收路线。
+- `tools/audit-llr-level-geometry.mjs --strict` 现在同时审计 set piece、三幕结构、房间形态、玩法标签、动态机关、节点预算和回收路线；十关均为 0 violations，预计熟练流程 231–289 秒，节点数 295–421。
+- 部署补丁会自动修复此前未被旧关卡触发的两个上游兼容问题：`thwomp.gd` 枚举逗号，以及 `rebind_option.gd` 在节点 ready 前访问 `key_list` 的空引用。
+- Godot 4.3 已实际启动第 1、4、5、8、10 关；浏览器已进入第 4、10 关并确认无 Godot 脚本错误，虚拟摇杆、跳跃、移动平台和掉落回场路径均做过实跑。最终默认 PCK 构建大小为 9,756,800 bytes，Godot 导出为 0 warnings / 0 errors。

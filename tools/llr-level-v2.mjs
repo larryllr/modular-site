@@ -1,3 +1,4 @@
+// Historical V2 generator. Deployment now imports llr-level-v3.mjs; keep this file only for diff/reference.
 function fmt(value) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }

@@ -88,6 +88,10 @@ function auditLevel(level) {
   const path = `${root}/llr_complete_${level}.tscn`;
   const scene = readFileSync(path, "utf8");
   const nodes = parseNodes(scene);
+  const resourcePaths = new Map(
+    [...scene.matchAll(/^\[ext_resource type="PackedScene" path="([^"]+)" id="([^"]+)"\]$/gm)]
+      .map((match) => [match[2], match[1]])
+  );
   const surfaces = nodes
     .filter((node) => node.parent === "Terrain")
     .map(terrainSurface)
@@ -183,6 +187,69 @@ function auditLevel(level) {
   if (mainRoutes !== 10) {
     violations.push({ type: "main-route-count", expected: 10, actual: mainRoutes });
   }
+  if (recoveryRoutes < 2) {
+    violations.push({ type: "recovery-route-count", expectedMinimum: 2, actual: recoveryRoutes });
+  }
+
+  const roomMarkers = nodes.filter((node) => /^LLRSegment\d{2}_/.test(node.name));
+  const setPieces = roomMarkers.map((node) => metadata(node.block, "_llr_set_piece"));
+  const acts = new Set(roomMarkers.map((node) => metadata(node.block, "_llr_act")));
+  const forms = new Set(roomMarkers.map((node) => node.name.replace(/^LLRSegment\d{2}_/, "")));
+  const mechanicSets = roomMarkers.map((node) => metadata(node.block, "_llr_mechanics") || "");
+  const mechanicTags = new Set(
+    mechanicSets.flatMap((value) => value.split(",").map((item) => item.trim()).filter(Boolean))
+  );
+  if (roomMarkers.length !== 10) {
+    violations.push({ type: "room-marker-count", expected: 10, actual: roomMarkers.length });
+  }
+  if (new Set(setPieces).size !== 10 || setPieces.some((value) => !value)) {
+    violations.push({ type: "set-piece-variety", expected: 10, actual: new Set(setPieces).size });
+  }
+  if (acts.size !== 3 || ![1, 2, 3].every((act) => acts.has(act))) {
+    violations.push({ type: "act-structure", acts: [...acts] });
+  }
+  if (forms.size < 6) {
+    violations.push({ type: "room-form-variety", expectedMinimum: 6, actual: forms.size });
+  }
+  if (new Set(mechanicSets).size < 8) {
+    violations.push({ type: "mechanic-set-variety", expectedMinimum: 8, actual: new Set(mechanicSets).size });
+  }
+  if (mechanicTags.size < 6) {
+    violations.push({ type: "mechanic-tag-variety", expectedMinimum: 6, actual: mechanicTags.size });
+  }
+  for (const marker of roomMarkers) {
+    if (metadata(marker.block, "_llr_geometry_version") !== 3) {
+      violations.push({ type: "geometry-version", room: marker.name });
+    }
+  }
+
+  const dynamicMatchers = [
+    ["shuttle", /\/llr_shuttle\//],
+    ["pivot", /\/moving_platform\/pivot\.tscn$/],
+    ["rotating", /\/rotating_block\/rotating_block\.tscn$/],
+    ["thwomp", /\/enemy\/thwomp\//],
+    ["tipping", /\/tipping_log\/tipping_log\.tscn$/],
+    ["warp", /\/interactable\/(?:pipe|door)\//],
+    ["fludd", /\/fludd_box\/fludd_pickup_/],
+    ["falling", /\/log\/log_fall\.tscn$/]
+  ];
+  const dynamicTypes = new Set();
+  let dynamicNodes = 0;
+  for (const node of nodes) {
+    const resourcePath = resourcePaths.get(node.instance) || "";
+    for (const [kind, matcher] of dynamicMatchers) {
+      if (!matcher.test(resourcePath)) continue;
+      dynamicTypes.add(kind);
+      dynamicNodes += 1;
+      break;
+    }
+  }
+  if (dynamicTypes.size < 3) {
+    violations.push({ type: "dynamic-mechanic-variety", expectedMinimum: 3, actual: [...dynamicTypes] });
+  }
+  if (dynamicNodes > 80) {
+    violations.push({ type: "dynamic-node-budget", nodes: dynamicNodes, limit: 80 });
+  }
 
   const flowNode = nodes.find((node) => node.name === "LLRFlowMetrics");
   const mainSeconds = flowNode ? metadata(flowNode.block, "_llr_main_seconds") : null;
@@ -190,8 +257,13 @@ function auditLevel(level) {
   if (typeof mainSeconds !== "number" || mainSeconds < 180) {
     violations.push({ type: "main-flow-too-short", mainSeconds });
   }
-  if (nodes.length > 750) {
-    violations.push({ type: "runtime-node-budget", nodes: nodes.length, limit: 750 });
+  if (nodes.length < 250 || nodes.length > 700) {
+    violations.push({ type: "runtime-node-budget", nodes: nodes.length, minimum: 250, limit: 700 });
+  }
+
+  const guideCoinCount = nodes.filter((node) => node.parent === "Items/Coins").length;
+  if (guideCoinCount > 80) {
+    violations.push({ type: "guide-coin-budget", nodes: guideCoinCount, limit: 80 });
   }
 
   const waterNodes = nodes.filter((node) => node.parent === "Water" && node.position && node.polygon.length >= 4);
@@ -215,6 +287,11 @@ function auditLevel(level) {
     recoveryRoutes,
     mainSeconds,
     recoverySeconds,
+    setPieceCount: new Set(setPieces).size,
+    formCount: forms.size,
+    mechanicTagCount: mechanicTags.size,
+    dynamicTypes: [...dynamicTypes],
+    dynamicNodes,
     violations
   };
 }
@@ -230,6 +307,11 @@ for (const report of reports) {
     recoveryRoutes: report.recoveryRoutes,
     mainSeconds: report.mainSeconds,
     recoverySeconds: report.recoverySeconds,
+    setPieces: report.setPieceCount,
+    forms: report.formCount,
+    mechanicTags: report.mechanicTagCount,
+    dynamicTypes: report.dynamicTypes,
+    dynamicNodes: report.dynamicNodes,
     violations: report.violations.length
   }));
 }

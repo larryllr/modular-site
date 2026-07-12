@@ -271,10 +271,10 @@ test("llr-mariorun Godot pack exposes ten original long Extras levels and rescue
 });
 
 test("llr-mariorun Extras menu offers ten complete touch-friendly level choices", () => {
-  const patch = source("tools/patch-llr-complete-level.mjs");
+  const blueprint = source("tools/llr-level-v3.mjs");
   const menu = source("vendor/Legacy_SM63Redux/scenes/menus/title/main_menu/main_menu.gd");
-  for (const title of ["郊野多层远征", "湖区水陆环线", "爆弹施工塔", "蘑菇垂直山谷", "云海双层航线", "水下遗迹往返", "飞行军团空港", "旋转机关塔", "九机制混合长征", "终极老师城"]) {
-    assert.match(patch, new RegExp(title));
+  for (const title of ["风车牧场", "潮汐水道", "爆弹拆迁城", "火箭蘑菇井", "云端货运站", "涡轮海岸公路", "飞鸟迁徙谷", "钟楼机关城", "遗迹寻宝环线", "老师城终局"]) {
+    assert.match(blueprint, new RegExp(title));
     assert.match(menu, new RegExp(title));
   }
   assert.match(menu, /func _open_extras_menu\(\) -> void:/);
@@ -283,25 +283,36 @@ test("llr-mariorun Extras menu offers ten complete touch-friendly level choices"
   assert.match(menu, /if !show_options and !show_extras:/);
 });
 
-test("llr-mariorun Extras scenes are audited 32k-wide V2 levels with chained finishes", () => {
+test("llr-mariorun Extras scenes are audited 32k-wide V3 set-piece levels with chained finishes", () => {
   for (let index = 1; index <= 10; index += 1) {
     const scene = source(`vendor/Legacy_SM63Redux/scenes/levels/llr_complete/llr_complete_${index}.tscn`);
     assert.equal((scene.match(/\[node name="LLRSegment\d{2}_/g) || []).length, 10);
-    assert.equal((scene.match(/metadata\/_llr_geometry_version = 2/g) || []).length, 10);
+    assert.equal((scene.match(/metadata\/_llr_geometry_version = 3/g) || []).length, 10);
+    assert.equal((scene.match(/metadata\/_llr_act = 1/g) || []).length, 3);
+    assert.equal((scene.match(/metadata\/_llr_act = 2/g) || []).length, 4);
+    assert.equal((scene.match(/metadata\/_llr_act = 3/g) || []).length, 3);
     assert.equal((scene.match(/metadata\/_llr_kind = "main"/g) || []).length, 10);
     assert.ok((scene.match(/metadata\/_llr_kind = "recovery"/g) || []).length >= 2);
+    const setPieces = [...scene.matchAll(/\[node name="LLRSegment\d{2}_[^\"]+"[^\]]*\][\s\S]*?metadata\/_llr_set_piece = "([^"]+)"/g)]
+      .map((match) => match[1]);
+    assert.equal(setPieces.length, 10);
+    assert.equal(new Set(setPieces).size, 10);
+    const forms = [...scene.matchAll(/\[node name="LLRSegment\d{2}_([^"]+)"/g)].map((match) => match[1]);
+    assert.ok(new Set(forms).size >= 6);
+    const mechanicSets = [...scene.matchAll(/metadata\/_llr_mechanics = "([^"]+)"/g)].map((match) => match[1]);
+    assert.equal(mechanicSets.length, 10);
+    assert.ok(new Set(mechanicSets).size >= 8);
+    assert.ok(new Set(mechanicSets.flatMap((value) => value.split(","))).size >= 6);
     assert.match(scene, /metadata\/_llr_points = PackedVector2Array\(/);
     assert.doesNotMatch(scene, /type="Marker2D" parent="Route"/);
     const entries = [...scene.matchAll(/metadata\/_llr_entry_y = (-?\d+(?:\.\d+)?)\nmetadata\/_llr_exit_y = (-?\d+(?:\.\d+)?)/g)];
     assert.equal(entries.length, 10);
-    const heightChanges = entries.map((match) => Math.abs(Number(match[2]) - Number(match[1])));
-    assert.ok(heightChanges.filter((change) => change > 180).length >= 6);
-    assert.ok(heightChanges.filter((change) => change > 450).length >= 3);
     const nodeCount = (scene.match(/^\[node /gm) || []).length;
-    assert.ok(nodeCount >= 400);
-    assert.ok(nodeCount <= 750);
+    assert.ok(nodeCount >= 250);
+    assert.ok(nodeCount <= 700);
     const flow = scene.match(/metadata\/_llr_main_seconds = (\d+(?:\.\d+)?)/);
     assert.ok(flow && Number(flow[1]) >= 180);
+    assert.match(scene, /metadata\/_llr_campaign_version = 3/);
     assert.match(scene, /32180, -820/);
     assert.match(scene, /\[node name="FinishWarp"/);
     assert.match(scene, /size = Vector2\(76, 340\)/);
@@ -314,13 +325,28 @@ test("llr-mariorun Extras scenes are audited 32k-wide V2 levels with chained fin
   }
 });
 
-test("llr-mariorun Extras V2 strict geometry audit passes", () => {
+test("llr-mariorun Extras V3 strict geometry and gameplay-variety audit passes", () => {
   const result = spawnSync(process.execPath, ["tools/audit-llr-level-geometry.mjs", "--strict"], {
     cwd: root,
     encoding: "utf8"
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /"totalViolations": 0/);
+});
+
+test("llr-mariorun Extras V3 includes a touch-friendly moving shuttle mechanic", () => {
+  const patch = source("tools/patch-llr-complete-level.mjs");
+  const script = source("vendor/Legacy_SM63Redux/classes/solid/llr_shuttle/llr_shuttle.gd");
+  const shuttle = source("vendor/Legacy_SM63Redux/classes/solid/llr_shuttle/llr_shuttle.tscn");
+  const thwomp = source("vendor/Legacy_SM63Redux/classes/entity/enemy/thwomp/thwomp.gd");
+  const rebindOption = source("vendor/Legacy_SM63Redux/gui/pause/options/rebind_option.gd");
+  assert.match(patch, /buildV3StageScene/);
+  assert.match(patch, /llr_shuttle\/llr_shuttle\.tscn/);
+  assert.match(script, /platform\.scale = Vector2\(1\.75, 1\.0\)/);
+  assert.match(script, /smoothstep\(0\.0, 1\.0/);
+  assert.match(shuttle, /moving_platform\/moving_platform\.tscn/);
+  assert.match(thwomp, /enum F \{\n\tIDLE = 0,\n\tBLINK = 1,/);
+  assert.match(rebindOption, /if !is_node_ready\(\) or !is_instance_valid\(key_list\):/);
 });
 
 test("llr-mariorun Level Designer keeps negative coordinates and exports clean data files", () => {
