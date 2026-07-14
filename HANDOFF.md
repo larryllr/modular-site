@@ -192,3 +192,10 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 - 线上 Chrome 冷启动实测：WASM 5.251 秒、PCK 5.046 秒并行完成，Godot 正常运行且控制台 0 errors；第二次启动两者 `transferSize` 均为 0。此前约 8.5 分钟的首次等待已降到约 5 秒大文件传输阶段。
 - 刘硕版和郭亮版的运行时补丁结果加入 Cloudflare Cache API：首次分别生成 11,082,768 / 11,122,304 bytes，均返回 `x-llr-extra-patch: applied`；随后从 `x-llr-pck-edge-cache: MISS` 变为 `HIT`。刘硕包已解析确认四类新机关和第 10 关资源都存在，并在真实浏览器中以约 3.9 秒加载、Godot 运行 0 errors、约 142 FPS。
 - 正式部署 Cloudflare Version ID：`09884dcd-e21d-4028-81f0-17701b55a599`。验证机存在失效 IPv6 路由，Node/Undici 直连会超时；强制 IPv4 后线上 PCK/WASM 完整哈希分别约 11 / 12.6 秒，浏览器的 Happy Eyeballs 路径不受该测试机问题影响。
+
+## 2026-07-14 Extras V4 设计与安全重生
+
+- 六个并行智能体分别完成 V3 代码审计、Story Mode 资源盘点、外部关卡设计资料研究、十关战役草案、50 个 set piece 候选和移动端 100 分评审；合并后的冻结设计稿为 `docs/llr-extras-level-design-v4.md`。V4 尚未替换线上关卡，计划取消 `10 × 3200px` 等宽模板，改为十关各自唯一核心动词、不同拓扑、7–9 个事件节拍和真实状态变化。
+- 修复用户指出的 VoidRescue 卡死：不再按同一 X 坐标从固定高度回投。`tools/godot-patches/death_plane.gd` 维护可提交模板，运行时记录最近 24 个稳定落脚位置；重生前用地面射线和角色碰撞盒逐个验证，移动平台已移走或位置被地形占用时自动回退更早安全点，并重置角色到中立动作状态。
+- Godot 4.3 工程解析、PCK 导出、机制烟测、43 项 Node 测试、TypeScript 检查和 V3 严格几何审计均通过。默认 PCK 9,791,216 bytes，SHA256 `4b8d6db725eecb40dc0253eae7ac94d2d01de520ff69eeb05203571a9658290c`；Brotli 5,738,402 bytes，gzip 6,791,765 bytes。
+- 线上 Playwright 验证启动器和原版 Godot 主菜单正常显示，虚拟按键只在触摸布局出现，控制台 0 errors；线上 `index.html` 已包含版本 `4b8d6db725eecb40`。Cloudflare Version ID：`5efe39d2-de38-4a25-b060-a8c1a1d462d4`。

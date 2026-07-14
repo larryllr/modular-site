@@ -35,7 +35,11 @@ if (mainMenu.includes(`\t\t\t2:\n\t\t\t\t_show_extras_message()`)) {
 mainMenu = mainMenu.replace(`\tSingleton.log_msg("Extras 暂未开放；Story Mode、Level Designer 和 Options 已可用。")\n\tif OS.has_feature("web"):\n\t\tJavaScriptBridge.eval("window.parent.__llrShowGameNotice && window.parent.__llrShowGameNotice('Extras 暂未开放，后面可以继续补内容。')", true)`, `\tSingleton.log_msg("Extras 已改为完整内置关卡；进入 LLR Complete 1。")\n\tif OS.has_feature("web"):\n\t\tJavaScriptBridge.eval("window.parent.__llrShowGameNotice && window.parent.__llrShowGameNotice('Extras 已改为完整内置关卡。')", true)`);
 write("vendor/Legacy_SM63Redux/scenes/menus/title/main_menu/main_menu.gd", mainMenu);
 
-write("vendor/Legacy_SM63Redux/classes/zone/trigger/death_plane/death_plane.gd", `extends Polygon2D\n\n\nconst SKY_RESPAWN_OFFSET := Vector2(0, -360)\nconst MIN_RESPAWN_Y := -280.0\n\n\nfunc _ready():\n\t$Area2D/CollisionPolygon2D.polygon = polygon\n\n\nfunc _on_Area2D_body_entered(body):\n\tvar player = body if body and body.name == "Player" else get_node_or_null("/root/Main/Player")\n\tif player == null:\n\t\treturn\n\t_rescue_player_from_void(player)\n\n\nfunc _rescue_player_from_void(player):\n\tvar respawn_position = player.position + SKY_RESPAWN_OFFSET\n\trespawn_position.y = min(respawn_position.y, MIN_RESPAWN_Y)\n\tplayer.position = respawn_position\n\tif player.get("vel") != null:\n\t\tplayer.vel = Vector2.ZERO\n\tif player.has_method("take_damage"):\n\t\tplayer.take_damage(1)\n\tSingleton.log_msg("掉出场地，已从上方拉回。")\n`);
+const deathPlane = read("tools/godot-patches/death_plane.gd");
+if (!deathPlane.includes("_safe_positions") || deathPlane.includes("SKY_RESPAWN_OFFSET")) {
+  throw new Error("Death-plane safe landing history patch is missing");
+}
+write("vendor/Legacy_SM63Redux/classes/zone/trigger/death_plane/death_plane.gd", deathPlane);
 
 let tests = read("tests/llr-mariorun.test.mjs");
 tests = tests.replace(`  assert.match(worker, /res:\\/\\/scenes\\/levels\\/extra\\/smb_1_1\\/smb_1_1\\.tscn\\.remap/);\n  assert.match(worker, /entry\\.name\\.endsWith\\("-smb_1_1\\.scn"\\)/);`, `  assert.match(worker, /res:\\/\\/classes\\/zone\\/trigger\\/death_plane\\/death_plane\\.gdc/);`);

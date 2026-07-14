@@ -282,6 +282,21 @@ test("static llr-mariorun game page embeds Godot runtime with touch controls and
   assert.match(godotLoader, /WebAssembly\.instantiate\(bytes, imports\)/);
 });
 
+test("llr-mariorun void rescue returns to a validated recent landing instead of a fixed sky height", () => {
+  const rescue = source("vendor/Legacy_SM63Redux/classes/zone/trigger/death_plane/death_plane.gd");
+  const rescueTemplate = source("tools/godot-patches/death_plane.gd");
+  const patch = source("tools/patch-llr-mariorun-controls.mjs");
+  assert.equal(rescue, rescueTemplate);
+  assert.match(rescue, /SAFE_HISTORY_LIMIT := 24/);
+  assert.match(rescue, /func _can_remember_position\(player\) -> bool:/);
+  assert.match(rescue, /func _find_valid_respawn\(player\) -> Vector2:/);
+  assert.match(rescue, /PhysicsRayQueryParameters2D\.create/);
+  assert.match(rescue, /PhysicsShapeQueryParameters2D\.new\(\)/);
+  assert.match(rescue, /player\.switch_state\(PLAYER_NEUTRAL_STATE\)/);
+  assert.doesNotMatch(rescue, /SKY_RESPAWN_OFFSET|MIN_RESPAWN_Y/);
+  assert.match(patch, /Death-plane safe landing history patch is missing/);
+});
+
 test("llr-mariorun Godot pack exposes ten original long Extras levels and rescues void falls", () => {
   const entries = parseGodotPckEntryNames("public/llr-mariorun/godot/index.pck");
   assert.ok(entries.includes("res://scenes/menus/title/main_menu/main_menu.gdc"));
