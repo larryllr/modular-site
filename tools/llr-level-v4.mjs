@@ -555,18 +555,19 @@ color = Color(0.72, 0.8, 0.92, 1)
     launch_speed: "10.2",
     horizontal_boost: "2.1"
   });
-  addFungus("B2MushroomStep1", 3210, 270, 130);
-  addFungus("B2MushroomStep2", 3520, 160, 170);
-  addCloud("B2RecoveryStack1", 3600, 270, 9);
-  addCloud("B2RecoveryStack2", 3600, 200, 9);
-  addCloud("B2RecoveryStack3", 3600, 130, 9);
-  addCloud("B2RecoveryStack4", 3600, 60, 9);
-  addCloud("B2WheelLandingCloud", 3580, 52, 9);
+  // Three staggered, wide recovery ledges replace the former seven-piece
+  // mushroom/cloud ladder. Missing the wheel remains recoverable, but the
+  // player now has to make three readable jumps instead of walking up a wall
+  // of overlapping platforms.
+  addCloud("B2RecoveryStep1", 3240, 250, 10);
+  addCloud("B2RecoveryStep2", 3420, 160, 10);
+  addCloud("B2RecoveryStep3", 3600, 70, 10);
   nodes.push(`${plainNode("B2SafeRecoveryContract", "Node", "Route").trimEnd()}
-metadata/_llr_vertical_step_count = 4
-metadata/_llr_max_upward_rise = 70
+metadata/_llr_vertical_step_count = 3
+metadata/_llr_max_upward_rise = 90
 metadata/_llr_void_required = false
-metadata/_llr_min_landing_width = 144
+metadata/_llr_min_landing_width = 175
+metadata/_llr_redundant_platforms_removed = 4
 `);
   grounded("B2Flowers", "Items/Decoration", "flowers", b2landing, 0.58, -10);
   recordRoute(stage.beats[1], "main", [
@@ -574,9 +575,9 @@ metadata/_llr_min_landing_width = 144
     { x: 3400, y: 30 }, { x: 3720, y: 18 }, { x: 4300, y: 58 }, { x: 4920, y: 98 }
   ]);
   recordRoute(stage.beats[1], "recovery", [
-    { x: 2950, y: 235 }, { x: 3200, y: 338 }, { x: 3540, y: 310 },
-    { x: 3600, y: 270 }, { x: 3600, y: 200 }, { x: 3600, y: 130 },
-    { x: 3600, y: 60 }, { x: 3720, y: 20 }, { x: 4010, y: 25 }
+    { x: 2950, y: 235 }, { x: 3200, y: 338 }, { x: 3240, y: 250 },
+    { x: 3420, y: 160 }, { x: 3600, y: 70 }, { x: 3720, y: 20 },
+    { x: 4010, y: 25 }
   ], { recoverySeconds: 10, coinLimit: 3 });
 
   const b3shoreA = addTerrain("B3ShoreA", 4980, 100, 620, [0, 12, -8, 0]);
@@ -608,16 +609,13 @@ metadata/_llr_min_landing_width = 144
   );
   addWater("B3CreekWater", 5520, 220, 2240, 380);
   const b3UpperApproach = addWood("B3UpperApproach", 5660, 126, 5);
-  const b3UpperTipping1 = addTippingLog("B3UpperTipping1", 5860, 82, 7, -1);
-  const b3UpperBridge1 = addWood("B3UpperBridge1", 6070, 60, 5);
-  const b3UpperRest = addWood("B3UpperRest", 6250, 24, 7);
-  const b3UpperBridge2 = addWood("B3UpperBridge2", 6430, 58, 5);
-  const b3UpperTipping2 = addTippingLog("B3UpperTipping2", 6620, 42, 7, 1);
-  const b3UpperBridge3 = addWood("B3UpperBridge3", 6820, 70, 5);
-  const b3UpperFallingSafety = addWood("B3UpperFallingSafety", 7010, 120, 6);
-  addFallingLog("B3UpperFalling", 7010, 78, 88, 112);
-  const b3UpperBridge4 = addWood("B3UpperBridge4", 7190, 82, 5);
-  const b3UpperExitCloud = addCloud("B3UpperExitCloud", 7380, 46, 9);
+  const b3UpperTipping1 = addTippingLog("B3UpperTipping1", 5925, 82, 7, -1);
+  const b3UpperRest = addWood("B3UpperRest", 6220, 24, 7);
+  const b3UpperTipping2 = addTippingLog("B3UpperTipping2", 6510, 42, 7, 1);
+  const b3UpperBridge3 = addWood("B3UpperBridge3", 6800, 70, 5);
+  const b3UpperFallingSafety = addWood("B3UpperFallingSafety", 7060, 120, 6);
+  addFallingLog("B3UpperFalling", 7060, 78, 88, 112);
+  const b3UpperExitCloud = addCloud("B3UpperExitCloud", 7330, 50, 9);
   const b3UpperExit = addWood("B3UpperExit", 7525, 78, 5);
   const b3ShoreStart = surfacePoint(b3shoreA, 1);
   const b3ShoreEnd = surfacePoint(b3shoreB, 0);
@@ -625,21 +623,19 @@ metadata/_llr_min_landing_width = 144
     { ...b3ShoreStart, halfWidth: 0 },
     b3UpperApproach,
     b3UpperTipping1,
-    b3UpperBridge1,
     b3UpperRest,
-    b3UpperBridge2,
     b3UpperTipping2,
     b3UpperBridge3,
     b3UpperFallingSafety,
-    b3UpperBridge4,
     b3UpperExitCloud,
     b3UpperExit,
     { ...b3ShoreEnd, halfWidth: 0 }
-  ]);
+  ], { maxGap: 100, maxRise: 76, minLandingWidth: 159 });
   nodes.push(`${plainNode("B3SafeTraversalContract", "Node", "Route").trimEnd()}
-metadata/_llr_max_open_gap = 96
-metadata/_llr_max_upward_rise = 72
-metadata/_llr_min_landing_width = 144
+metadata/_llr_max_open_gap = 100
+metadata/_llr_max_upward_rise = 76
+metadata/_llr_min_landing_width = 159
+metadata/_llr_optional_platform_count = 8
 metadata/_llr_water_return_stairs = true
 metadata/_llr_void_required = false
 `);
@@ -655,10 +651,9 @@ metadata/_llr_void_required = false
     { x: 7670, y: 80 }, { x: 8270, y: 80 }
   ]);
   recordRoute(stage.beats[2], "bonus", [
-    { x: 5380, y: 90 }, { x: 5660, y: 126 }, { x: 5860, y: 82 },
-    { x: 6070, y: 60 }, { x: 6250, y: 24 }, { x: 6430, y: 58 },
-    { x: 6620, y: 42 }, { x: 6820, y: 70 }, { x: 7010, y: 120 },
-    { x: 7190, y: 82 }, { x: 7380, y: 46 }, { x: 7525, y: 78 },
+    { x: 5380, y: 90 }, { x: 5660, y: 126 }, { x: 5925, y: 82 },
+    { x: 6220, y: 24 }, { x: 6510, y: 42 }, { x: 6800, y: 70 },
+    { x: 7060, y: 120 }, { x: 7330, y: 50 }, { x: 7525, y: 78 },
     { x: 7920, y: 78 }
   ], { coinLimit: 5 });
   recordRoute(stage.beats[2], "recovery", [
@@ -693,7 +688,6 @@ metadata/_llr_void_required = false
   const b4top = addTerrain("B4Top", 10400, -380, 650, [0, 10, -8, 0]);
   const b4exit = addTerrain("B4Exit", 10900, -220, 420, [0, -10, 0]);
   addPivot("B4LowerWheel", 9100, 360, 112, 4.6, 0.4);
-  addCloud("B4LowerSafety", 9280, 260, 9);
   nodes.push(`${plainNode("B4SafeTowerExitContract", "Node", "Route").trimEnd()}
 metadata/_llr_exit_stairs = true
 metadata/_llr_stair_count = 7
@@ -707,7 +701,6 @@ metadata/_llr_void_required = false
     horizontal_boost: "1.4"
   });
   addFungus("B4UpperMushroom", 9820, 36, 160);
-  addCloud("B4UpperEntryCloud", 9860, -18, 9);
   addPivot("B4UpperWheel", 10240, -228, 118, 4.9, 1.1);
   addCloud("B4TopSafety", 10420, -330, 9);
   addDirector("B4TowerCheckpoint", 11040, -260, {
@@ -738,7 +731,10 @@ metadata/_llr_void_required = false
 
   const b5a = addTerrain("B5DescentA", 11100, -220, 560, [0, 34, 68], 180);
   const b5b = addTerrain("B5DescentB", 11630, -90, 620, [0, 34, 64], 180);
-  const b5lowA = addTerrain("B5LowA", 12220, 170, 820, [0, 16, -10, 0]);
+  // The low route begins exactly where the descent slab ends. The old 30px
+  // overlap, combined with four thick mid/high terrain slabs, made the
+  // screenshot's fake "gap": visually open but physically impassable.
+  const b5lowA = addTerrain("B5LowA", 12250, 170, 790, [0, 16, -10, 0]);
   const b5lowB = addTerrain("B5LowB", 13020, 240, 850, [0, -12, 14, 0]);
   const b5lowC = addTerrain("B5LowC", 13840, 180, 880, [0, 18, -10, 0]);
   const b5end = addTerrainPolygon(
@@ -748,33 +744,40 @@ metadata/_llr_void_required = false
     [[0, 50], [110, 50], [110, 0], [420, 0]],
     180
   );
-  const b5midA = addTerrain("B5MidA", 12280, -40, 620, [0, -10, 8, 0]);
-  const b5midB = addTerrain("B5MidB", 13220, -20, 680, [0, 12, -8, 0]);
-  const b5highA = addTerrain("B5HighA", 12600, -270, 560, [0, -8, 8, 0]);
-  const b5highB = addTerrain("B5HighB", 13700, -250, 620, [0, 10, -8, 0]);
-  grounded("B5LowSpring1", "Items/Mechanisms", "spring", b5lowA, 0.62, -8, {
+  grounded("B5LowSpring1", "Items/Mechanisms", "spring", b5lowA, 0.3, -8, {
     launch_speed: "9.2", horizontal_boost: "1.8"
   });
-  grounded("B5MidSpring", "Items/Mechanisms", "spring", b5midB, 0.74, -8, {
-    launch_speed: "9.8", horizontal_boost: "1.4"
-  });
-  addCloud("B5MidBridge1", 12980, -42, 9);
-  addCloud("B5HighBridge", 13430, -250, 14);
+  // Five thin, broad platforms form the optional shortcut. They retain
+  // deliberate 100-110px open jumps without creating collision ceilings over
+  // the continuous low route.
+  addWood("B5ShortcutA", 12600, 40, 10);
+  addWood("B5ShortcutB", 13030, -30, 10);
+  addWood("B5ShortcutC", 13460, -110, 10);
+  addWood("B5ShortcutD", 13890, -70, 10);
+  addWood("B5ShortcutE", 14320, 20, 10);
+  nodes.push(`${plainNode("B5OpenMainRouteContract", "Node", "Route").trimEnd()}
+metadata/_llr_minimum_headroom = 120
+metadata/_llr_thick_overhead_terrain = false
+metadata/_llr_optional_platform_count = 5
+metadata/_llr_max_optional_open_gap = 110
+metadata/_llr_void_required = false
+`);
   grounded("B5Goomba1", "Items/Enemies", "goomba", b5lowA, 0.32, -12);
   grounded("B5Goomba2", "Items/Enemies", "goomba", b5lowC, 0.58, -12);
-  grounded("B5Koopa", "Items/Enemies", "koopa", b5midB, 0.5, -18, { type: "0" });
-  grounded("B5Tree1", "Items/Decoration", "smallTree", b5midA, 0.22, -38);
+  grounded("B5Koopa", "Items/Enemies", "koopa", b5lowB, 0.5, -18, { type: "0" });
+  grounded("B5Tree1", "Items/Decoration", "smallTree", b5lowA, 0.18, -38);
   grounded("B5Flowers", "Items/Decoration", "flowers", b5lowB, 0.52, -10);
   airborne("B5HighBlueCoin", "Items/Pickups", "blueCoin", 14020, -330);
   recordRoute(stage.beats[4], "main", [
     { x: 11120, y: -220 }, { x: 11620, y: -20 }, { x: 12180, y: 150 },
-    { x: 12600, y: 175 }, { x: 13200, y: 235 }, { x: 13900, y: 180 },
+    { x: 12250, y: 170 }, { x: 12600, y: 175 }, { x: 13200, y: 235 }, { x: 13900, y: 180 },
     { x: 14500, y: 175 }, { x: 14580, y: 130 }, { x: 14690, y: 80 },
     { x: 14960, y: 78 }
   ]);
   recordRoute(stage.beats[4], "bonus", [
-    { x: 12080, y: 130 }, { x: 12400, y: -42 }, { x: 12840, y: -270 },
-    { x: 13430, y: -250 }, { x: 14020, y: -250 }, { x: 14520, y: 20 }
+    { x: 12080, y: 130 }, { x: 12480, y: 130 }, { x: 12600, y: 40 },
+    { x: 13030, y: -30 }, { x: 13460, y: -110 }, { x: 13890, y: -70 },
+    { x: 14320, y: 20 }, { x: 14580, y: 130 }
   ], { coinLimit: 5 });
 
   const b6overlook = addTerrain("B6Overlook", 14830, 80, 720, [0, -12, 8, 0]);

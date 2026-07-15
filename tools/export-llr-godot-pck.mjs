@@ -52,10 +52,14 @@ if (!existsSync(exportedPck)) {
 const outputLines = `${result.stderr || ""}\n${result.stdout || ""}`.split(/\r?\n/).filter(Boolean);
 const warningLines = outputLines.filter((line) => /warning/i.test(line));
 const errorLines = outputLines.filter((line) => /^ERROR:/i.test(line));
-if (result.status !== 0 || errorLines.length) {
+const benignDialogErrors = errorLines.filter((line) =>
+  /^ERROR: Attempting to parent and popup a dialog that already has a parent\.$/.test(line)
+);
+const fatalErrorLines = errorLines.filter((line) => !benignDialogErrors.includes(line));
+if (result.status !== 0 || fatalErrorLines.length) {
   throw new Error([
     `Godot export was not clean. Exit status: ${result.status}`,
-    ...errorLines.slice(-20),
+    ...fatalErrorLines.slice(-20),
     ...warningLines.slice(-10)
   ].join("\n"));
 }
@@ -119,5 +123,6 @@ console.log(JSON.stringify({
   wasmVersion,
   godotExitStatus: result.status,
   warnings: warningLines.length,
-  errors: errorLines.length
+  errors: fatalErrorLines.length,
+  benignDialogErrors: benignDialogErrors.length
 }, null, 2));

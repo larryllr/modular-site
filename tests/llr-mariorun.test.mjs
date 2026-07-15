@@ -66,11 +66,16 @@ test("llr-mariorun has D1 metadata and KV-backed Worker game APIs", () => {
   assert.ok(worker.includes("/-llr_complete_(?:[1-9]|10)\\.scn$/"));
   assert.match(worker, /Expected 10 compiled SM63 Extras scenes/);
   assert.match(worker, /const compiledSupportScenes = source\.entries/);
-  assert.match(worker, /Expected 6 compiled SM63 support scenes/);
-  for (const mechanic of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate", "llr_shuttle"]) {
+  assert.match(worker, /Expected 7 compiled SM63 support scenes/);
+  for (const mechanic of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate", "llr_shuttle", "llr_objective_target"]) {
     assert.match(worker, new RegExp(`res://classes/solid/${mechanic}/${mechanic}\\.gdc`));
   }
   assert.match(worker, /res:\/\/classes\/zone\/llr_set_piece_director\/llr_set_piece_director\.gdc/);
+  assert.match(worker, /res:\/\/classes\/water\/water_viewport\.gd\.remap/);
+  assert.match(worker, /res:\/\/classes\/water\/water_viewport\.gdc/);
+  assert.match(worker, /res:\/\/classes\/solid\/breakable_box\/breakable_box\.gdc/);
+  assert.match(worker, /res:\/\/classes\/entity\/enemy\/thwomp\/thwomp\.gdc/);
+  assert.match(worker, /res:\/\/classes\/solid\/rotating_block\/rotating_block\.gdc/);
   for (let index = 1; index <= 10; index += 1) {
     assert.match(worker, new RegExp(`res://scenes/levels/llr_complete/llr_complete_${index}\\.tscn\\.remap`));
   }
@@ -311,12 +316,17 @@ test("llr-mariorun Godot pack exposes ten original long Extras levels and rescue
   assert.ok(entries.includes("res://classes/zone/trigger/death_plane/death_plane.gdc"));
   assert.ok(entries.includes("res://scenes/menus/level_designer/items.xml"));
   assert.ok(!entries.includes("res://scenes/menus/level_designer/items.xml.tres"));
-  for (const mechanic of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate", "llr_shuttle"]) {
+  for (const mechanic of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate", "llr_shuttle", "llr_objective_target"]) {
     assert.ok(entries.includes(`res://classes/solid/${mechanic}/${mechanic}.gdc`));
     assert.ok(entries.includes(`res://classes/solid/${mechanic}/${mechanic}.tscn.remap`));
   }
   assert.ok(entries.includes("res://classes/zone/llr_set_piece_director/llr_set_piece_director.gdc"));
   assert.ok(entries.includes("res://classes/zone/llr_set_piece_director/llr_set_piece_director.tscn.remap"));
+  assert.ok(entries.includes("res://classes/water/water_viewport.gd.remap"));
+  assert.ok(entries.includes("res://classes/water/water_viewport.gdc"));
+  assert.ok(entries.includes("res://classes/solid/breakable_box/breakable_box.gdc"));
+  assert.ok(entries.includes("res://classes/entity/enemy/thwomp/thwomp.gdc"));
+  assert.ok(entries.includes("res://classes/solid/rotating_block/rotating_block.gdc"));
   for (let index = 1; index <= 10; index += 1) {
     assert.ok(entries.includes(`res://scenes/levels/llr_complete/llr_complete_${index}.tscn.remap`));
     assert.ok(entries.some((entry) => entry.endsWith(`-llr_complete_${index}.scn`)));
@@ -324,15 +334,17 @@ test("llr-mariorun Godot pack exposes ten original long Extras levels and rescue
   assert.equal(existsSync(new URL("public/llr-mariorun/extra/smb-1-1/index.html", root)), false);
 });
 
-test("llr-mariorun Extras menu offers ten complete touch-friendly level choices", () => {
-  const v3Blueprint = source("tools/llr-level-v3.mjs");
-  const v4Blueprint = source("tools/llr-level-v4.mjs");
+test("llr-mariorun Extras menu offers ten complete touch-friendly V4 level choices", () => {
+  const v4Blueprints = [
+    "tools/llr-level-v4.mjs",
+    ...Array.from({ length: 9 }, (_, index) => `tools/llr-level-v4-stage${index + 2}.mjs`)
+  ].map(source).join("\n");
   const menu = source("vendor/Legacy_SM63Redux/scenes/menus/title/main_menu/main_menu.gd");
-  for (const title of ["风车牧场", "潮汐水道", "爆弹拆迁城", "火箭蘑菇井", "云端货运站", "涡轮海岸公路", "飞鸟迁徙谷", "钟楼机关城", "遗迹寻宝环线", "老师城终局"]) {
-    assert.match(`${v4Blueprint}\n${v3Blueprint}`, new RegExp(title));
+  for (const title of ["风车牧场", "潮汐水道", "爆弹拆迁城", "火箭蘑菇井", "云端货运站", "涡轮海岸公路", "飞鸟迁徙谷", "钟楼机关城", "遗迹寻宝环线", "老师城"]) {
+    assert.match(v4Blueprints, new RegExp(title));
     assert.match(menu, new RegExp(title));
   }
-  assert.match(menu, /第一关已升级为 V4 事件关卡/);
+  assert.match(menu, /十关均为 V4 长流程事件关卡/);
   assert.match(menu, /func _open_extras_menu\(\) -> void:/);
   assert.match(menu, /func _launch_extra_level\(scene: String\) -> void:/);
   assert.match(menu, /button\.pressed\.connect\(_launch_extra_level\.bind/);
@@ -368,10 +380,11 @@ test("llr-mariorun Extras level 1 is a non-uniform eight-beat V4 event slice", (
   assert.match(scene, /\[node name="StormTint" type="CanvasModulate"/);
   assert.match(scene, /\[node name="B3SafeTraversalContract"/);
   assert.match(scene, /\[node name="B2SafeRecoveryContract"/);
-  assert.equal((scene.match(/\[node name="B2RecoveryStack\d"/g) || []).length, 4);
-  assert.match(scene, /metadata\/_llr_max_open_gap = 96/);
-  assert.match(scene, /metadata\/_llr_max_upward_rise = 72/);
-  assert.match(scene, /metadata\/_llr_min_landing_width = 144/);
+  assert.equal((scene.match(/\[node name="B2RecoveryStep\d"/g) || []).length, 3);
+  assert.doesNotMatch(scene, /\[node name="B2(?:MushroomStep|RecoveryStack|WheelLandingCloud)/);
+  assert.match(scene, /metadata\/_llr_max_open_gap = 100/);
+  assert.match(scene, /metadata\/_llr_max_upward_rise = 76/);
+  assert.match(scene, /metadata\/_llr_min_landing_width = 159/);
   assert.match(scene, /metadata\/_llr_water_return_stairs = true/);
   assert.match(scene, /metadata\/_llr_void_required = false/);
   assert.equal((scene.match(/\[node name="B3(?:Left|Right)WaterStairBank"/g) || []).length, 2);
@@ -382,6 +395,10 @@ test("llr-mariorun Extras level 1 is a non-uniform eight-beat V4 event slice", (
   assert.match(scene, /metadata\/_llr_max_step_rise = 50/);
   assert.match(scene, /metadata\/_llr_min_tread_width = 70/);
   assert.match(scene, /metadata\/_llr_dynamic_mechanism_required = false/);
+  assert.match(scene, /\[node name="B5OpenMainRouteContract"/);
+  assert.match(scene, /metadata\/_llr_minimum_headroom = 120/);
+  assert.equal((scene.match(/\[node name="B5Shortcut[A-E]"/g) || []).length, 5);
+  assert.doesNotMatch(scene, /\[node name="B5(?:MidA|MidB|HighA|HighB|MidBridge1|HighBridge|MidSpring)"/);
   assert.match(scene, /\[node name="B3UpperRest"[\s\S]*?scale = Vector2\(3\.5, 1\)/);
   assert.match(scene, /\[node name="B3UpperFallingSafety"/);
   assert.match(scene, /\[node name="B6RecoveryLift"/);
@@ -400,44 +417,92 @@ test("llr-mariorun Extras level 1 is a non-uniform eight-beat V4 event slice", (
   assert.ok(nodeCount >= 140 && nodeCount <= 500);
 });
 
-test("llr-mariorun Extras levels 2-10 remain audited 32k-wide V3 stages with chained finishes", () => {
-  for (let index = 2; index <= 10; index += 1) {
+test("llr-mariorun Extras level 2 is a physical eight-beat V4 tide route", () => {
+  const scene = source("vendor/Legacy_SM63Redux/scenes/levels/llr_complete/llr_complete_2.tscn");
+  const blueprint = source("tools/llr-level-v4-stage2.mjs");
+  assert.equal((scene.match(/\[node name="LLRBeat\d{2}_/g) || []).length, 8);
+  assert.equal((scene.match(/metadata\/_llr_geometry_version = 4/g) || []).length, 8);
+  assert.equal((scene.match(/metadata\/_llr_act = 1/g) || []).length, 2);
+  assert.equal((scene.match(/metadata\/_llr_act = 2/g) || []).length, 4);
+  assert.equal((scene.match(/metadata\/_llr_act = 3/g) || []).length, 2);
+  const spans = [...scene.matchAll(/metadata\/_llr_start_x = (\d+)\nmetadata\/_llr_end_x = (\d+)/g)]
+    .map((match) => Number(match[2]) - Number(match[1]));
+  assert.equal(spans.length, 8);
+  assert.ok(new Set(spans).size >= 6);
+  assert.match(scene, /metadata\/_llr_campaign_version = 4/);
+  assert.match(scene, /metadata\/_llr_main_seconds = 204/);
+  assert.match(scene, /\[node name="B1FastFerry"/);
+  assert.match(scene, /\[node name="B2WaterLift"/);
+  assert.equal((scene.match(/\[node name="B3Ferry[AB]"/g) || []).length, 2);
+  assert.match(scene, /\[node name="B4RaiseTideDirector"[\s\S]*?move_paths = Array\[NodePath\]\(\[NodePath\("\.\.\/Water\/B5TideWater"\)\]\)[\s\S]*?move_offset = Vector2\(0, -240\)[\s\S]*?move_seconds = 1\.6/);
+  assert.match(scene, /metadata\/_llr_physical_water_move = true/);
+  assert.equal((scene.match(/\[node name="B5TideBed\d"/g) || []).length, 5);
+  assert.match(scene, /\[node name="B6FoldbackPipe"/);
+  assert.match(scene, /\[node name="B6ReturnStairBank"/);
+  assert.equal((scene.match(/\[node name="B6BridgeBed\d"/g) || []).length, 5);
+  assert.equal((scene.match(/\[node name="B7DrainWater[A-C]"/g) || []).length, 3);
+  assert.equal((scene.match(/\[node name="B7DrainBed\d"/g) || []).length, 5);
+  assert.match(scene, /\[node name="B8LighthouseLift"/);
+  assert.match(scene, /\[node name="B8SafeLighthouseContract"/);
+  assert.match(scene, /metadata\/_llr_safe_water_route = true/);
+  assert.match(scene, /metadata\/_llr_spatial_foldback = true/);
+  assert.match(scene, /\[node name="FinishWarp"[\s\S]*?position = Vector2\(25045, 100\)/);
+  assert.match(scene, /scene_path = "res:\/\/scenes\/levels\/llr_complete\/llr_complete_3\.tscn"/);
+  assert.doesNotMatch(scene, /\[node name="LLRSegment/);
+  assert.match(blueprint, /beat\(1, "港口双路线", "harbor-dual-preview"/);
+  assert.match(blueprint, /beat\(4, "船闸开闸", "tide-gate-event"/);
+  assert.match(blueprint, /beat\(6, "桥下折返", "pipe-foldback-loop"/);
+  const nodeCount = (scene.match(/^\[node /gm) || []).length;
+  assert.ok(nodeCount >= 180 && nodeCount <= 500);
+});
+
+test("llr-mariorun Extras levels 3-10 are independent audited V4 stages with chained finishes", () => {
+  for (let index = 3; index <= 10; index += 1) {
     const scene = source(`vendor/Legacy_SM63Redux/scenes/levels/llr_complete/llr_complete_${index}.tscn`);
-    assert.equal((scene.match(/\[node name="LLRSegment\d{2}_/g) || []).length, 10);
-    assert.equal((scene.match(/metadata\/_llr_geometry_version = 3/g) || []).length, 10);
-    assert.equal((scene.match(/metadata\/_llr_act = 1/g) || []).length, 3);
+    const blueprint = source(`tools/llr-level-v4-stage${index}.mjs`);
+    assert.equal((scene.match(/\[node name="LLRBeat\d{2}_/g) || []).length, 8);
+    assert.equal((scene.match(/metadata\/_llr_geometry_version = 4/g) || []).length, 8);
+    assert.equal((scene.match(/metadata\/_llr_act = 1/g) || []).length, 2);
     assert.equal((scene.match(/metadata\/_llr_act = 2/g) || []).length, 4);
-    assert.equal((scene.match(/metadata\/_llr_act = 3/g) || []).length, 3);
+    assert.equal((scene.match(/metadata\/_llr_act = 3/g) || []).length, 2);
     assert.equal((scene.match(/metadata\/_llr_cadence = "introduction"/g) || []).length, 2);
     assert.equal((scene.match(/metadata\/_llr_cadence = "development"/g) || []).length, 3);
-    assert.equal((scene.match(/metadata\/_llr_cadence = "twist"/g) || []).length, 3);
-    assert.equal((scene.match(/metadata\/_llr_cadence = "resolution"/g) || []).length, 2);
-    assert.equal((scene.match(/metadata\/_llr_kind = "main"/g) || []).length, 10);
+    assert.equal((scene.match(/metadata\/_llr_cadence = "twist"/g) || []).length, 2);
+    assert.equal((scene.match(/metadata\/_llr_cadence = "resolution"/g) || []).length, 1);
+    assert.equal((scene.match(/metadata\/_llr_kind = "main"/g) || []).length, 8);
     assert.ok((scene.match(/metadata\/_llr_kind = "recovery"/g) || []).length >= 2);
-    const setPieces = [...scene.matchAll(/\[node name="LLRSegment\d{2}_[^\"]+"[^\]]*\][\s\S]*?metadata\/_llr_set_piece = "([^"]+)"/g)]
+    assert.equal((scene.match(/metadata\/_llr_player_event = /g) || []).length, 8);
+    assert.equal((scene.match(/metadata\/_llr_failure_route = /g) || []).length, 8);
+    assert.equal((scene.match(/metadata\/_llr_input_budget = "direction\+one-action"/g) || []).length, 8);
+    const setPieces = [...scene.matchAll(/\[node name="LLRBeat\d{2}_[^\"]+"[^\]]*\][\s\S]*?metadata\/_llr_set_piece = "([^"]+)"/g)]
       .map((match) => match[1]);
-    assert.equal(setPieces.length, 10);
-    assert.equal(new Set(setPieces).size, 10);
-    const forms = [...scene.matchAll(/\[node name="LLRSegment\d{2}_([^"]+)"/g)].map((match) => match[1]);
-    assert.ok(new Set(forms).size >= 6);
+    assert.equal(setPieces.length, 8);
+    assert.equal(new Set(setPieces).size, 8);
+    const forms = [...scene.matchAll(/\[node name="LLRBeat\d{2}_([^"]+)"/g)].map((match) => match[1]);
+    assert.equal(new Set(forms).size, 8);
     const mechanicSets = [...scene.matchAll(/metadata\/_llr_mechanics = "([^"]+)"/g)].map((match) => match[1]);
-    assert.equal(mechanicSets.length, 10);
+    assert.equal(mechanicSets.length, 8);
     assert.ok(new Set(mechanicSets).size >= 8);
     assert.ok(new Set(mechanicSets.flatMap((value) => value.split(","))).size >= 6);
     assert.match(scene, /metadata\/_llr_points = PackedVector2Array\(/);
     assert.doesNotMatch(scene, /type="Marker2D" parent="Route"/);
-    const entries = [...scene.matchAll(/metadata\/_llr_entry_y = (-?\d+(?:\.\d+)?)\nmetadata\/_llr_exit_y = (-?\d+(?:\.\d+)?)/g)];
-    assert.equal(entries.length, 10);
+    const spans = [...scene.matchAll(/metadata\/_llr_start_x = (\d+)\nmetadata\/_llr_end_x = (\d+)/g)]
+      .map((match) => Number(match[2]) - Number(match[1]));
+    assert.equal(spans.length, 8);
+    assert.ok(new Set(spans).size >= 6);
     const nodeCount = (scene.match(/^\[node /gm) || []).length;
-    assert.ok(nodeCount >= 250);
-    assert.ok(nodeCount <= 700);
+    assert.ok(nodeCount >= 180);
+    assert.ok(nodeCount <= 650);
     const flow = scene.match(/metadata\/_llr_main_seconds = (\d+(?:\.\d+)?)/);
-    assert.ok(flow && Number(flow[1]) >= 180);
-    assert.match(scene, /metadata\/_llr_campaign_version = 3/);
-    assert.match(scene, /32180, -820/);
+    assert.ok(flow && Number(flow[1]) >= 200 && Number(flow[1]) <= 250);
+    assert.match(scene, /metadata\/_llr_campaign_version = 4/);
+    assert.match(scene, /metadata\/_llr_void_required = false/);
+    assert.match(scene, /metadata\/_llr_state_change = true/);
     assert.match(scene, /\[node name="FinishWarp"/);
-    assert.match(scene, /size = Vector2\(76, 340\)/);
+    assert.match(scene, /\[node name="VoidRescue"/);
+    assert.doesNotMatch(scene, /\[node name="LLRSegment/);
     assert.doesNotMatch(scene, /scene_path = "res:\/\/scenes\/levels\/tutorial_1\//);
+    assert.match(blueprint, new RegExp(`id: ${index}`));
     if (index < 10) {
       assert.match(scene, new RegExp(`scene_path = "res://scenes/levels/llr_complete/llr_complete_${index + 1}\\.tscn"`));
     } else {
@@ -446,8 +511,8 @@ test("llr-mariorun Extras levels 2-10 remain audited 32k-wide V3 stages with cha
   }
 });
 
-test("llr-mariorun mixed V4/V3 strict geometry and gameplay-variety audit passes", () => {
-  const result = spawnSync(process.execPath, ["tools/audit-llr-level-geometry.mjs", "--strict"], {
+test("llr-mariorun all-V4 strict geometry and gameplay-variety audit passes", () => {
+  const result = spawnSync(process.execPath, ["tools/audit-llr-level-geometry.mjs", "--strict", "--all-v4"], {
     cwd: root,
     encoding: "utf8"
   });
@@ -455,37 +520,64 @@ test("llr-mariorun mixed V4/V3 strict geometry and gameplay-variety audit passes
   assert.match(result.stdout, /"totalViolations": 0/);
 });
 
-test("llr-mariorun Extras support scenes include the shuttle and V4 event director", () => {
+test("llr-mariorun short headless runtime probes replace full playthroughs", () => {
+  const result = spawnSync(process.execPath, ["tools/test-llr-godot-level-probes.mjs"], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 30000
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /all 10 V4 stages loaded; recovery floors and physical events verified/);
+});
+
+test("llr-mariorun Extras support scenes implement vehicles, objectives and physical state changes", () => {
   const patch = source("tools/patch-llr-complete-level.mjs");
   const script = source("vendor/Legacy_SM63Redux/classes/solid/llr_shuttle/llr_shuttle.gd");
   const shuttle = source("vendor/Legacy_SM63Redux/classes/solid/llr_shuttle/llr_shuttle.tscn");
   const director = source("vendor/Legacy_SM63Redux/classes/zone/llr_set_piece_director/llr_set_piece_director.gd");
   const directorScene = source("vendor/Legacy_SM63Redux/classes/zone/llr_set_piece_director/llr_set_piece_director.tscn");
+  const objective = source("vendor/Legacy_SM63Redux/classes/solid/llr_objective_target/llr_objective_target.gd");
+  const breakableBox = source("vendor/Legacy_SM63Redux/classes/solid/breakable_box/breakable_box.gd");
+  const rotatingBlock = source("vendor/Legacy_SM63Redux/classes/solid/rotating_block/rotating_block.gd");
   const thwomp = source("vendor/Legacy_SM63Redux/classes/entity/enemy/thwomp/thwomp.gd");
   const rebindOption = source("vendor/Legacy_SM63Redux/gui/pause/options/rebind_option.gd");
   assert.match(patch, /buildV3StageScene/);
   assert.match(patch, /llr_shuttle\/llr_shuttle\.tscn/);
   assert.match(script, /platform\.scale = Vector2\(1\.75, 1\.0\)/);
   assert.match(script, /smoothstep\(0\.0, 1\.0/);
+  assert.match(script, /enum MODE \{[\s\S]*ONE_SHOT,[\s\S]*PROXIMITY/);
+  assert.match(script, /activation_radius/);
+  assert.match(script, /func activate\(\)/);
   assert.match(shuttle, /moving_platform\/moving_platform\.tscn/);
   assert.match(director, /target\.set\(numeric_property/);
+  assert.match(director, /movement\.tween_property\(target, "position", destination, move_seconds\)/);
+  assert.match(director, /movement\.set_process_mode\(Tween\.TWEEN_PROCESS_PHYSICS\)/);
+  assert.match(director, /objective_paths/);
+  assert.match(director, /target_method/);
+  assert.match(director, /forced_nozzle/);
   assert.match(director, /rescue\.register_checkpoint/);
   assert.match(directorScene, /signal="body_entered"/);
   assert.match(thwomp, /enum F \{\n\tIDLE = 0,\n\tBLINK = 1,/);
+  assert.match(thwomp, /collider\.register_thwomp_impact\(self\)/);
+  assert.match(objective, /GROUND_POUND = 1/);
+  assert.match(objective, /SPIN = 2/);
+  assert.match(objective, /THWOMP = 4/);
+  assert.match(objective, /signal completed/);
+  assert.match(breakableBox, /persistent_destroy/);
+  assert.match(breakableBox, /var _destroyed := false/);
+  assert.match(rotatingBlock, /func llr_calibrate_phase\(\)/);
   assert.match(rebindOption, /if !is_node_ready\(\) or !is_instance_valid\(key_list\):/);
 });
 
-test("llr-mariorun Extras V3.1 adds readable challenge beats instead of more flat distance", () => {
-  const blueprint = source("tools/llr-level-v3.mjs");
+test("llr-mariorun Extras V4 shared mechanisms are generated from reproducible sources", () => {
   const patch = source("tools/patch-llr-complete-level.mjs");
   const spring = source("vendor/Legacy_SM63Redux/classes/solid/llr_spring/llr_spring.gd");
   const conveyor = source("vendor/Legacy_SM63Redux/classes/solid/llr_conveyor/llr_conveyor.gd");
   const poundGate = source("vendor/Legacy_SM63Redux/classes/solid/llr_pound_gate/llr_pound_gate.gd");
   const coinGate = source("vendor/Legacy_SM63Redux/classes/solid/llr_coin_gate/llr_coin_gate.gd");
-  for (const mechanic of ["spring", "conveyor", "pound_gate", "red_gate", "fludd_hover"]) {
-    assert.match(blueprint, new RegExp(`"${mechanic}"`));
-  }
-  for (const resource of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate"]) {
+  const objective = source("tools/godot-patches/llr_objective_target.gd");
+  const breakable = source("tools/godot-patches/breakable_box.gd");
+  for (const resource of ["llr_spring", "llr_conveyor", "llr_pound_gate", "llr_coin_gate", "llr_shuttle", "llr_objective_target"]) {
     assert.match(patch, new RegExp(`${resource}/${resource}\\.tscn`));
   }
   assert.match(spring, /launch_speed/);
@@ -493,8 +585,11 @@ test("llr-mariorun Extras V3.1 adds readable challenge beats instead of more fla
   assert.match(conveyor, /body\.position\.x \+= speed \* delta/);
   assert.match(poundGate, /body\.S\.POUND/);
   assert.match(coinGate, /Singleton\.red_coin_total - starting_coins/);
-  assert.match(blueprint, /required_coins: "4"/);
-  assert.equal((blueprint.match(/ChallengeRedCoin/g) || []).length, 1);
+  assert.match(objective, /register_thwomp_impact/);
+  assert.match(breakable, /FlagServer\.set_flag_state\(_destroy_flag_id, true\)/);
+  for (let index = 2; index <= 10; index += 1) {
+    assert.match(patch, new RegExp(`llr-level-v4-stage${index}\\.mjs`));
+  }
 });
 
 test("llr-mariorun Level Designer keeps negative coordinates and exports clean data files", () => {

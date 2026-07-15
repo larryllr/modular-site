@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://classes/solid/llr_objective_target/llr_objective_target.gd" id="1"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+resource_local_to_scene = true
+size = Vector2(96, 24)
+
+[sub_resource type="RectangleShape2D" id="2"]
+resource_local_to_scene = true
+size = Vector2(104, 32)
+
+[node name="LLRObjectiveTarget" type="StaticBody2D"]
+z_index = 2
+collision_layer = 1
+collision_mask = 0
+script = ExtResource("1")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("1")
+
+[node name="PlayerHitArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+input_pickable = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlayerHitArea"]
+shape = SubResource("2")
+
+[connection signal="body_entered" from="PlayerHitArea" to="." method="_on_PlayerHitArea_body_entered"]
+[connection signal="body_exited" from="PlayerHitArea" to="." method="_on_PlayerHitArea_body_exited"]

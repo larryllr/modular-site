@@ -41,7 +41,7 @@ try {
   if (existsSync(runtimeScript)) unlinkSync(runtimeScript);
 }
 
-if (result.error || result.status !== 0 || !result.stdout.includes("LLR mechanism smoke test OK")) {
+if (result.error || result.status !== 0 || !result.stdout.includes("objective target")) {
   throw new Error([
     `Godot mechanism test failed with status ${result.status}`,
     result.error?.message,

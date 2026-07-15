@@ -152,6 +152,25 @@ function auditLevel(level) {
 
   for (const node of nodes) {
     if (!node.position || node.name === "VoidRescue") continue;
+    const physicalStageChange = metadata(node.block, "_llr_physical_stage_change") === true;
+    const dormantOffsetY = metadata(node.block, "_llr_dormant_offset_y");
+    const finalY = metadata(node.block, "_llr_final_y");
+    if (physicalStageChange && typeof dormantOffsetY === "number") {
+      if (
+        typeof finalY !== "number" ||
+        Math.abs(node.position.y - dormantOffsetY - finalY) > 0.03 ||
+        finalY < -720 || finalY > 720
+      ) {
+        violations.push({
+          type: "invalid-dormant-stage-change",
+          node: node.name,
+          positionY: node.position.y,
+          dormantOffsetY,
+          finalY
+        });
+      }
+      continue;
+    }
     if (node.position.y < -760 || node.position.y > 720) {
       violations.push({ type: "outside-camera", node: node.name, y: node.position.y });
     }
@@ -245,6 +264,7 @@ function auditLevel(level) {
   }
 
   if (isV4) {
+    const isRevisitableHub = metadata(flowNode.block, "_llr_revisitable_central_hall") === true;
     const spans = roomMarkers.map((marker) => ({
       start: metadata(marker.block, "_llr_start_x"),
       end: metadata(marker.block, "_llr_end_x")
@@ -258,7 +278,7 @@ function auditLevel(level) {
       if (typeof span.start !== "number" || typeof span.end !== "number" || span.end <= span.start) {
         violations.push({ type: "invalid-beat-span", beat: index + 1, span });
       }
-      if (index > 0 && spans[index - 1].end !== span.start) {
+      if (!isRevisitableHub && index > 0 && spans[index - 1].end !== span.start) {
         violations.push({ type: "beat-span-gap", beat: index + 1, previousEnd: spans[index - 1].end, start: span.start });
       }
     }
@@ -276,32 +296,41 @@ function auditLevel(level) {
     if (!nodes.some((node) => (resourcePaths.get(node.instance) || "").includes("llr_set_piece_director"))) {
       violations.push({ type: "missing-set-piece-director" });
     }
+    if (level === 1) {
     const b2Recovery = nodes.find((node) => node.name === "B2SafeRecoveryContract");
     if (
       !b2Recovery ||
-      metadata(b2Recovery.block, "_llr_vertical_step_count") !== 4 ||
-      metadata(b2Recovery.block, "_llr_max_upward_rise") > 70 ||
+      metadata(b2Recovery.block, "_llr_vertical_step_count") !== 3 ||
+      metadata(b2Recovery.block, "_llr_max_upward_rise") > 90 ||
+      metadata(b2Recovery.block, "_llr_min_landing_width") < 175 ||
+      metadata(b2Recovery.block, "_llr_redundant_platforms_removed") < 4 ||
       metadata(b2Recovery.block, "_llr_void_required") !== false
     ) {
       violations.push({ type: "missing-b2-conservative-recovery" });
     }
-    const b2RecoverySteps = [1, 2, 3, 4]
-      .map((index) => nodes.find((node) => node.name === `B2RecoveryStack${index}`))
+    const b2RecoverySteps = [1, 2, 3]
+      .map((index) => nodes.find((node) => node.name === `B2RecoveryStep${index}`))
       .filter(Boolean);
-    if (b2RecoverySteps.length !== 4) {
+    if (b2RecoverySteps.length !== 3) {
       violations.push({ type: "missing-b2-recovery-step", actual: b2RecoverySteps.length });
     }
     for (let index = 1; index < b2RecoverySteps.length; index += 1) {
-      if (b2RecoverySteps[index - 1].position.y - b2RecoverySteps[index].position.y > 70) {
+      if (b2RecoverySteps[index - 1].position.y - b2RecoverySteps[index].position.y > 90) {
         violations.push({ type: "high-b2-recovery-step", node: b2RecoverySteps[index].name });
+      }
+    }
+    for (const removedNode of ["B2MushroomStep1", "B2MushroomStep2", "B2RecoveryStack1", "B2WheelLandingCloud"]) {
+      if (nodes.some((node) => node.name === removedNode)) {
+        violations.push({ type: "redundant-b2-recovery-platform", node: removedNode });
       }
     }
     const safeTraversal = nodes.find((node) => node.name === "B3SafeTraversalContract");
     if (
       !safeTraversal ||
-      metadata(safeTraversal.block, "_llr_max_open_gap") > 96 ||
-      metadata(safeTraversal.block, "_llr_max_upward_rise") > 72 ||
-      metadata(safeTraversal.block, "_llr_min_landing_width") < 144 ||
+      metadata(safeTraversal.block, "_llr_max_open_gap") > 100 ||
+      metadata(safeTraversal.block, "_llr_max_upward_rise") > 76 ||
+      metadata(safeTraversal.block, "_llr_min_landing_width") < 159 ||
+      metadata(safeTraversal.block, "_llr_optional_platform_count") !== 8 ||
       metadata(safeTraversal.block, "_llr_water_return_stairs") !== true ||
       metadata(safeTraversal.block, "_llr_void_required") !== false
     ) {
@@ -440,11 +469,143 @@ function auditLevel(level) {
         violations.push({ type: "legacy-softlock-node", node: removedNode });
       }
     }
+    const openMainRoute = nodes.find((node) => node.name === "B5OpenMainRouteContract");
+    if (
+      !openMainRoute ||
+      metadata(openMainRoute.block, "_llr_minimum_headroom") < 120 ||
+      metadata(openMainRoute.block, "_llr_thick_overhead_terrain") !== false ||
+      metadata(openMainRoute.block, "_llr_optional_platform_count") !== 5 ||
+      metadata(openMainRoute.block, "_llr_max_optional_open_gap") > 110 ||
+      metadata(openMainRoute.block, "_llr_void_required") !== false
+    ) {
+      violations.push({ type: "missing-open-b5-main-route" });
+    }
+    for (const removedNode of ["B5MidA", "B5MidB", "B5HighA", "B5HighB", "B5MidBridge1", "B5HighBridge", "B5MidSpring"]) {
+      if (nodes.some((node) => node.name === removedNode)) {
+        violations.push({ type: "b5-overhead-softlock-node", node: removedNode });
+      }
+    }
+    const b5Shortcuts = ["A", "B", "C", "D", "E"]
+      .map((suffix) => nodes.find((node) => node.name === `B5Shortcut${suffix}`))
+      .filter(Boolean);
+    if (
+      b5Shortcuts.length !== 5 ||
+      b5Shortcuts.some((node) => metadata(node.block, "_llr_walkable_width") < 320)
+    ) {
+      violations.push({ type: "invalid-b5-shortcut-platforms", actual: b5Shortcuts.length });
+    }
+    const b5Descent = surfaceMap.get("B5DescentB");
+    const b5Low = surfaceMap.get("B5LowA");
+    if (!b5Descent || !b5Low || Math.abs(b5Descent.x1 - b5Low.x0) > 0.01) {
+      violations.push({ type: "b5-descent-seam-gap", descentEnd: b5Descent?.x1, lowStart: b5Low?.x0 });
+    }
     for (const liftName of ["B6RecoveryLift", "B8RecoveryLift"]) {
       const lift = nodes.find((node) => node.name === liftName);
       const travel = lift ? parseVector(lift.block, "travel") : null;
       if (!lift || !travel || travel.y > -600 || metadata(lift.block, "_llr_walkable_width") < 144) {
         violations.push({ type: "invalid-recovery-lift", node: liftName, travel });
+      }
+    }
+    }
+    if (level === 2) {
+      const tideContract = nodes.find((node) => node.name === "B4TideEventContract");
+      if (
+        !tideContract ||
+        metadata(tideContract.block, "_llr_physical_water_move") !== true ||
+        metadata(tideContract.block, "_llr_tide_rise") !== 240 ||
+        metadata(tideContract.block, "_llr_move_seconds") > 2 ||
+        metadata(tideContract.block, "_llr_gate_before_trigger") !== true ||
+        metadata(tideContract.block, "_llr_void_required") !== false
+      ) {
+        violations.push({ type: "missing-physical-tide-contract" });
+      }
+      const tideDirector = nodes.find((node) => node.name === "B4RaiseTideDirector");
+      const tideOffset = tideDirector ? parseVector(tideDirector.block, "move_offset") : null;
+      if (
+        !tideDirector ||
+        !/move_paths = Array\[NodePath\]\(\[NodePath\("\.\.\/Water\/B5TideWater"\)\]\)/.test(tideDirector.block) ||
+        !tideOffset || tideOffset.x !== 0 || tideOffset.y !== -240 ||
+        !/move_seconds = 1\.6/.test(tideDirector.block)
+      ) {
+        violations.push({ type: "invalid-tide-director", tideOffset });
+      }
+      const tideWater = nodes.find((node) => node.name === "B5TideWater");
+      const tideWaterHeight = tideWater?.polygon.length
+        ? Math.max(...tideWater.polygon.map((point) => point.y)) - Math.min(...tideWater.polygon.map((point) => point.y))
+        : null;
+      if (!tideWater || tideWater.position.y !== 520 || tideWaterHeight < 420) {
+        violations.push({ type: "unsafe-tide-water-body", tideWaterHeight });
+      }
+      const safeDive = nodes.find((node) => node.name === "B2SafeDiveContract");
+      if (
+        !safeDive ||
+        metadata(safeDive.block, "_llr_continuous_seabed") !== true ||
+        metadata(safeDive.block, "_llr_water_is_failure") !== false ||
+        metadata(safeDive.block, "_llr_lift_wait_seconds") > 2 ||
+        metadata(safeDive.block, "_llr_void_required") !== false
+      ) {
+        violations.push({ type: "missing-safe-dive-contract" });
+      }
+      const foldbackContract = nodes.find((node) => node.name === "B6PipeLoopContract");
+      const foldbackPipe = nodes.find((node) => node.name === "B6FoldbackPipe");
+      const foldbackTarget = foldbackPipe ? parseVector(foldbackPipe.block, "target_pos") : null;
+      if (
+        !foldbackContract ||
+        metadata(foldbackContract.block, "_llr_pipe_foldback") !== true ||
+        metadata(foldbackContract.block, "_llr_continuous_seabed") !== true ||
+        metadata(foldbackContract.block, "_llr_exit_stairs") !== true ||
+        metadata(foldbackContract.block, "_llr_void_required") !== false ||
+        !foldbackPipe || !foldbackTarget || foldbackTarget.x > foldbackPipe.position.x - 2000
+      ) {
+        violations.push({ type: "invalid-pipe-foldback", foldbackTarget });
+      }
+      const foldbackStairs = surfaceMap.get("B6ReturnStairBank");
+      if (!foldbackStairs || !foldbackStairs.deepStructural || foldbackStairs.top.length < 12) {
+        violations.push({ type: "missing-pipe-loop-return-stairs" });
+      }
+      const drainage = nodes.find((node) => node.name === "B7DrainageContract");
+      if (
+        !drainage ||
+        metadata(drainage.block, "_llr_pool_count") !== 3 ||
+        metadata(drainage.block, "_llr_water_step_drop") !== 60 ||
+        metadata(drainage.block, "_llr_continuous_seabed") !== true ||
+        metadata(drainage.block, "_llr_void_required") !== false
+      ) {
+        violations.push({ type: "missing-stepped-drainage-contract" });
+      }
+      const drainageWaters = ["B7DrainWaterA", "B7DrainWaterB", "B7DrainWaterC"]
+        .map((name) => nodes.find((node) => node.name === name))
+        .filter(Boolean);
+      if (
+        drainageWaters.length !== 3 ||
+        drainageWaters.some((water, index) => water.position.y !== 300 + index * 60)
+      ) {
+        violations.push({ type: "invalid-stepped-water-levels" });
+      }
+      const lighthouse = nodes.find((node) => node.name === "B8SafeLighthouseContract");
+      const lighthouseLift = nodes.find((node) => node.name === "B8LighthouseLift");
+      const lighthouseTravel = lighthouseLift ? parseVector(lighthouseLift.block, "travel") : null;
+      if (
+        !lighthouse ||
+        metadata(lighthouse.block, "_llr_water_below_lift") !== true ||
+        metadata(lighthouse.block, "_llr_static_finish") !== true ||
+        metadata(lighthouse.block, "_llr_void_required") !== false ||
+        !lighthouseLift || !lighthouseTravel || lighthouseTravel.y > -360 ||
+        metadata(lighthouseLift.block, "_llr_walkable_width") < 160
+      ) {
+        violations.push({ type: "invalid-safe-lighthouse-finish", lighthouseTravel });
+      }
+      for (const prefix of ["B1HarborBed", "B2DiveBed", "B3FerryBed", "B5TideBed", "B6BridgeBed", "B7DrainBed", "B8LighthouseBed"]) {
+        const beds = surfaces.filter((surface) => surface.name.startsWith(prefix)).sort((left, right) => left.x0 - right.x0);
+        if (!beds.length) {
+          violations.push({ type: "missing-water-seabed", prefix });
+          continue;
+        }
+        for (let index = 1; index < beds.length; index += 1) {
+          if (beds[index].x0 > beds[index - 1].x1 + 1) {
+            violations.push({ type: "water-seabed-gap", prefix, after: beds[index - 1].name });
+          }
+        }
       }
     }
     for (const node of nodes) {
@@ -560,6 +721,18 @@ for (const report of reports) {
 const violations = reports.flatMap((report) =>
   report.violations.map((violation) => ({ level: report.level, ...violation }))
 );
+if (process.argv.includes("--all-v4")) {
+  for (const report of reports) {
+    if (report.campaignVersion !== 4) {
+      violations.push({
+        level: report.level,
+        type: "legacy-campaign-version",
+        expected: 4,
+        actual: report.campaignVersion
+      });
+    }
+  }
+}
 console.log(JSON.stringify({ totalViolations: violations.length }, null, 2));
 
 if (process.argv.includes("--details") && violations.length) {

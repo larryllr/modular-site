@@ -2,6 +2,15 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname } from "node:path";
 import { buildV3StageScene, V3_STAGE_BLUEPRINTS } from "./llr-level-v3.mjs";
 import { buildV4StageOneScene, V4_STAGE_ONE_BLUEPRINT } from "./llr-level-v4.mjs";
+import { buildV4StageTwoScene, V4_STAGE_TWO_BLUEPRINT } from "./llr-level-v4-stage2.mjs";
+import { buildV4StageThreeScene, V4_STAGE_THREE_BLUEPRINT } from "./llr-level-v4-stage3.mjs";
+import { buildV4StageFourScene, V4_STAGE_FOUR_BLUEPRINT } from "./llr-level-v4-stage4.mjs";
+import { buildV4StageFiveScene, V4_STAGE_FIVE_BLUEPRINT } from "./llr-level-v4-stage5.mjs";
+import { buildV4StageSixScene, V4_STAGE_SIX_BLUEPRINT } from "./llr-level-v4-stage6.mjs";
+import { buildV4StageSevenScene, V4_STAGE_SEVEN_BLUEPRINT } from "./llr-level-v4-stage7.mjs";
+import { buildV4StageEightScene, V4_STAGE_EIGHT_BLUEPRINT } from "./llr-level-v4-stage8.mjs";
+import { buildV4StageNineScene, V4_STAGE_NINE_BLUEPRINT } from "./llr-level-v4-stage9.mjs";
+import { buildV4StageTenScene, V4_STAGE_TEN_BLUEPRINT } from "./llr-level-v4-stage10.mjs";
 
 const projectRoot = "vendor/Legacy_SM63Redux";
 const extrasRoot = `${projectRoot}/scenes/levels/llr_complete`;
@@ -35,7 +44,16 @@ const directorScriptPath = `${directorRoot}/llr_set_piece_director.gd`;
 const directorScenePath = `${directorRoot}/llr_set_piece_director.tscn`;
 const directorScriptSourcePath = "tools/godot-patches/llr_set_piece_director.gd";
 const directorSceneSourcePath = "tools/godot-patches/llr_set_piece_director.tscn";
+const objectiveTargetRoot = `${projectRoot}/classes/solid/llr_objective_target`;
+const objectiveTargetScriptPath = `${objectiveTargetRoot}/llr_objective_target.gd`;
+const objectiveTargetScenePath = `${objectiveTargetRoot}/llr_objective_target.tscn`;
+const objectiveTargetScriptSourcePath = "tools/godot-patches/llr_objective_target.gd";
+const objectiveTargetSceneSourcePath = "tools/godot-patches/llr_objective_target.tscn";
+const waterViewportScriptPath = `${projectRoot}/classes/water/water_viewport.gd`;
+const breakableBoxScriptPath = `${projectRoot}/classes/solid/breakable_box/breakable_box.gd`;
+const breakableBoxScriptSourcePath = "tools/godot-patches/breakable_box.gd";
 const thwompScriptPath = `${projectRoot}/classes/entity/enemy/thwomp/thwomp.gd`;
+const rotatingBlockScriptPath = `${projectRoot}/classes/solid/rotating_block/rotating_block.gd`;
 const rebindOptionScriptPath = `${projectRoot}/gui/pause/options/rebind_option.gd`;
 const segmentWidth = 3200;
 const segmentCount = 10;
@@ -101,24 +119,61 @@ const shuttleScriptSource = `class_name LLRShuttle
 extends Node2D
 
 
+enum MODE {
+\tCYCLE,
+\tONE_SHOT,
+\tPROXIMITY,
+}
+
 @export var travel: Vector2 = Vector2(192, 0)
 @export_range(0.8, 12.0, 0.1) var travel_seconds: float = 2.6
 @export_range(0.0, 2.0, 0.05) var pause_seconds: float = 0.35
 @export_range(0.0, 1.0, 0.01) var phase: float = 0.0
+@export var mode: MODE = MODE.CYCLE
+@export_range(64.0, 640.0, 8.0) var activation_radius := 240.0
+@export_range(0.0, 4.0, 0.05) var start_delay := 0.0
 
 var elapsed: float = 0.0
+var active := false
+var finished := false
+var delay_elapsed := 0.0
 @onready var platform: Node2D = $MovingPlatform
 
 
 func _ready() -> void:
 \tplatform.scale = Vector2(1.75, 1.0)
-\telapsed = phase * _cycle_length()
+\tactive = mode != MODE.PROXIMITY
+\telapsed = phase * _cycle_length() if mode == MODE.CYCLE else 0.0
 \t_apply_position()
 
 
 func _physics_process(delta: float) -> void:
-\telapsed = fposmod(elapsed + delta, _cycle_length())
+\tif !active:
+\t\tif finished:
+\t\t\treturn
+\t\tif mode == MODE.PROXIMITY:
+\t\t\tvar player := get_node_or_null("/root/Main/Player") as Node2D
+\t\t\tif player != null and player.global_position.distance_to(global_position) <= activation_radius:
+\t\t\t\tactivate()
+\t\treturn
+\tif delay_elapsed < start_delay:
+\t\tdelay_elapsed += delta
+\t\treturn
+\tif mode == MODE.CYCLE:
+\t\telapsed = fposmod(elapsed + delta, _cycle_length())
+\telse:
+\t\telapsed = min(elapsed + delta, travel_seconds)
+\t\tif elapsed >= travel_seconds:
+\t\t\tfinished = true
+\t\t\tactive = false
 \t_apply_position()
+
+
+func activate() -> void:
+\tif finished:
+\t\treturn
+\tactive = true
+\tdelay_elapsed = 0.0
 
 
 func _cycle_length() -> float:
@@ -126,6 +181,9 @@ func _cycle_length() -> float:
 
 
 func _apply_position() -> void:
+\tif mode != MODE.CYCLE:
+\t\tplatform.position = travel * smoothstep(0.0, 1.0, clamp(elapsed / max(0.01, travel_seconds), 0.0, 1.0))
+\t\treturn
 \tvar cursor := elapsed
 \tvar amount := 0.0
 \tif cursor < pause_seconds:
@@ -541,6 +599,7 @@ const resources = {
   poundGate: "res://classes/solid/llr_pound_gate/llr_pound_gate.tscn",
   coinGate: "res://classes/solid/llr_coin_gate/llr_coin_gate.tscn",
   director: "res://classes/zone/llr_set_piece_director/llr_set_piece_director.tscn",
+  objectiveTarget: "res://classes/solid/llr_objective_target/llr_objective_target.tscn",
   pipe: "res://classes/interactable/pipe/pipe.tscn",
   door: "res://classes/interactable/door/door.tscn",
   arrow: "res://classes/decorative/arrow/arrow.tscn",
@@ -552,8 +611,34 @@ const resourceIds = Object.fromEntries(
   Object.keys(resources).map((key, index) => [key, `llr_${index + 1}`])
 );
 
+const v4Blueprints = new Map([
+  [1, V4_STAGE_ONE_BLUEPRINT],
+  [2, V4_STAGE_TWO_BLUEPRINT],
+  [3, V4_STAGE_THREE_BLUEPRINT],
+  [4, V4_STAGE_FOUR_BLUEPRINT],
+  [5, V4_STAGE_FIVE_BLUEPRINT],
+  [6, V4_STAGE_SIX_BLUEPRINT],
+  [7, V4_STAGE_SEVEN_BLUEPRINT],
+  [8, V4_STAGE_EIGHT_BLUEPRINT],
+  [9, V4_STAGE_NINE_BLUEPRINT],
+  [10, V4_STAGE_TEN_BLUEPRINT]
+]);
+
+const v4Builders = new Map([
+  [1, buildV4StageOneScene],
+  [2, buildV4StageTwoScene],
+  [3, buildV4StageThreeScene],
+  [4, buildV4StageFourScene],
+  [5, buildV4StageFiveScene],
+  [6, buildV4StageSixScene],
+  [7, buildV4StageSevenScene],
+  [8, buildV4StageEightScene],
+  [9, buildV4StageNineScene],
+  [10, buildV4StageTenScene]
+]);
+
 const stages = V3_STAGE_BLUEPRINTS.map((stage) => ({
-  ...(stage.id === 1 ? { ...stage, ...V4_STAGE_ONE_BLUEPRINT } : stage),
+  ...(v4Blueprints.has(stage.id) ? { ...stage, ...v4Blueprints.get(stage.id) } : stage),
   resource: `res://scenes/levels/llr_complete/llr_complete_${stage.id}.tscn`,
   output: `${extrasRoot}/llr_complete_${stage.id}.tscn`
 }));
@@ -990,9 +1075,11 @@ function buildStageLegacy(stage) {
 }
 
 function buildStage(stage) {
-  const scene = stage.id === 1
-    ? buildV4StageOneScene({ stage, stages, resources, resourceIds, mainMenuResource })
-    : buildV3StageScene({ stage, stages, resources, resourceIds, mainMenuResource, segmentWidth });
+  const context = { stage, stages, resources, resourceIds, mainMenuResource };
+  const v4Builder = v4Builders.get(stage.id);
+  const scene = v4Builder
+    ? v4Builder(context)
+    : buildV3StageScene({ ...context, segmentWidth });
   mkdirSync(dirname(stage.output), { recursive: true });
   writeFileSync(stage.output, scene, "utf8");
 }
@@ -1016,16 +1103,98 @@ function writeLlrSupportResources() {
   mkdirSync(directorRoot, { recursive: true });
   writeFileSync(directorScriptPath, readFileSync(directorScriptSourcePath, "utf8"), "utf8");
   writeFileSync(directorScenePath, readFileSync(directorSceneSourcePath, "utf8"), "utf8");
+  mkdirSync(objectiveTargetRoot, { recursive: true });
+  writeFileSync(objectiveTargetScriptPath, readFileSync(objectiveTargetScriptSourcePath, "utf8"), "utf8");
+  writeFileSync(objectiveTargetScenePath, readFileSync(objectiveTargetSceneSourcePath, "utf8"), "utf8");
+  writeFileSync(breakableBoxScriptPath, readFileSync(breakableBoxScriptSourcePath, "utf8"), "utf8");
+
+  let waterViewportScript = readFileSync(waterViewportScriptPath, "utf8").replace(/\r\n/g, "\n");
+  if (!waterViewportScript.includes("var _llr_water_extents := Vector2.ZERO")) {
+    waterViewportScript = replaceOnce(
+      waterViewportScript,
+      "var current_frame = 0",
+      "var current_frame = 0\nvar _llr_water_extents := Vector2.ZERO",
+      "water extent state"
+    );
+    waterViewportScript = replaceOnce(
+      waterViewportScript,
+      "\tvar size_extents = max_vec - min_vec",
+      "\tvar size_extents = max_vec - min_vec\n\t_llr_water_extents = size_extents",
+      "water extent capture"
+    );
+    waterViewportScript = replaceOnce(
+      waterViewportScript,
+      "\nfunc _draw():",
+      "\nfunc _physics_process(_delta):\n\tif !Engine.is_editor_hint() and detection_area != null and _llr_water_extents != Vector2.ZERO:\n\t\tdetection_area.top_left_corner = global_position - _llr_water_extents / 2\n\n\nfunc _draw():",
+      "moving water coordinate sync"
+    );
+  }
+  if (
+    !waterViewportScript.includes("detection_area.top_left_corner = global_position - _llr_water_extents / 2") ||
+    !waterViewportScript.includes("var _llr_water_extents := Vector2.ZERO")
+  ) {
+    throw new Error("Moving water coordinate patch was not applied");
+  }
+  writeFileSync(waterViewportScriptPath, waterViewportScript, "utf8");
 
   let thwompScript = readFileSync(thwompScriptPath, "utf8").replace(/\r\n/g, "\n");
   thwompScript = thwompScript.replace(
     /enum F \{\n\tIDLE = 0,?\n\tBLINK = 1,?\n\tANGRY = 2,?\n\tLOOKLEFT = 3,?\n\tLOOKRIGHT = 4,?\n\}/,
     "enum F {\n\tIDLE = 0,\n\tBLINK = 1,\n\tANGRY = 2,\n\tLOOKLEFT = 3,\n\tLOOKRIGHT = 4,\n}"
   );
+  if (!thwompScript.includes("register_thwomp_impact")) {
+    thwompScript = replaceOnce(
+      thwompScript,
+      "extends StaticBody2D\n",
+      "extends StaticBody2D\n\n\nsignal landed(collider)\n",
+      "Thwomp landed signal"
+    );
+    thwompScript = replaceOnce(
+      thwompScript,
+      "\t\t\tvar landed = false\n\t\t\tvar pushup = 0",
+      "\t\t\tvar has_landed = false\n\t\t\tvar pushup = 0\n\t\t\tvar impact_colliders: Array[Object] = []",
+      "Thwomp impact collider state"
+    );
+    thwompScript = replaceOnce(
+      thwompScript,
+      "\t\t\t\tif raycast.is_colliding():\n\t\t\t\t\tlanded = true\n\t\t\t\t\t\n\t\t\t\t\tif pushup < raycast.get_collision_point().y:",
+      "\t\t\t\tif raycast.is_colliding():\n\t\t\t\t\thas_landed = true\n\t\t\t\t\tvar collider = raycast.get_collider()\n\t\t\t\t\tif is_instance_valid(collider) and !impact_colliders.has(collider):\n\t\t\t\t\t\timpact_colliders.append(collider)\n\t\t\t\t\t\n\t\t\t\t\tif pushup < raycast.get_collision_point().y:",
+      "Thwomp impact collider capture"
+    );
+    thwompScript = replaceOnce(
+      thwompScript,
+      "\t\t\tif landed:\n\t\t\t\tglobal_position.y = pushup-_groundref",
+      "\t\t\tif has_landed:\n\t\t\t\tglobal_position.y = pushup-_groundref",
+      "Thwomp landed state rename"
+    );
+    thwompScript = replaceOnce(
+      thwompScript,
+      "\t\t\t\tdustright.emitting = true\n\t\t\t\t_switch_state(S.GROUNDED)",
+      "\t\t\t\tdustright.emitting = true\n\t\t\t\tfor collider in impact_colliders:\n\t\t\t\t\tif collider.has_method(\"register_thwomp_impact\"):\n\t\t\t\t\t\tcollider.register_thwomp_impact(self)\n\t\t\t\t\tlanded.emit(collider)\n\t\t\t\t_switch_state(S.GROUNDED)",
+      "Thwomp impact delivery"
+    );
+  }
   if (!/enum F \{\n\tIDLE = 0,\n\tBLINK = 1,/.test(thwompScript)) {
     throw new Error("Thwomp enum compatibility patch was not applied");
   }
+  if (!thwompScript.includes('collider.register_thwomp_impact(self)')) {
+    throw new Error("Thwomp objective impact patch was not applied");
+  }
   writeFileSync(thwompScriptPath, thwompScript, "utf8");
+
+  let rotatingBlockScript = readFileSync(rotatingBlockScriptPath, "utf8").replace(/\r\n/g, "\n");
+  if (!rotatingBlockScript.includes("func llr_calibrate_phase()")) {
+    rotatingBlockScript = replaceOnce(
+      rotatingBlockScript,
+      "\nfunc _physics_process(_delta):",
+      "\nfunc llr_calibrate_phase() -> void:\n\ttimer = 0\n\tturning = false\n\ttotal_interval = 0\n\trotation = angle_offset\n\n\nfunc _physics_process(_delta):",
+      "Rotating block phase calibration"
+    );
+  }
+  if (!rotatingBlockScript.includes("func llr_calibrate_phase()")) {
+    throw new Error("Rotating block phase calibration patch was not applied");
+  }
+  writeFileSync(rotatingBlockScriptPath, rotatingBlockScript, "utf8");
 
   let rebindScript = readFileSync(rebindOptionScriptPath, "utf8").replace(/\r\n/g, "\n");
   if (!rebindScript.includes("if !is_node_ready() or !is_instance_valid(key_list):")) {
@@ -1111,7 +1280,7 @@ func _build_extras_menu() -> void:
 \t\t\textras_first_button = button
 
 \tvar description := Label.new()
-\tdescription.text = "十关长流程；第一关已升级为 V4 事件关卡"
+\tdescription.text = "十关均为 V4 长流程事件关卡；失足有实体回收路线"
 \tdescription.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 \tdescription.modulate = Color(1.0, 0.86, 0.48, 1.0)
 \tcolumn.add_child(description)
@@ -1312,4 +1481,4 @@ for (const stage of stages) {
 patchMainMenu();
 patchExportSources();
 
-console.log(`llr Extras mixed campaign patch complete: level 1 V4 event slice + ${stages.length - 1} V3 stages`);
+console.log(`llr Extras all-V4 campaign patch complete: ${v4Blueprints.size} event stages`);

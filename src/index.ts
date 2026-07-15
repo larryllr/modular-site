@@ -2742,9 +2742,20 @@ const sm63ExtrasPckEntries = [
   "res://classes/solid/llr_shuttle/llr_shuttle.gd.remap",
   "res://classes/solid/llr_shuttle/llr_shuttle.gdc",
   "res://classes/solid/llr_shuttle/llr_shuttle.tscn.remap",
+  "res://classes/solid/llr_objective_target/llr_objective_target.gd.remap",
+  "res://classes/solid/llr_objective_target/llr_objective_target.gdc",
+  "res://classes/solid/llr_objective_target/llr_objective_target.tscn.remap",
   "res://classes/zone/llr_set_piece_director/llr_set_piece_director.gd.remap",
   "res://classes/zone/llr_set_piece_director/llr_set_piece_director.gdc",
   "res://classes/zone/llr_set_piece_director/llr_set_piece_director.tscn.remap",
+  "res://classes/water/water_viewport.gd.remap",
+  "res://classes/water/water_viewport.gdc",
+  "res://classes/solid/breakable_box/breakable_box.gd.remap",
+  "res://classes/solid/breakable_box/breakable_box.gdc",
+  "res://classes/entity/enemy/thwomp/thwomp.gd.remap",
+  "res://classes/entity/enemy/thwomp/thwomp.gdc",
+  "res://classes/solid/rotating_block/rotating_block.gd.remap",
+  "res://classes/solid/rotating_block/rotating_block.gdc",
   "res://scenes/levels/llr_complete/llr_complete_1.tscn.remap",
   "res://scenes/levels/llr_complete/llr_complete_2.tscn.remap",
   "res://scenes/levels/llr_complete/llr_complete_3.tscn.remap",
@@ -2766,14 +2777,14 @@ function patchSm63ExtrasIntoPck(targetBuffer: ArrayBuffer, sourceBuffer: ArrayBu
     .filter((name) => /-llr_complete_(?:[1-9]|10)\.scn$/.test(name));
   const compiledSupportScenes = source.entries
     .map((entry) => entry.name)
-    .filter((name) => /-llr_(?:spring|conveyor|pound_gate|coin_gate|shuttle|set_piece_director)\.scn$/.test(name));
+    .filter((name) => /-llr_(?:spring|conveyor|pound_gate|coin_gate|shuttle|objective_target|set_piece_director)\.scn$/.test(name));
   const replacementNames = [...sm63ExtrasPckEntries, ...compiledExtraScenes, ...compiledSupportScenes];
 
   if (compiledExtraScenes.length !== 10) {
     throw new Error(`Expected 10 compiled SM63 Extras scenes, found ${compiledExtraScenes.length}`);
   }
-  if (compiledSupportScenes.length !== 6) {
-    throw new Error(`Expected 6 compiled SM63 support scenes, found ${compiledSupportScenes.length}`);
+  if (compiledSupportScenes.length !== 7) {
+    throw new Error(`Expected 7 compiled SM63 support scenes, found ${compiledSupportScenes.length}`);
   }
 
   for (const name of replacementNames) {
