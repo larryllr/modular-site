@@ -10,6 +10,10 @@ const panelWidth = 620;
 const panelHeight = 330;
 const imageWidth = panelWidth * roomsPerRow;
 const imageHeight = panelHeight * 2;
+let activePanelBounds = Array.from({ length: 10 }, (_, index) => ({
+  start: index * roomWidth,
+  end: (index + 1) * roomWidth
+}));
 
 mkdirSync(outputRoot, { recursive: true });
 
@@ -82,9 +86,17 @@ function escape(text) {
 function localPoint(worldX, worldY, room) {
   const column = room % roomsPerRow;
   const row = Math.floor(room / roomsPerRow);
-  const x = column * panelWidth + 12 + ((worldX - room * roomWidth) / roomWidth) * (panelWidth - 24);
+  const bounds = activePanelBounds[room] || { start: room * roomWidth, end: (room + 1) * roomWidth };
+  const x = column * panelWidth + 12 + ((worldX - bounds.start) / Math.max(1, bounds.end - bounds.start)) * (panelWidth - 24);
   const y = row * panelHeight + 28 + ((worldY + 820) / 1580) * (panelHeight - 44);
   return { x, y };
+}
+
+function panelForX(worldX) {
+  const index = activePanelBounds.findIndex((bounds, panelIndex) =>
+    worldX >= bounds.start && (worldX < bounds.end || panelIndex === activePanelBounds.length - 1)
+  );
+  return Math.max(0, index < 0 ? activePanelBounds.length - 1 : index);
 }
 
 function platformMarkup(node, room) {
@@ -134,22 +146,31 @@ function mechanismMarkup(node, room) {
 for (let level = 1; level <= 10; level += 1) {
   const scene = readFileSync(`${sourceRoot}/llr_complete_${level}.tscn`, "utf8");
   const nodes = parseScene(scene);
+  const beatMarkers = nodes
+    .filter((node) => /^LLRBeat\d{2}_/.test(node.name))
+    .sort((left, right) => Number(metadata(left.block, "_llr_beat")) - Number(metadata(right.block, "_llr_beat")));
+  activePanelBounds = beatMarkers.length
+    ? beatMarkers.map((marker) => ({
+        start: Number(metadata(marker.block, "_llr_start_x")),
+        end: Number(metadata(marker.block, "_llr_end_x"))
+      }))
+    : Array.from({ length: 10 }, (_, index) => ({ start: index * roomWidth, end: (index + 1) * roomWidth }));
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${imageWidth}" height="${imageHeight}" viewBox="0 0 ${imageWidth} ${imageHeight}">`,
     `<rect width="100%" height="100%" fill="#dcecff"/>`
   ];
 
-  for (let room = 0; room < 10; room += 1) {
+  for (let room = 0; room < activePanelBounds.length; room += 1) {
     const column = room % roomsPerRow;
     const row = Math.floor(room / roomsPerRow);
     const x = column * panelWidth;
     const y = row * panelHeight;
     parts.push(`<rect x="${x + 2}" y="${y + 2}" width="${panelWidth - 4}" height="${panelHeight - 4}" rx="8" fill="none" stroke="#415a77" stroke-width="3"/>`);
-    parts.push(`<text x="${x + 16}" y="${y + 22}" font-family="sans-serif" font-size="16" fill="#102a43">L${level} · Room ${room + 1}</text>`);
+    parts.push(`<text x="${x + 16}" y="${y + 22}" font-family="sans-serif" font-size="16" fill="#102a43">L${level} · ${beatMarkers.length ? "Beat" : "Room"} ${room + 1}</text>`);
   }
 
   for (const node of nodes.filter((item) => item.parent === "Terrain" && item.polygon.length >= 4)) {
-    const room = Math.max(0, Math.min(9, Math.floor(node.position.x / roomWidth)));
+    const room = panelForX(node.position.x);
     const points = node.polygon.map((point) =>
       localPoint(node.position.x + point.x, node.position.y + point.y, room)
     );
@@ -157,7 +178,7 @@ for (let level = 1; level <= 10; level += 1) {
   }
 
   for (const node of nodes.filter((item) => item.parent === "Water" && item.polygon.length >= 4)) {
-    const room = Math.max(0, Math.min(9, Math.floor(node.position.x / roomWidth)));
+    const room = panelForX(node.position.x);
     const points = node.polygon.map((point) =>
       localPoint(node.position.x + point.x, node.position.y + point.y, room)
     );
@@ -165,12 +186,12 @@ for (let level = 1; level <= 10; level += 1) {
   }
 
   for (const node of nodes.filter((item) => item.parent === "Items/Platforms")) {
-    const room = Math.max(0, Math.min(9, Math.floor(node.position.x / roomWidth)));
+    const room = panelForX(node.position.x);
     parts.push(...platformMarkup(node, room));
   }
 
   for (const node of nodes.filter((item) => item.parent === "Items/Mechanisms")) {
-    const room = Math.max(0, Math.min(9, Math.floor(node.position.x / roomWidth)));
+    const room = panelForX(node.position.x);
     parts.push(...mechanismMarkup(node, room));
   }
 
@@ -190,7 +211,7 @@ for (let level = 1; level <= 10; level += 1) {
   }
 
   for (const node of nodes.filter((item) => item.anchored || item.airborne)) {
-    const room = Math.max(0, Math.min(9, Math.floor(node.position.x / roomWidth)));
+    const room = panelForX(node.position.x);
     const point = localPoint(node.position.x, node.position.y, room);
     const color = node.anchored ? "#6a00f4" : "#0077b6";
     parts.push(`<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="4" fill="${color}"><title>${escape(node.name)}</title></circle>`);

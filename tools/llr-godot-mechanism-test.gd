@@ -27,6 +27,11 @@ class FakePlayer:
 		state = next_state
 
 
+class DirectorTarget:
+	extends Node2D
+	var speed := 4.5
+
+
 func fail(message: String) -> void:
 	push_error(message)
 	get_tree().quit(1)
@@ -57,6 +62,38 @@ func _ready() -> void:
 		fail("Reverse conveyor arrows did not flip")
 		return
 
+	var shuttle = load("res://classes/solid/llr_shuttle/llr_shuttle.tscn").instantiate()
+	shuttle.travel = Vector2(240, -80)
+	shuttle.travel_seconds = 2.0
+	shuttle.pause_seconds = 0.0
+	shuttle.phase = 0.25
+	add_child(shuttle)
+	await get_tree().process_frame
+	if shuttle.get_node("MovingPlatform").position.length() < 40.0:
+		fail("Shuttle phase did not place the platform along its route")
+		return
+
+	var director_target := DirectorTarget.new()
+	director_target.name = "DirectorTarget"
+	add_child(director_target)
+	var reveal_target := Node2D.new()
+	reveal_target.name = "RevealTarget"
+	reveal_target.visible = false
+	add_child(reveal_target)
+	var director = load("res://classes/zone/llr_set_piece_director/llr_set_piece_director.tscn").instantiate()
+	director.name = "Director"
+	director.target_paths.append(NodePath("../DirectorTarget"))
+	director.reveal_paths.append(NodePath("../RevealTarget"))
+	director.numeric_multiplier = -1.0
+	director.checkpoint = false
+	add_child(director)
+	await get_tree().process_frame
+	player.name = "Player"
+	director._on_Trigger_body_entered(player)
+	if !director.triggered or director_target.get("speed") != -4.5 or !reveal_target.visible:
+		fail("Set-piece director did not apply its one-shot state change")
+		return
+
 	var pound_gate = load("res://classes/solid/llr_pound_gate/llr_pound_gate.tscn").instantiate()
 	add_child(pound_gate)
 	await get_tree().process_frame
@@ -84,5 +121,5 @@ func _ready() -> void:
 		return
 
 	Singleton.red_coin_total = 0
-	print("LLR mechanism smoke test OK: spring, conveyor, pound gate, red-coin gate")
+	print("LLR mechanism smoke test OK: spring, conveyor, shuttle, director, pound gate, red-coin gate")
 	get_tree().quit(0)

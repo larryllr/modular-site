@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { buildV3StageScene, V3_STAGE_BLUEPRINTS } from "./llr-level-v3.mjs";
+import { buildV4StageOneScene, V4_STAGE_ONE_BLUEPRINT } from "./llr-level-v4.mjs";
 
 const projectRoot = "vendor/Legacy_SM63Redux";
 const extrasRoot = `${projectRoot}/scenes/levels/llr_complete`;
@@ -29,6 +30,11 @@ const poundGateScenePath = `${poundGateRoot}/llr_pound_gate.tscn`;
 const coinGateRoot = `${projectRoot}/classes/solid/llr_coin_gate`;
 const coinGateScriptPath = `${coinGateRoot}/llr_coin_gate.gd`;
 const coinGateScenePath = `${coinGateRoot}/llr_coin_gate.tscn`;
+const directorRoot = `${projectRoot}/classes/zone/llr_set_piece_director`;
+const directorScriptPath = `${directorRoot}/llr_set_piece_director.gd`;
+const directorScenePath = `${directorRoot}/llr_set_piece_director.tscn`;
+const directorScriptSourcePath = "tools/godot-patches/llr_set_piece_director.gd";
+const directorSceneSourcePath = "tools/godot-patches/llr_set_piece_director.tscn";
 const thwompScriptPath = `${projectRoot}/classes/entity/enemy/thwomp/thwomp.gd`;
 const rebindOptionScriptPath = `${projectRoot}/gui/pause/options/rebind_option.gd`;
 const segmentWidth = 3200;
@@ -534,6 +540,7 @@ const resources = {
   conveyor: "res://classes/solid/llr_conveyor/llr_conveyor.tscn",
   poundGate: "res://classes/solid/llr_pound_gate/llr_pound_gate.tscn",
   coinGate: "res://classes/solid/llr_coin_gate/llr_coin_gate.tscn",
+  director: "res://classes/zone/llr_set_piece_director/llr_set_piece_director.tscn",
   pipe: "res://classes/interactable/pipe/pipe.tscn",
   door: "res://classes/interactable/door/door.tscn",
   arrow: "res://classes/decorative/arrow/arrow.tscn",
@@ -546,7 +553,7 @@ const resourceIds = Object.fromEntries(
 );
 
 const stages = V3_STAGE_BLUEPRINTS.map((stage) => ({
-  ...stage,
+  ...(stage.id === 1 ? { ...stage, ...V4_STAGE_ONE_BLUEPRINT } : stage),
   resource: `res://scenes/levels/llr_complete/llr_complete_${stage.id}.tscn`,
   output: `${extrasRoot}/llr_complete_${stage.id}.tscn`
 }));
@@ -983,14 +990,9 @@ function buildStageLegacy(stage) {
 }
 
 function buildStage(stage) {
-  const scene = buildV3StageScene({
-    stage,
-    stages,
-    resources,
-    resourceIds,
-    mainMenuResource,
-    segmentWidth
-  });
+  const scene = stage.id === 1
+    ? buildV4StageOneScene({ stage, stages, resources, resourceIds, mainMenuResource })
+    : buildV3StageScene({ stage, stages, resources, resourceIds, mainMenuResource, segmentWidth });
   mkdirSync(dirname(stage.output), { recursive: true });
   writeFileSync(stage.output, scene, "utf8");
 }
@@ -1011,6 +1013,9 @@ function writeLlrSupportResources() {
   mkdirSync(coinGateRoot, { recursive: true });
   writeFileSync(coinGateScriptPath, coinGateScriptSource, "utf8");
   writeFileSync(coinGateScenePath, coinGateSceneSource, "utf8");
+  mkdirSync(directorRoot, { recursive: true });
+  writeFileSync(directorScriptPath, readFileSync(directorScriptSourcePath, "utf8"), "utf8");
+  writeFileSync(directorScenePath, readFileSync(directorSceneSourcePath, "utf8"), "utf8");
 
   let thwompScript = readFileSync(thwompScriptPath, "utf8").replace(/\r\n/g, "\n");
   thwompScript = thwompScript.replace(
@@ -1106,7 +1111,7 @@ func _build_extras_menu() -> void:
 \t\t\textras_first_button = button
 
 \tvar description := Label.new()
-\tdescription.text = "10 关 × 10 段长流程；高空下方均有本关地面回收路线"
+\tdescription.text = "十关长流程；第一关已升级为 V4 事件关卡"
 \tdescription.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 \tdescription.modulate = Color(1.0, 0.86, 0.48, 1.0)
 \tcolumn.add_child(description)
@@ -1307,4 +1312,4 @@ for (const stage of stages) {
 patchMainMenu();
 patchExportSources();
 
-console.log(`llr Extras V3 patch complete: ${stages.length} set-piece stages, ${segmentCount} rooms each, ${levelWidth}px wide`);
+console.log(`llr Extras mixed campaign patch complete: level 1 V4 event slice + ${stages.length - 1} V3 stages`);

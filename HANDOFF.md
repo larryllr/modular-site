@@ -1,6 +1,6 @@
 # 项目交接说明
 
-更新时间：2026-06-25
+更新时间：2026-07-15
 
 ## 新对话启动语
 
@@ -10,13 +10,13 @@
 
 ## 项目信息
 
-- 项目目录：`C:\Users\宽宽\Documents\Codex\2026-05-08\cloudflare`
+- 项目目录：`C:\Users\宽宽\Documents\Codex Website`
 - GitHub：`https://github.com/larryllr/modular-site`
 - 正式域名：`https://neyc.de5.net`
 - Worker 预览地址：`https://cloudflare-modular-site.2089151168.workers.dev`
 - 当前分支：`main`
 - 最新提交：以 `git log -1 --oneline` 为准
-- 最新 Cloudflare Version ID：`cf8f17a4-348c-452f-846e-61baf4bf2c28`
+- 最新 Cloudflare Version ID：`0d9d3df5-02b5-4770-b243-d15049e62844`
 - 管理后台：`/admin`
 - 默认完整管理员密码：`admin`
 - 网站配置与内容主要保存在 Cloudflare KV `SITE_CONFIG`
@@ -199,3 +199,13 @@ npm install --prefix vendor/cubecity --ignore-scripts --legacy-peer-deps --regis
 - 修复用户指出的 VoidRescue 卡死：不再按同一 X 坐标从固定高度回投。`tools/godot-patches/death_plane.gd` 维护可提交模板，运行时记录最近 24 个稳定落脚位置；重生前用地面射线和角色碰撞盒逐个验证，移动平台已移走或位置被地形占用时自动回退更早安全点，并重置角色到中立动作状态。
 - Godot 4.3 工程解析、PCK 导出、机制烟测、43 项 Node 测试、TypeScript 检查和 V3 严格几何审计均通过。默认 PCK 9,791,216 bytes，SHA256 `4b8d6db725eecb40dc0253eae7ac94d2d01de520ff69eeb05203571a9658290c`；Brotli 5,738,402 bytes，gzip 6,791,765 bytes。
 - 线上 Playwright 验证启动器和原版 Godot 主菜单正常显示，虚拟按键只在触摸布局出现，控制台 0 errors；线上 `index.html` 已包含版本 `4b8d6db725eecb40`。Cloudflare Version ID：`5efe39d2-de38-4a25-b060-a8c1a1d462d4`。
+
+## 2026-07-15 Extras 第一关 V4 上线与塔底出口修复
+
+- 第一关“风车牧场”已由 V3 等宽房间替换为正式 V4 事件切片：8 个非等宽节拍、8 种拓扑、204 秒主流程、277 个节点；后九关仍保留已审计的 V3 版本，等待逐关升级。
+- 针对实跑反馈完成多轮低路回收修复：倒木溪谷水池两岸为封到底的实体台阶，Beat 2 补四级宽云梯，Beat 6/8 取消不可达蘑菇链并使用宽升降台，Beat 7 补连续溪床和五级出水台阶；VoidRescue 会分离检查点历史、验证三条地面射线并清理游泳/弹跳/锁定/FLUDD/镜头残留状态。
+- 用户截图中的风车塔底出口根因是 `B4Bottom y≈520` 与旧 `B4Mid y≈180` 重叠后形成约 340px 实心竖墙，旋转风车又是唯一出口。现已将墙体替换为 `B4TowerExitStairBank`：7 级永久实体台阶、最大级高 50px、最小踏面 70px；风车只作为更快的可选路线，不再承担兜底回场。
+- 新增真实多边形审计 `B4SafeTowerExitContract`，会检查台阶数量、实际级高、踏面宽度、盆地和中层端点以及不依赖动态机关；十关 `tools/audit-llr-level-geometry.mjs --strict --details` 均为 0 violations。
+- Godot Web 临时出生探针已在正式导出前完全清除。塔底实跑从盆地连续走完七级台阶并进入上层；正式包在桌面、844×390 手机横屏和线上域名均启动成功，虚拟摇杆/动作键正常，线上进入 Extras 第一关并移动成功，控制台 0 errors。
+- 最终默认 PCK 为 9,800,352 bytes，SHA256 `5ab5a550ea03edcc2628f8cec555007f16fd5da029698dd979cbc1ab3d06263f`；Brotli 5,749,337 bytes，gzip 6,797,909 bytes。线上请求返回 `v=5ab5a550ea03edcc`、`x-llr-pack-id: original` 和正确 Brotli 长度。
+- 回归验证：Godot 导出 0 warnings / 0 errors，机制烟测通过，Node 测试 44/44、TypeScript、`git diff --check` 和手机横屏浏览器验收均通过。Cloudflare Version ID：`0d9d3df5-02b5-4770-b243-d15049e62844`，100% 流量。

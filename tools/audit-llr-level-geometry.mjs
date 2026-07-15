@@ -60,6 +60,7 @@ function terrainSurface(node) {
   }));
   return {
     name: node.name,
+    deepStructural: metadata(node.block, "_llr_deep_structural_terrain") === true,
     x0: Math.min(...top.map((point) => point.x)),
     x1: Math.max(...top.map((point) => point.x)),
     width: Math.max(...top.map((point) => point.x)) - Math.min(...top.map((point) => point.x)),
@@ -98,8 +99,11 @@ function auditLevel(level) {
     .filter(Boolean);
   const surfaceMap = new Map(surfaces.map((surface) => [surface.name, surface]));
   const violations = [];
+  const flowNode = nodes.find((node) => node.name === "LLRFlowMetrics");
+  const campaignVersion = flowNode ? metadata(flowNode.block, "_llr_campaign_version") : null;
+  const isV4 = campaignVersion === 4;
 
-  for (let room = 1; room < 10; room += 1) {
+  for (let room = 1; !isV4 && room < 10; room += 1) {
     const left = surfaceMap.get(`S${room}End`);
     const right = surfaceMap.get(`S${room + 1}Start`);
     if (!left || !right) {
@@ -154,7 +158,10 @@ function auditLevel(level) {
   }
 
   for (const surface of surfaces) {
-    if (surface.depth < 130 || surface.depth > 210) {
+    const invalidDepth = surface.deepStructural
+      ? surface.depth < 400 || surface.depth > 540
+      : surface.depth < 130 || surface.depth > 210;
+    if (invalidDepth) {
       violations.push({ type: "terrain-depth", surface: surface.name, depth: surface.depth });
     }
     if (surface.width > 900 && !/LakeBasin$/.test(surface.name)) {
@@ -178,33 +185,42 @@ function auditLevel(level) {
         const current = routeNode.routePoints[index];
         const dx = current.x - previous.x;
         const dy = current.y - previous.y;
-        if (dx <= 0 || dx > 235 || dy < -95 || dy > 190) {
+        const invalidStep = isV4
+          ? Math.abs(dx) > 215 || dy < -92 || dy > 180 || Math.hypot(dx, dy) > 235
+          : dx <= 0 || dx > 235 || dy < -95 || dy > 190;
+        if (invalidStep) {
           violations.push({ type: "unreachable-route-step", key, dx, dy });
         }
       }
     }
   }
-  if (mainRoutes !== 10) {
-    violations.push({ type: "main-route-count", expected: 10, actual: mainRoutes });
+  const expectedMainRoutes = isV4 ? 8 : 10;
+  if (mainRoutes !== expectedMainRoutes) {
+    violations.push({ type: "main-route-count", expected: expectedMainRoutes, actual: mainRoutes });
   }
   if (recoveryRoutes < 2) {
     violations.push({ type: "recovery-route-count", expectedMinimum: 2, actual: recoveryRoutes });
   }
 
-  const roomMarkers = nodes.filter((node) => /^LLRSegment\d{2}_/.test(node.name));
+  const roomMarkers = nodes.filter((node) =>
+    isV4 ? /^LLRBeat\d{2}_/.test(node.name) : /^LLRSegment\d{2}_/.test(node.name)
+  );
   const setPieces = roomMarkers.map((node) => metadata(node.block, "_llr_set_piece"));
   const acts = new Set(roomMarkers.map((node) => metadata(node.block, "_llr_act")));
   const cadences = new Set(roomMarkers.map((node) => metadata(node.block, "_llr_cadence")));
-  const forms = new Set(roomMarkers.map((node) => node.name.replace(/^LLRSegment\d{2}_/, "")));
+  const forms = new Set(roomMarkers.map((node) =>
+    node.name.replace(isV4 ? /^LLRBeat\d{2}_/ : /^LLRSegment\d{2}_/, "")
+  ));
   const mechanicSets = roomMarkers.map((node) => metadata(node.block, "_llr_mechanics") || "");
   const mechanicTags = new Set(
     mechanicSets.flatMap((value) => value.split(",").map((item) => item.trim()).filter(Boolean))
   );
-  if (roomMarkers.length !== 10) {
-    violations.push({ type: "room-marker-count", expected: 10, actual: roomMarkers.length });
+  const expectedMarkerCount = isV4 ? 8 : 10;
+  if (roomMarkers.length !== expectedMarkerCount) {
+    violations.push({ type: isV4 ? "beat-marker-count" : "room-marker-count", expected: expectedMarkerCount, actual: roomMarkers.length });
   }
-  if (new Set(setPieces).size !== 10 || setPieces.some((value) => !value)) {
-    violations.push({ type: "set-piece-variety", expected: 10, actual: new Set(setPieces).size });
+  if (new Set(setPieces).size !== expectedMarkerCount || setPieces.some((value) => !value)) {
+    violations.push({ type: "set-piece-variety", expected: expectedMarkerCount, actual: new Set(setPieces).size });
   }
   if (acts.size !== 3 || ![1, 2, 3].every((act) => acts.has(act))) {
     violations.push({ type: "act-structure", acts: [...acts] });
@@ -212,8 +228,9 @@ function auditLevel(level) {
   if (!["introduction", "development", "twist", "resolution"].every((phase) => cadences.has(phase))) {
     violations.push({ type: "cadence-structure", cadences: [...cadences] });
   }
-  if (forms.size < 6) {
-    violations.push({ type: "room-form-variety", expectedMinimum: 6, actual: forms.size });
+  const minimumForms = isV4 ? 8 : 6;
+  if (forms.size < minimumForms) {
+    violations.push({ type: isV4 ? "beat-topology-variety" : "room-form-variety", expectedMinimum: minimumForms, actual: forms.size });
   }
   if (new Set(mechanicSets).size < 8) {
     violations.push({ type: "mechanic-set-variety", expectedMinimum: 8, actual: new Set(mechanicSets).size });
@@ -222,8 +239,220 @@ function auditLevel(level) {
     violations.push({ type: "mechanic-tag-variety", expectedMinimum: 6, actual: mechanicTags.size });
   }
   for (const marker of roomMarkers) {
-    if (metadata(marker.block, "_llr_geometry_version") !== 3) {
+    if (metadata(marker.block, "_llr_geometry_version") !== (isV4 ? 4 : 3)) {
       violations.push({ type: "geometry-version", room: marker.name });
+    }
+  }
+
+  if (isV4) {
+    const spans = roomMarkers.map((marker) => ({
+      start: metadata(marker.block, "_llr_start_x"),
+      end: metadata(marker.block, "_llr_end_x")
+    }));
+    const widths = spans.map((span) => span.end - span.start);
+    if (new Set(widths).size < 6) {
+      violations.push({ type: "beat-width-variety", expectedMinimum: 6, actual: new Set(widths).size });
+    }
+    for (let index = 0; index < spans.length; index += 1) {
+      const span = spans[index];
+      if (typeof span.start !== "number" || typeof span.end !== "number" || span.end <= span.start) {
+        violations.push({ type: "invalid-beat-span", beat: index + 1, span });
+      }
+      if (index > 0 && spans[index - 1].end !== span.start) {
+        violations.push({ type: "beat-span-gap", beat: index + 1, previousEnd: spans[index - 1].end, start: span.start });
+      }
+    }
+    for (const marker of roomMarkers) {
+      if (!metadata(marker.block, "_llr_player_event") || !metadata(marker.block, "_llr_failure_route")) {
+        violations.push({ type: "missing-event-contract", beat: marker.name });
+      }
+      if (metadata(marker.block, "_llr_input_budget") !== "direction+one-action") {
+        violations.push({ type: "mobile-input-budget", beat: marker.name });
+      }
+    }
+    if (!roomMarkers.some((marker) => metadata(marker.block, "_llr_state_change") === true)) {
+      violations.push({ type: "missing-state-change" });
+    }
+    if (!nodes.some((node) => (resourcePaths.get(node.instance) || "").includes("llr_set_piece_director"))) {
+      violations.push({ type: "missing-set-piece-director" });
+    }
+    const b2Recovery = nodes.find((node) => node.name === "B2SafeRecoveryContract");
+    if (
+      !b2Recovery ||
+      metadata(b2Recovery.block, "_llr_vertical_step_count") !== 4 ||
+      metadata(b2Recovery.block, "_llr_max_upward_rise") > 70 ||
+      metadata(b2Recovery.block, "_llr_void_required") !== false
+    ) {
+      violations.push({ type: "missing-b2-conservative-recovery" });
+    }
+    const b2RecoverySteps = [1, 2, 3, 4]
+      .map((index) => nodes.find((node) => node.name === `B2RecoveryStack${index}`))
+      .filter(Boolean);
+    if (b2RecoverySteps.length !== 4) {
+      violations.push({ type: "missing-b2-recovery-step", actual: b2RecoverySteps.length });
+    }
+    for (let index = 1; index < b2RecoverySteps.length; index += 1) {
+      if (b2RecoverySteps[index - 1].position.y - b2RecoverySteps[index].position.y > 70) {
+        violations.push({ type: "high-b2-recovery-step", node: b2RecoverySteps[index].name });
+      }
+    }
+    const safeTraversal = nodes.find((node) => node.name === "B3SafeTraversalContract");
+    if (
+      !safeTraversal ||
+      metadata(safeTraversal.block, "_llr_max_open_gap") > 96 ||
+      metadata(safeTraversal.block, "_llr_max_upward_rise") > 72 ||
+      metadata(safeTraversal.block, "_llr_min_landing_width") < 144 ||
+      metadata(safeTraversal.block, "_llr_water_return_stairs") !== true ||
+      metadata(safeTraversal.block, "_llr_void_required") !== false
+    ) {
+      violations.push({ type: "missing-conservative-water-crossing" });
+    }
+    for (const bankName of ["B3LeftWaterStairBank", "B3RightWaterStairBank"]) {
+      const bank = surfaceMap.get(bankName);
+      if (!bank || !bank.deepStructural || bank.top.length < 16) {
+        violations.push({ type: "missing-sealed-water-stair-bank", node: bankName });
+      }
+    }
+    const creekWater = nodes.find((node) => node.name === "B3CreekWater");
+    const creekHeight = creekWater?.polygon.length
+      ? Math.max(...creekWater.polygon.map((point) => point.y)) - Math.min(...creekWater.polygon.map((point) => point.y))
+      : null;
+    if (creekHeight !== 380) {
+      violations.push({ type: "unsafe-water-depth", node: "B3CreekWater", creekHeight });
+    }
+    if (creekWater?.position && creekWater.polygon.length) {
+      const waterLeft = creekWater.position.x + Math.min(...creekWater.polygon.map((point) => point.x));
+      const waterRight = creekWater.position.x + Math.max(...creekWater.polygon.map((point) => point.x));
+      const waterBottom = creekWater.position.y + Math.max(...creekWater.polygon.map((point) => point.y));
+      for (const [bankName, expectedSide] of [
+        ["B3LeftWaterStairBank", "left"],
+        ["B3RightWaterStairBank", "right"]
+      ]) {
+        const bankNode = nodes.find((node) => node.name === bankName);
+        if (!bankNode?.position || bankNode.polygon.length < 6) continue;
+        const bankBottom = bankNode.position.y + Math.max(...bankNode.polygon.map((point) => point.y));
+        const bankLeft = bankNode.position.x + Math.min(...bankNode.polygon.map((point) => point.x));
+        const bankRight = bankNode.position.x + Math.max(...bankNode.polygon.map((point) => point.x));
+        if (bankBottom !== waterBottom || (expectedSide === "left" ? bankLeft > waterLeft : bankRight < waterRight)) {
+          violations.push({ type: "unsealed-water-bank", node: bankName, bankBottom, waterBottom });
+        }
+        const top = bankNode.polygon.slice(0, -2);
+        for (let index = 1; index < top.length; index += 1) {
+          const dx = top[index].x - top[index - 1].x;
+          const dy = top[index].y - top[index - 1].y;
+          if (Math.abs(dy) < 0.01 && dx > 0 && dx < 55) {
+            violations.push({ type: "narrow-water-stair-tread", node: bankName, dx });
+          }
+          if (Math.abs(dx) < 0.01 && Math.abs(dy) > 55) {
+            violations.push({ type: "high-water-stair-rise", node: bankName, dy });
+          }
+        }
+      }
+    }
+    const towerExitContract = nodes.find((node) => node.name === "B4SafeTowerExitContract");
+    if (
+      !towerExitContract ||
+      metadata(towerExitContract.block, "_llr_exit_stairs") !== true ||
+      metadata(towerExitContract.block, "_llr_stair_count") !== 7 ||
+      metadata(towerExitContract.block, "_llr_max_step_rise") > 50 ||
+      metadata(towerExitContract.block, "_llr_min_tread_width") < 70 ||
+      metadata(towerExitContract.block, "_llr_dynamic_mechanism_required") !== false ||
+      metadata(towerExitContract.block, "_llr_void_required") !== false
+    ) {
+      violations.push({ type: "missing-safe-tower-exit-contract" });
+    }
+    const towerExit = surfaceMap.get("B4TowerExitStairBank");
+    const towerExitNode = nodes.find((node) => node.name === "B4TowerExitStairBank");
+    if (!towerExit || !towerExit.deepStructural || !towerExitNode || towerExit.top.length < 16) {
+      violations.push({ type: "missing-sealed-tower-exit-stairs" });
+    } else {
+      const top = towerExitNode.polygon.slice(0, -2);
+      let upwardSteps = 0;
+      for (let index = 1; index < top.length; index += 1) {
+        const dx = top[index].x - top[index - 1].x;
+        const dy = top[index].y - top[index - 1].y;
+        if (Math.abs(dy) < 0.01 && dx > 0 && dx < 70) {
+          violations.push({ type: "narrow-tower-exit-tread", dx });
+        }
+        if (Math.abs(dx) < 0.01 && dy < 0) {
+          upwardSteps += 1;
+          if (Math.abs(dy) > 50) {
+            violations.push({ type: "high-tower-exit-step", dy });
+          }
+        }
+        if (dx < 0 || (Math.abs(dx) > 0.01 && Math.abs(dy) > 0.01)) {
+          violations.push({ type: "invalid-tower-exit-stair-edge", dx, dy });
+        }
+      }
+      const first = towerExit.top[0];
+      const last = towerExit.top.at(-1);
+      if (
+        upwardSteps !== 7 ||
+        first.x !== 9100 || first.y !== 510 ||
+        last.x !== 10000 || last.y !== 180
+      ) {
+        violations.push({
+          type: "tower-exit-stairs-do-not-bridge-basin",
+          upwardSteps,
+          first,
+          last
+        });
+      }
+    }
+    for (const contractName of ["B6SafeRecoveryContract", "B8SafeRecoveryContract"]) {
+      const contract = nodes.find((node) => node.name === contractName);
+      if (
+        !contract ||
+        metadata(contract.block, "_llr_vertical_rescue") !== true ||
+        metadata(contract.block, "_llr_void_required") !== false ||
+        metadata(contract.block, "_llr_min_landing_width") < 144
+      ) {
+        violations.push({ type: "missing-vertical-rescue", node: contractName });
+      }
+    }
+    const creekContract = nodes.find((node) => node.name === "B7SafeCreekContract");
+    if (
+      !creekContract ||
+      metadata(creekContract.block, "_llr_continuous_creek_bed") !== true ||
+      metadata(creekContract.block, "_llr_exit_step_count") !== 5 ||
+      metadata(creekContract.block, "_llr_void_required") !== false
+    ) {
+      violations.push({ type: "missing-creek-recovery-contract" });
+    }
+    for (const bedName of ["B7CreekBed1", "B7CreekBed2", "B7CreekBed3", "B7CreekBed4", "B7CreekBed5"]) {
+      if (!surfaceMap.has(bedName)) violations.push({ type: "missing-creek-bed", node: bedName });
+    }
+    const creekBeds = [1, 2, 3, 4, 5]
+      .map((index) => surfaceMap.get(`B7CreekBed${index}`))
+      .filter(Boolean);
+    for (let index = 1; index < creekBeds.length; index += 1) {
+      if (creekBeds[index].x0 > creekBeds[index - 1].x1) {
+        violations.push({ type: "creek-bed-gap", after: creekBeds[index - 1].name });
+      }
+    }
+    for (let index = 1; index <= 5; index += 1) {
+      if (!nodes.some((node) => node.name === `B7CreekExitStep${index}`)) {
+        violations.push({ type: "missing-creek-exit-step", node: `B7CreekExitStep${index}` });
+      }
+    }
+    for (const removedNode of ["B6RecoveryMushroom", "B8RecoveryMushroom", "B8RecoveryCloud2"]) {
+      if (nodes.some((node) => node.name === removedNode)) {
+        violations.push({ type: "legacy-softlock-node", node: removedNode });
+      }
+    }
+    for (const liftName of ["B6RecoveryLift", "B8RecoveryLift"]) {
+      const lift = nodes.find((node) => node.name === liftName);
+      const travel = lift ? parseVector(lift.block, "travel") : null;
+      if (!lift || !travel || travel.y > -600 || metadata(lift.block, "_llr_walkable_width") < 144) {
+        violations.push({ type: "invalid-recovery-lift", node: liftName, travel });
+      }
+    }
+    for (const node of nodes) {
+      const walkableWidth = metadata(node.block, "_llr_walkable_width");
+      const resourcePath = resourcePaths.get(node.instance) || "";
+      if (typeof walkableWidth === "number" && walkableWidth < 144 && !/\/log\/log_fall\.tscn$/.test(resourcePath)) {
+        violations.push({ type: "narrow-declared-landing", node: node.name, walkableWidth });
+      }
     }
   }
 
@@ -238,7 +467,8 @@ function auditLevel(level) {
     ["falling", /\/log\/log_fall\.tscn$/],
     ["spring", /\/llr_spring\/llr_spring\.tscn$/],
     ["conveyor", /\/llr_conveyor\/llr_conveyor\.tscn$/],
-    ["challenge-gate", /\/llr_(?:pound|coin)_gate\/llr_(?:pound|coin)_gate\.tscn$/]
+    ["challenge-gate", /\/llr_(?:pound|coin)_gate\/llr_(?:pound|coin)_gate\.tscn$/],
+    ["director", /\/llr_set_piece_director\/llr_set_piece_director\.tscn$/]
   ];
   const dynamicTypes = new Set();
   let dynamicNodes = 0;
@@ -258,14 +488,14 @@ function auditLevel(level) {
     violations.push({ type: "dynamic-node-budget", nodes: dynamicNodes, limit: 80 });
   }
 
-  const flowNode = nodes.find((node) => node.name === "LLRFlowMetrics");
   const mainSeconds = flowNode ? metadata(flowNode.block, "_llr_main_seconds") : null;
   const recoverySeconds = flowNode ? metadata(flowNode.block, "_llr_recovery_seconds") : null;
   if (typeof mainSeconds !== "number" || mainSeconds < 180) {
     violations.push({ type: "main-flow-too-short", mainSeconds });
   }
-  if (nodes.length < 250 || nodes.length > 700) {
-    violations.push({ type: "runtime-node-budget", nodes: nodes.length, minimum: 250, limit: 700 });
+  const minimumNodes = isV4 ? 140 : 250;
+  if (nodes.length < minimumNodes || nodes.length > 700) {
+    violations.push({ type: "runtime-node-budget", nodes: nodes.length, minimum: minimumNodes, limit: 700 });
   }
 
   const guideCoinCount = nodes.filter((node) => node.parent === "Items/Coins").length;
@@ -287,6 +517,7 @@ function auditLevel(level) {
 
   return {
     level,
+    campaignVersion,
     nodeCount: nodes.length,
     terrainCount: surfaces.length,
     anchoredCount: anchored.length,
@@ -308,6 +539,7 @@ const reports = levels.map(auditLevel);
 for (const report of reports) {
   console.log(JSON.stringify({
     level: report.level,
+    campaignVersion: report.campaignVersion,
     nodes: report.nodeCount,
     terrain: report.terrainCount,
     anchored: report.anchoredCount,
