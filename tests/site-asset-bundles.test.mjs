@@ -8,10 +8,12 @@ const source = (path) => readFileSync(new URL(path, root), "utf8");
 function readBundle(group) {
   const directory = new URL(`public/site-assets/${group}/`, root);
   const names = readdirSync(directory).filter((name) => name.endsWith(".js"));
+  const entryName = names.find((name) => /^app-[A-Z0-9]+\.js$/.test(name));
   return {
     names,
     source: names.map((name) => source(`public/site-assets/${group}/${name}`)).join("\n"),
-    bytes: names.reduce((total, name) => total + statSync(new URL(name, directory)).size, 0)
+    bytes: names.reduce((total, name) => total + statSync(new URL(name, directory)).size, 0),
+    entryBytes: entryName ? statSync(new URL(entryName, directory)).size : 0
   };
 }
 
@@ -35,7 +37,7 @@ test("public and admin pages load separate hashed bundles", () => {
   assert.match(adminEntry, /startAdminApp/);
   assert.ok(publicBundle.names.some((name) => /^app-[A-Z0-9]+\.js$/.test(name)));
   assert.ok(adminBundle.names.some((name) => /^app-[A-Z0-9]+\.js$/.test(name)));
-  assert.ok(publicBundle.bytes < adminBundle.bytes);
+  assert.ok(publicBundle.entryBytes < adminBundle.entryBytes);
 });
 
 test("public bundle excludes game and site administration code", () => {

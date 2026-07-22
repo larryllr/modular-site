@@ -164,7 +164,7 @@ const api = {
   }
 };
 
-export async function startPublicApp() {
+export async function startPublicApp(options = {}) {
   try {
     setLoadedConfig(await loadPublicConfig());
     if (getRouteSlug() === "p2p") {
@@ -181,6 +181,13 @@ export async function startPublicApp() {
       scheduleDailyBackground(page);
     }
   } finally {
+    if (typeof options.beforeReveal === "function") {
+      try {
+        await options.beforeReveal();
+      } catch {
+        // Motion is progressive enhancement and must never block the site.
+      }
+    }
     document.documentElement.classList.remove("app-booting");
   }
 }

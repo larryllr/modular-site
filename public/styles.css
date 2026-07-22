@@ -838,6 +838,18 @@ h1 {
   pointer-events: none;
 }
 
+.home-entry-grid .entry-card:not(.has-entry-background)::after {
+  position: absolute;
+  top: 0;
+  right: 22px;
+  left: 22px;
+  height: 2px;
+  border-radius: 0 0 999px 999px;
+  background: linear-gradient(90deg, var(--teal-bright), rgba(45, 108, 223, 0.42), transparent 88%);
+  content: "";
+  pointer-events: none;
+}
+
 .page-module-grid {
   align-items: start;
 }
@@ -1055,12 +1067,40 @@ html.module-fullscreen-open body {
   width: fit-content;
 }
 
+.entry-card .button::after {
+  margin-left: 8px;
+  content: "\2192";
+  font-size: 1.05em;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.external-entry-card .button::after {
+  content: "\2197";
+}
+
+.entry-card .button[aria-disabled="true"]::after {
+  content: none;
+}
+
+@media (hover: hover) {
+  .entry-card .button:hover::after {
+    transform: translateX(2px);
+  }
+
+  .external-entry-card .button:hover::after {
+    transform: translate(1px, -1px);
+  }
+}
+
 .entry-card .button[aria-disabled="true"] {
   pointer-events: none;
   opacity: 0.62;
 }
 
 .entry-card.has-entry-background {
+  background-color: #17332e;
+  background-image: linear-gradient(135deg, #17332e, #2a4a45);
   background-position: center;
   background-size: cover;
   color: #ffffff;
